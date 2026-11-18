@@ -2421,42 +2421,47 @@
         `#include <dithering_fragment>`,
         `#include <dithering_fragment>
          if (vLavaMask > 0.02) {
-           // --- MULTI-LAYERED CONVECTING MOLTEN LAVA & GLOWING MAGMA FISSURE SHADER ---
-           vec2 uv = vWaterWorldPos.xz * 0.30;
-           // Domain warping so magma veins swirl and churn organically
-           float warpX = lavaNoise(uv * 1.3 + vec2(uTime * 0.16, -uTime * 0.12));
-           float warpY = lavaNoise(uv * 1.3 + vec2(-uTime * 0.14, uTime * 0.18) + vec2(11.7, 5.3));
-           vec2 warpedUV = uv + vec2(warpX, warpY) * 0.65;
+           // --- TRANSLUCENT CONVECTING RED / ORANGE / YELLOW MOLTEN LIQUID LAVA SHADER ---
+           vec2 uv = vWaterWorldPos.xz * 0.28;
+           // Domain warping so liquid magma currents swirl and churn organically
+           float warpX = lavaNoise(uv * 1.35 + vec2(uTime * 0.22, -uTime * 0.16));
+           float warpY = lavaNoise(uv * 1.35 + vec2(-uTime * 0.18, uTime * 0.24) + vec2(11.7, 5.3));
+           vec2 warpedUV = uv + vec2(warpX, warpY) * 0.72;
 
-           // Cellular Voronoi crust plates + glowing magma fissures between plates
-           vec2 vor = lavaVoronoi(warpedUV * 1.45, uTime);
-           float cellEdgeDist = vor.y; // 0 at fissure cracks between cooled basalt plates, larger inside plate centers
-           float fineNoise = lavaNoise(warpedUV * 3.8 - vec2(uTime * 0.32, uTime * 0.22));
-           float slowPulse = 0.5 + 0.5 * sin(uTime * 2.4 + vor.x * 5.0 + fineNoise * 3.5);
+           // Cellular Voronoi convection cells + fine liquid magma ribbons
+           vec2 vor = lavaVoronoi(warpedUV * 1.35, uTime * 1.15);
+           float cellEdgeDist = vor.y;
+           float fineNoise = lavaNoise(warpedUV * 3.4 - vec2(uTime * 0.38, uTime * 0.26));
+           float slowPulse = 0.5 + 0.5 * sin(uTime * 2.8 + vor.x * 4.5 + fineNoise * 4.0);
 
-           // Glowing magma fissures (brightest along cracks and shallow advancing lava rims)
-           float fissureCrack = 1.0 - smoothstep(0.02, 0.28 + slowPulse * 0.08, cellEdgeDist);
-           float subCrustHeat = smoothstep(0.32, 0.85, fineNoise * 0.65 + (1.0 - vor.x) * 0.55);
-           float rimHeat = smoothstep(0.30, 0.07, vWaterDepth) * 0.65;
-           float totalHeat = clamp(max(fissureCrack * 1.05, subCrustHeat * 0.78) + rimHeat, 0.0, 1.0);
+           // Bright golden-yellow fissures & convecting hot plumes inside glowing crimson-orange liquid
+           float fissureCrack = 1.0 - smoothstep(0.04, 0.42 + slowPulse * 0.12, cellEdgeDist);
+           float liquidPlume = smoothstep(0.18, 0.82, fineNoise * 0.62 + (1.0 - vor.x) * 0.58);
+           float rimHeat = smoothstep(0.28, 0.065, vWaterDepth) * 0.45;
+           float totalHeat = clamp(max(fissureCrack * 0.95, liquidPlume * 0.88) + rimHeat, 0.0, 1.0);
 
-           // Temperature color palette: Cooled Dark Volcanic Basalt Crust -> Deep Magma Red -> Blazing Orange -> White-Hot Gold Core
-           vec3 crustCol   = vec3(0.09, 0.035, 0.025);
-           vec3 deepRedCol = vec3(0.76, 0.06, 0.01);
-           vec3 orangeCol  = vec3(1.00, 0.38, 0.02);
-           vec3 coreHotCol = vec3(1.00, 0.94, 0.45);
+           // Pure molten liquid palette: Deep Glowing Red -> Fiery Liquid Orange -> Blazing Golden-Yellow
+           vec3 rubyRedLiquid   = vec3(0.88, 0.10, 0.01);
+           vec3 fieryOrangeLiq  = vec3(1.00, 0.44, 0.02);
+           vec3 brightYellowLiq = vec3(1.00, 0.92, 0.26);
+           vec3 whiteGoldCore   = vec3(1.00, 0.98, 0.62);
 
-           vec3 lavaCol = mix(crustCol, deepRedCol, smoothstep(0.08, 0.38, totalHeat));
-           lavaCol = mix(lavaCol, orangeCol, smoothstep(0.35, 0.72, totalHeat));
-           lavaCol = mix(lavaCol, coreHotCol, smoothstep(0.70, 0.97, totalHeat));
+           vec3 lavaCol = mix(rubyRedLiquid, fieryOrangeLiq, smoothstep(0.05, 0.45, totalHeat));
+           lavaCol = mix(lavaCol, brightYellowLiq, smoothstep(0.42, 0.78, totalHeat));
+           lavaCol = mix(lavaCol, whiteGoldCore, smoothstep(0.76, 0.98, totalHeat));
 
-           // Self-illuminating emissive radiance: glows even brighter at night under ACES Filmic tone mapping!
-           float emissiveBoost = 1.15 + uNightFactor * 0.85 + slowPulse * 0.18;
-           vec3 finalLavaRGB = mix(crustCol * (0.65 + uNightFactor * 0.35), lavaCol * emissiveBoost, smoothstep(0.06, 0.30, totalHeat));
+           // Only a very sheer, translucent dark-crimson ripple wisp in the coolest cell centers so the red/yellow liquid always dominates
+           float sheerRipple = smoothstep(0.42, 0.75, cellEdgeDist) * (1.0 - fineNoise * 0.7) * 0.18;
+           lavaCol = mix(lavaCol, vec3(0.48, 0.04, 0.01), sheerRipple);
 
-           float lavaBlend = smoothstep(0.02, 0.45, vLavaMask);
+           // Self-illuminating emissive radiance: glows brilliantly at night!
+           float emissiveBoost = 1.12 + uNightFactor * 0.88 + slowPulse * 0.16;
+           vec3 finalLavaRGB = lavaCol * emissiveBoost;
+
+           float lavaBlend = smoothstep(0.02, 0.40, vLavaMask);
            gl_FragColor.rgb = mix(gl_FragColor.rgb, finalLavaRGB, lavaBlend);
-           float lavaAlpha = smoothstep(0.065, 0.14, vWaterDepth) * 0.98;
+           // Translucent liquid alpha (~0.52 - 0.68) so you see deep into the glowing red/yellow molten pool
+           float lavaAlpha = smoothstep(0.06, 0.15, vWaterDepth) * (0.50 + totalHeat * 0.18);
            gl_FragColor.a = mix(gl_FragColor.a, lavaAlpha, lavaBlend);
          } else if (uUnderwater > 0.5) {
            // When looking up at the water surface from underwater (Snell's window shimmer)
@@ -3233,6 +3238,27 @@
       0.7071, 0.7071, 0.7071, 0.7071
     ];
 
+    // Helper: Cool & solidify molten lava at cell i into hard volcanic basalt rock (obstacleType = 3)
+    function solidifyLavaCellToRock(i, solidifyDepth) {
+      const w = water[i];
+      if (w <= 0.005 || lavaFrac[i] < 0.20) return;
+      const dH = Math.min(w, solidifyDepth);
+      if (dH <= 0.001) return;
+
+      // Fuse any underlying loose sand + the cooled lava thickness into solid, wind-proof volcanic bedrock
+      const rockAdd = sand[i] + dH * 0.95;
+      bedrock[i] = clamp(bedrock[i] + rockAdd, MIN_TERRAIN_HEIGHT, MAX_TERRAIN_HEIGHT);
+      sand[i] = 0.0;
+      obstacleType[i] = 3; // Cooled Volcanic Basalt Rock (hard like rock)
+      veg[i] = 0.0;
+
+      water[i] = Math.max(0.0, w - dH);
+      if (water[i] < 0.025) {
+        water[i] = 0.0;
+        lavaFrac[i] = 0.0;
+      }
+    }
+
     function waterShedAndPoolStep(stepScale = 1.0) {
       const rainAdd = params.rainRate * 0.0018 * stepScale;
       const evapSub = params.evapRate * (1.0 + params.windSpeed * 0.04) * 0.00048 * stepScale;
@@ -3243,10 +3269,14 @@
         if (lf < 0.35) {
           if (rainAdd > 0) w += rainAdd;
           if (w > 0) w = Math.max(0, w - evapSub);
+          water[i] = w;
         } else if (w <= 0.001) {
           lavaFrac[i] = 0;
+          water[i] = 0;
+        } else if (params.rainRate > 0.25) {
+          // Rainfall cools molten lava into hard solid rock!
+          solidifyLavaCellToRock(i, params.rainRate * 0.032 * stepScale);
         }
-        water[i] = w;
       }
 
       // Gravity downhill flow rate scales smoothly, with a responsive minimum so poured water & lava settle naturally
@@ -3340,16 +3370,45 @@
         water[idx(k, GRID - 1)] *= edgeDecay;
       }
 
-      // Capillary Soil Moisture, Open-Water Proximity Field & Lava Incineration
+      // Capillary Soil Moisture, Open-Water Proximity, and Water/Snow Quenching Lava into Hard Rock
       for (let y = 1; y < GRID - 1; y++) {
         for (let x = 1; x < GRID - 1; x++) {
           const i = idx(x, y);
           let m = soilMoisture[i];
           let wp = waterProximity[i];
+          const wNow = water[i];
+          const lfNow = lavaFrac[i];
+
+          // 1. If water and lava mixed in this cell, OR if a lava cell touches a neighboring water cell or snow/ice,
+          //    the lava is cooled by the water/snow and solidifies into hard volcanic rock!
+          if (wNow > 0.03 && lfNow >= 0.20) {
+            let touchesColdWater = (lfNow < 0.78); // Mixed water + lava in same cell
+            if (!touchesColdWater) {
+              for (let d = 0; d < 4; d++) {
+                const ni = i + N8_OFFSETS[d];
+                if (water[ni] > 0.045 && lavaFrac[ni] < 0.25) {
+                  touchesColdWater = true;
+                  // Consume some of the neighboring cooling water into steam as it quenches the lava
+                  water[ni] = Math.max(0, water[ni] - 0.15 * flowScale);
+                  break;
+                }
+              }
+            }
+            const snowOrIceHere = snowCover[i] + iceCover[i];
+            if (touchesColdWater || snowOrIceHere > 0.06) {
+              const quenchDepth = touchesColdWater
+                ? Math.max(0.08, wNow * (1.0 - lfNow * 0.55) * 0.65)
+                : Math.max(0.08, snowOrIceHere * 0.85);
+              snowCover[i] = 0.0;
+              iceCover[i] = 0.0;
+              solidifyLavaCellToRock(i, quenchDepth);
+            }
+          }
+
           const isLavaCell = (water[i] > 0.025 && lavaFrac[i] >= 0.35);
 
           if (isLavaCell) {
-            // Molten lava incinerates vegetation, vaporizes soil moisture, and melts snow & ice!
+            // Molten lava incinerates vegetation, vaporizes soil moisture, and melts thin frost
             m = 0.0;
             wp = 0.0;
             if (veg[i] > 0) veg[i] = Math.max(0, veg[i] - 0.45 * stepScale);
@@ -3846,7 +3905,13 @@
         const sandBlend = clamp(s / 0.32, 0.0, 1.0);
 
         let br, bg, bb;
-        if (obstacleType[i] === 2) {
+        if (obstacleType[i] === 3) {
+          // Cooled Volcanic Basalt Rock (solidified from lava cooled by water or snow)
+          const basaltStrata = 0.5 + 0.5 * Math.sin(b * 2.4 + (i % 7) * 0.5);
+          br = 0.20 + basaltStrata * 0.08;
+          bg = 0.19 + basaltStrata * 0.07;
+          bb = 0.21 + basaltStrata * 0.08;
+        } else if (obstacleType[i] === 2) {
           br = 0.62; bg = 0.55; bb = 0.46;
         } else if (obstacleType[i] === 1) {
           const strata = 0.5 + 0.5 * Math.sin(b * 1.4);
@@ -3898,21 +3963,31 @@
         let tg = bg * (1 - sandBlend) + sg * sandBlend;
         let tb = bb * (1 - sandBlend) + sb * sandBlend;
 
-        // Scorched volcanic basalt bank & radiant magma edge glow on terrain touching or bordering lava!
+        // Underneath translucent molten lava, make the basin floor glow bright molten red/orange/yellow
+        // so looking through the transparent lava surface reveals deep glowing liquid magma!
         let nearLava = lf;
-        if (i >= GRID && i < MAX_CELLS - GRID) {
-          const nL = (water[i - 1] > 0.03 ? lavaFrac[i - 1] : 0);
-          const nR = (water[i + 1] > 0.03 ? lavaFrac[i + 1] : 0);
-          const nU = (water[i - GRID] > 0.03 ? lavaFrac[i - GRID] : 0);
-          const nD = (water[i + GRID] > 0.03 ? lavaFrac[i + GRID] : 0);
-          nearLava = Math.max(nearLava, Math.max(nL, nR, nU, nD) * 0.85);
-        }
-        if (nearLava > 0.12) {
-          const scorch = clamp(nearLava * 0.82, 0.0, 0.85);
-          const emberGlow = nearLava * (0.32 + nightFactor * 0.75);
-          tr = tr * (1 - scorch) + 0.16 * scorch + emberGlow * 0.88;
-          tg = tg * (1 - scorch) + 0.08 * scorch + emberGlow * 0.24;
-          tb = tb * (1 - scorch) + 0.06 * scorch + emberGlow * 0.03;
+        if (w > 0.045 && lf >= 0.30) {
+          const lavaDepthHeat = clamp(w / 1.5, 0.0, 1.0);
+          const bedGlow = 0.85 + nightFactor * 0.55;
+          tr = (0.94 + lavaDepthHeat * 0.06) * bedGlow;
+          tg = (0.32 + lavaDepthHeat * 0.46) * bedGlow;
+          tb = (0.02 + lavaDepthHeat * 0.14) * bedGlow;
+        } else {
+          // Shoreline bank adjacent to lava glows with warm volcanic ember light
+          if (i >= GRID && i < MAX_CELLS - GRID) {
+            const nL = (water[i - 1] > 0.04 ? lavaFrac[i - 1] : 0);
+            const nR = (water[i + 1] > 0.04 ? lavaFrac[i + 1] : 0);
+            const nU = (water[i - GRID] > 0.04 ? lavaFrac[i - GRID] : 0);
+            const nD = (water[i + GRID] > 0.04 ? lavaFrac[i + GRID] : 0);
+            nearLava = Math.max(nearLava, Math.max(nL, nR, nU, nD) * 0.85);
+          }
+          if (nearLava > 0.12) {
+            const scorch = clamp(nearLava * 0.65, 0.0, 0.72);
+            const emberGlow = nearLava * (0.35 + nightFactor * 0.78);
+            tr = tr * (1 - scorch) + 0.22 * scorch + emberGlow * 0.92;
+            tg = tg * (1 - scorch) + 0.12 * scorch + emberGlow * 0.30;
+            tb = tb * (1 - scorch) + 0.10 * scorch + emberGlow * 0.04;
+          }
         }
 
         // Accumulated Snow & Frost Layer on Terrain (higher elevations, leeward drifts & boulders hold snow longer)
@@ -7113,11 +7188,29 @@
           const i = idx(x, y);
 
           if (params.tool === 'water') {
+            if (water[i] > 0.025 && lavaFrac[i] >= 0.25) {
+              // Pouring water directly onto molten lava cools & solidifies the lava into hard volcanic rock!
+              solidifyLavaCellToRock(i, water[i]);
+            }
             const maxWaterDepth = Math.max(0, MAX_TERRAIN_HEIGHT - (bedrock[i] + sand[i]));
             water[i] = Math.min(maxWaterDepth, water[i] + falloff * 0.85);
-            lavaFrac[i] = Math.max(0.0, lavaFrac[i] - falloff * 0.90);
+            lavaFrac[i] = 0.0;
             soilMoisture[i] = Math.min(1.0, soilMoisture[i] + falloff * 0.5);
           } else if (params.tool === 'lava') {
+            if (water[i] > 0.04 && lavaFrac[i] < 0.25) {
+              // Pouring lava directly into cold water quenches & solidifies the contact layer into hard rock!
+              const quenchH = Math.min(water[i], falloff * 0.85);
+              lavaFrac[i] = 1.0;
+              solidifyLavaCellToRock(i, quenchH);
+            } else if (snowCover[i] > 0.06 || iceCover[i] > 0.06) {
+              // Pouring lava onto accumulated snow or frozen lake ice cools the first layer into hard rock!
+              const snowQuench = (snowCover[i] + iceCover[i]) * 0.65 * falloff;
+              snowCover[i] = 0.0;
+              iceCover[i] = 0.0;
+              bedrock[i] = clamp(bedrock[i] + sand[i] + snowQuench, MIN_TERRAIN_HEIGHT, MAX_TERRAIN_HEIGHT);
+              sand[i] = 0.0;
+              obstacleType[i] = 3;
+            }
             const maxLavaDepth = Math.max(0, MAX_TERRAIN_HEIGHT - (bedrock[i] + sand[i]));
             water[i] = Math.min(maxLavaDepth, water[i] + falloff * 0.85);
             lavaFrac[i] = 1.0;
@@ -7723,9 +7816,16 @@
         const groundY = bedrock[i] + sand[i];
 
         if (w > 0.02 && lf > 0.25) {
-          // Molten lava never freezes or holds snow!
-          snowCover[i] = 0;
-          iceCover[i] = 0;
+          // When snow falls onto molten lava (or snow/ice touches lava), the lava is cooled and turns hard like rock!
+          if (isSnowing || sn > 0.02 || ic > 0.02) {
+            const freezeRate = (0.45 + params.snowRate * 0.75 + (sn + ic) * 1.2) * dt;
+            snowCover[i] = 0;
+            iceCover[i] = 0;
+            solidifyLavaCellToRock(i, freezeRate);
+          } else {
+            snowCover[i] = 0;
+            iceCover[i] = 0;
+          }
           continue;
         }
 
@@ -7830,7 +7930,12 @@
 
     document.getElementById('btn-cloudburst').addEventListener('click', () => {
       for (let i = 0; i < MAX_CELLS; i++) {
+        if (water[i] > 0.02 && lavaFrac[i] >= 0.25) {
+          // Flash flood water quenches any active molten lava into hard volcanic rock!
+          solidifyLavaCellToRock(i, water[i]);
+        }
         water[i] += 0.38;
+        lavaFrac[i] = 0.0;
         soilMoisture[i] = Math.min(1.0, soilMoisture[i] + 0.45);
       }
       for (let k = 0; k < 6; k++) {
