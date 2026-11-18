@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Aeolian & Oasis — 3D Sand, Hydrology & Biome Flora Simulator</title>
   <style>
     :root {
@@ -34,11 +34,14 @@
       background: #120e0a;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
       color: var(--text);
+      touch-action: none;
+      overscroll-behavior: none;
     }
 
     #canvas-container {
       position: absolute;
       inset: 0;
+      touch-action: none;
     }
 
     /* Underwater Submersion Overlay (Caustics + Vignette when Camera is Below Water) */
@@ -657,6 +660,236 @@
       flex-wrap: wrap;
       margin-top: 6px;
     }
+
+    /* Mobile / Touch Mode Toggle Button (Orbit vs Sculpt for 1-Finger Touch) */
+    .touch-mode-btn {
+      display: none;
+      background: rgba(232, 168, 76, 0.18);
+      border: 1px solid rgba(255, 197, 109, 0.55);
+      color: #fde68a;
+      font-weight: 700;
+    }
+    .touch-mode-btn.orbit-active {
+      background: linear-gradient(135deg, #38bdf8, #0284c7);
+      color: #082f49;
+      border-color: #bae6fd;
+    }
+    @media (pointer: coarse), (max-width: 980px) {
+      .touch-mode-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+    }
+
+    /* Force Landscape Overlay on Mobile Portrait */
+    #portrait-rotate-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: radial-gradient(circle at 50% 40%, #1c323b 0%, #100d0a 85%);
+      color: var(--text);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 28px;
+      gap: 14px;
+    }
+    .rotate-phone-icon {
+      font-size: 54px;
+      animation: tiltPhone 1.8s ease-in-out infinite alternate;
+    }
+    @keyframes tiltPhone {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(-90deg); }
+    }
+    @media screen and (max-width: 920px) and (orientation: portrait) {
+      #portrait-rotate-overlay {
+        display: flex;
+      }
+      body.dismiss-portrait-lock #portrait-rotate-overlay {
+        display: none;
+      }
+    }
+
+    /* Mobile FPV Virtual Joystick & Action Pads */
+    #fpv-touch-controls {
+      display: none;
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 14;
+    }
+    body.fpv-touch-active #fpv-touch-controls {
+      display: block;
+    }
+    #fpv-joy-zone {
+      position: absolute;
+      bottom: 56px;
+      left: 18px;
+      width: 112px;
+      height: 112px;
+      border-radius: 50%;
+      background: rgba(16, 15, 13, 0.55);
+      border: 1.5px solid rgba(232, 168, 76, 0.45);
+      pointer-events: auto;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #fpv-joy-knob {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #ffc56d 0%, #c97b28 100%);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+      pointer-events: none;
+      transition: transform 0.04s linear;
+    }
+    #fpv-touch-actions {
+      position: absolute;
+      bottom: 58px;
+      right: 56px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: auto;
+    }
+    .fpv-touch-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      font-size: 11.5px;
+      font-weight: 700;
+      background: rgba(16, 15, 13, 0.72);
+      border: 1.5px solid rgba(232, 168, 76, 0.55);
+      color: #fde68a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.55);
+      touch-action: none;
+    }
+    .fpv-touch-btn:active {
+      background: linear-gradient(135deg, #e8a84c, #c97b28);
+      color: #16110b;
+    }
+
+    /* Compact Side-Docking Responsive Rules for Mobile & Short Landscape Screens */
+    @media screen and (max-height: 560px), screen and (max-width: 980px) {
+      /* 1. Top Bar: Hide brand subtitle & secondary stat readouts so top-left stays minimal */
+      .top-bar {
+        top: 6px;
+        left: 8px;
+        right: 54px;
+        gap: 6px;
+        flex-wrap: nowrap;
+      }
+      .brand-pill {
+        padding: 4px 9px;
+        border-radius: 10px;
+        gap: 7px;
+      }
+      .brand-sub {
+        display: none;
+      }
+      .brand-title {
+        font-size: 11px;
+      }
+      .compass-widget {
+        width: 28px;
+        height: 28px;
+      }
+      .compass-arrow {
+        width: 18px;
+        height: 18px;
+      }
+      .stats-bar {
+        padding: 4px 8px;
+        border-radius: 10px;
+        gap: 6px;
+      }
+      /* Hide bulky telemetry text items on mobile landscape, keeping FPV button, Screenshot, and Weather/FPS */
+      .stats-bar .stat-item {
+        display: none;
+      }
+      .stats-bar .stat-item.keep-mobile {
+        display: flex;
+        min-width: auto;
+      }
+      button.fpv-btn, #btn-screenshot {
+        padding: 5px 9px;
+        font-size: 11px;
+      }
+
+      /* 2. Bottom Tool Dock: Single horizontal scrollable strip tucked tightly at bottom-left */
+      .bottom-dock {
+        bottom: 6px;
+        left: 8px;
+        right: 54px;
+        max-width: calc(100vw - 66px);
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding: 5px 8px;
+        border-radius: 11px;
+        gap: 5px;
+      }
+      .bottom-dock::-webkit-scrollbar {
+        display: none;
+      }
+      .bottom-dock button {
+        flex-shrink: 0;
+        padding: 5px 9px;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .dock-hint {
+        display: none;
+      }
+
+      /* 3. Right Control Sidebar: Slimmer collapsed icon strip tucked against the right edge */
+      .control-panel {
+        top: 6px;
+        right: 6px;
+        bottom: 6px;
+        width: 285px;
+        padding: 9px;
+      }
+      .control-panel.collapsed {
+        width: 40px;
+        padding: 6px 4px;
+        max-height: calc(100vh - 12px);
+        overflow-y: auto;
+      }
+      .panel-collapsed-icons {
+        gap: 4px;
+      }
+      .panel-icon-btn {
+        width: 30px;
+        height: 30px;
+        font-size: 13.5px;
+        border-radius: 8px;
+      }
+
+      /* 4. FPV Equipment Bar & Banner on mobile landscape */
+      #fpv-banner {
+        display: none !important;
+      }
+      #fpv-equip-bar {
+        bottom: 46px;
+        padding: 4px 7px;
+        gap: 4px;
+      }
+      .fpv-slot-btn {
+        padding: 4px 8px;
+        font-size: 10.5px;
+      }
+    }
   </style>
   <script type="importmap">
     {
@@ -669,6 +902,29 @@
 </head>
 <body>
   <div id="canvas-container"></div>
+
+  <!-- Force Landscape Overlay on Mobile Portrait -->
+  <div id="portrait-rotate-overlay">
+    <div class="rotate-phone-icon">📱🔄</div>
+    <h2 style="font-size:20px; color:var(--accent-bright); letter-spacing:0.04em; text-transform:uppercase;">Please Rotate to Landscape</h2>
+    <p style="font-size:13.5px; color:var(--text-dim); max-width:320px; line-height:1.5;">
+      Aeolian &amp; Oasis 3D is designed for landscape view. Rotate your device horizontally for the full 3D viewport and touch controls.
+    </p>
+    <button id="btn-force-landscape" style="margin-top:8px; padding:9px 18px; font-weight:700; background:linear-gradient(135deg,#e8a84c,#c97b28); color:#16110b; border-color:#ffc56d;">
+      🔄 Lock Landscape / Continue
+    </button>
+  </div>
+
+  <!-- Mobile FPV Virtual Joystick & Action Buttons -->
+  <div id="fpv-touch-controls">
+    <div id="fpv-joy-zone" title="Drag thumb to walk in FPV mode">
+      <div id="fpv-joy-knob"></div>
+    </div>
+    <div id="fpv-touch-actions">
+      <button id="btn-fpv-touch-action" class="fpv-touch-btn" title="Use Sculpt Brush or Draw/Fire Bow">🎯 Use</button>
+      <button id="btn-fpv-touch-jump" class="fpv-touch-btn" title="Jump or Swim Up">⬆️ Jump</button>
+    </div>
+  </div>
 
   <!-- Underwater Lens & Caustics Overlay -->
   <div id="underwater-tint"></div>
@@ -722,7 +978,7 @@
       <button id="btn-screenshot" title="Capture a PNG screenshot of the 3D scene and save it to your computer (Shortcut: P)">
         📸 Screenshot
       </button>
-      <div class="stat-item">
+      <div class="stat-item keep-mobile">
         <span class="stat-label">Weather</span>
         <span class="stat-value" style="color:#bae6fd;" id="stat-weather">🌤️ Clear Oasis</span>
       </div>
@@ -746,7 +1002,7 @@
         <span class="stat-label">Wildlife</span>
         <span class="stat-value" style="color:#f472b6;" id="stat-fauna">0</span>
       </div>
-      <div class="stat-item">
+      <div class="stat-item keep-mobile">
         <span class="stat-label">FPS</span>
         <span class="stat-value" id="stat-fps">60</span>
       </div>
@@ -755,6 +1011,7 @@
 
   <!-- Bottom Brush / Interaction Dock -->
   <div class="bottom-dock">
+    <button id="btn-touch-mode" class="touch-mode-btn" title="Toggle 1-Finger Touch between Sculpting Terrain and Rotating Camera (2 fingers always pinch-zoom/orbit)">✋ Touch: Sculpt</button>
     <button class="tool-btn active" data-tool="water" title="Pour water that sheds down slopes and collects in the lowest basins">💧 Pour Water</button>
     <button class="tool-btn" data-tool="pour" title="Left-click + drag on terrain to pour sand">⏳ Pour Sand</button>
     <button class="tool-btn" data-tool="seed" title="Plant flora (grows Jungle near open water, Cacti & Scrub in the desert)">🌱 Plant Flora</button>
@@ -1179,6 +1436,13 @@
       MIDDLE: THREE.MOUSE.DOLLY,
       RIGHT: THREE.MOUSE.ROTATE
     };
+
+    // Default Touch Configuration: 1-finger touch sculpts terrain (or orbits when toggled), 2-finger pinch/drag always zooms & rotates camera!
+    controls.touches = {
+      ONE: null,
+      TWO: THREE.TOUCH.DOLLY_ROTATE
+    };
+    let touchOneFingerMode = 'sculpt'; // 'sculpt' | 'orbit'
 
     const hemiLight = new THREE.HemisphereLight(0xffebd1, 0x4f4335, 0.72);
     scene.add(hemiLight);
@@ -5703,6 +5967,8 @@
       bowCharge: 0,
       bowReleaseRecoil: 0,
       sculptPulse: 0,
+      joyX: 0,
+      joyY: 0,
       keys: { forward: false, backward: false, left: false, right: false, sprint: false, jump: false },
       savedOrbitPos: new THREE.Vector3(),
       savedOrbitTarget: new THREE.Vector3()
@@ -6073,6 +6339,8 @@
       fpvBanner.style.display = params.fpvMode ? 'block' : 'none';
       fpvEquipBar.style.display = params.fpvMode ? 'flex' : 'none';
       fpvViewModelRoot.visible = params.fpvMode;
+      const isTouchCapable = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.matchMedia('(pointer: coarse)').matches;
+      document.body.classList.toggle('fpv-touch-active', params.fpvMode && isTouchCapable);
 
       // Immediately rescale all flora (skinnier & smaller in FPV so you can see through the underbrush)
       rebuildFloraInstances();
@@ -6092,15 +6360,20 @@
         fpvState.yaw = 0.38;
         fpvState.pitch = 0.16;
         fpvState.velY = 0;
+        fpvState.joyX = 0;
+        fpvState.joyY = 0;
         setFpvEquipment(params.fpvEquip);
 
-        if (renderer.domElement.requestPointerLock) {
+        if (!isTouchCapable && renderer.domElement.requestPointerLock) {
           renderer.domElement.requestPointerLock();
         }
       } else {
         torchLight.intensity = 0.0;
         fpvState.bowDrawing = false;
         fpvState.bowCharge = 0;
+        fpvState.joyX = 0;
+        fpvState.joyY = 0;
+        document.body.classList.remove('fpv-touch-active');
         if (document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
           document.exitPointerLock();
         }
@@ -6224,7 +6497,7 @@
           fpvState.trappedUnderIce = false;
         }
 
-        // Horizontal movement vector
+        // Horizontal movement vector (Keyboard WASD/Arrows + Mobile Touch Virtual Joystick)
         const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), fpvState.yaw);
         const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), fpvState.yaw);
 
@@ -6235,8 +6508,13 @@
         if (fpvState.keys.right) { moveX += right.x; moveZ += right.z; }
         if (fpvState.keys.left) { moveX -= right.x; moveZ -= right.z; }
 
+        if (Math.abs(fpvState.joyX) > 0.04 || Math.abs(fpvState.joyY) > 0.04) {
+          moveX += forward.x * (-fpvState.joyY) + right.x * fpvState.joyX;
+          moveZ += forward.z * (-fpvState.joyY) + right.z * fpvState.joyX;
+        }
+
         const moveLen = Math.hypot(moveX, moveZ);
-        if (moveLen > 0) {
+        if (moveLen > 1.0) {
           moveX /= moveLen;
           moveZ /= moveLen;
         }
@@ -6552,15 +6830,21 @@
       rebuildFloraInstances();
     }
 
+    // Multi-touch & Pointer tracking so 1-finger sculpts (or orbits), 2-finger pinch-zooms/rotates, and FPV touch-look & virtual joystick work seamlessly
+    const activeTouchPointers = new Set();
+    let fpvLookPointerId = null;
+    let fpvLookLastX = 0;
+    let fpvLookLastY = 0;
+
     function updatePointerRay(e) {
       if (params.fpvMode && params.fpvEquip !== 'sculpt') {
         brushRing.visible = false;
         return null;
       }
-      if (params.fpvMode && document.pointerLockElement === renderer.domElement) {
-        // In pointer-locked FPV mode, raycast from center crosshair
+      if (params.fpvMode && (document.pointerLockElement === renderer.domElement || e === null)) {
+        // In pointer-locked or mobile FPV mode, raycast from center crosshair
         pointer.set(0, 0);
-      } else {
+      } else if (e) {
         const rect = renderer.domElement.getBoundingClientRect();
         pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -6581,11 +6865,28 @@
     }
 
     renderer.domElement.addEventListener('pointerdown', (e) => {
-      if (params.fpvMode && document.pointerLockElement !== renderer.domElement && e.button === 0) {
-        renderer.domElement.requestPointerLock();
+      if (e.pointerType === 'touch') {
+        activeTouchPointers.add(e.pointerId);
+        // When a 2nd finger touches down, immediately cancel any 1-finger sculpt so 2-finger pinch-zoom / rotate takes over cleanly
+        if (activeTouchPointers.size >= 2) {
+          isPointerDown = false;
+          brushRing.visible = false;
+          return;
+        }
       }
-      if (e.button === 0 && !e.altKey && !e.shiftKey) {
-        if (params.fpvMode) {
+
+      if (params.fpvMode) {
+        if (e.pointerType === 'touch') {
+          // On touch screens in FPV mode, dragging on the 3D canvas looks around!
+          fpvLookPointerId = e.pointerId;
+          fpvLookLastX = e.clientX;
+          fpvLookLastY = e.clientY;
+          return;
+        }
+        if (document.pointerLockElement !== renderer.domElement && e.button === 0) {
+          renderer.domElement.requestPointerLock();
+        }
+        if (e.button === 0 && !e.altKey && !e.shiftKey) {
           if (params.fpvEquip === 'sculpt') {
             isPointerDown = true;
             const pt = updatePointerRay(e);
@@ -6594,8 +6895,16 @@
             fpvState.bowDrawing = true;
             fpvState.bowCharge = 0.08;
           }
-          return;
         }
+        return;
+      }
+
+      // In Orbit Mode: if touch is set to 'orbit' mode, let OrbitControls handle 1-finger camera rotation
+      if (e.pointerType === 'touch' && touchOneFingerMode === 'orbit') {
+        return;
+      }
+
+      if ((e.button === 0 || e.pointerType === 'touch') && !e.altKey && !e.shiftKey) {
         isPointerDown = true;
         const pt = updatePointerRay(e);
         if (pt) applyBrushAtWorld(pt.x, pt.z);
@@ -6603,21 +6912,174 @@
     });
 
     window.addEventListener('pointermove', (e) => {
+      if (params.fpvMode && e.pointerType === 'touch' && e.pointerId === fpvLookPointerId) {
+        const dx = e.clientX - fpvLookLastX;
+        const dy = e.clientY - fpvLookLastY;
+        fpvLookLastX = e.clientX;
+        fpvLookLastY = e.clientY;
+        const touchSensitivity = 0.0042;
+        fpvState.yaw -= dx * touchSensitivity;
+        fpvState.pitch = clamp(fpvState.pitch - dy * touchSensitivity, -Math.PI * 0.47, Math.PI * 0.47);
+        if (isPointerDown && params.fpvEquip === 'sculpt') {
+          const pt = updatePointerRay(null);
+          if (pt) applyBrushAtWorld(pt.x, pt.z);
+        }
+        return;
+      }
+
+      if (e.pointerType === 'touch' && (activeTouchPointers.size >= 2 || (touchOneFingerMode === 'orbit' && !params.fpvMode))) {
+        return;
+      }
+
       const pt = updatePointerRay(e);
       if (isPointerDown && pt && (!params.fpvMode || params.fpvEquip === 'sculpt')) {
         applyBrushAtWorld(pt.x, pt.z);
       }
     });
 
-    window.addEventListener('pointerup', () => {
-      if (params.fpvMode && params.fpvEquip === 'bow' && fpvState.bowDrawing) {
+    function handlePointerUpOrCancel(e) {
+      if (e && e.pointerType === 'touch') {
+        activeTouchPointers.delete(e.pointerId);
+        if (e.pointerId === fpvLookPointerId) {
+          fpvLookPointerId = null;
+        }
+      }
+      if (params.fpvMode && params.fpvEquip === 'bow' && fpvState.bowDrawing && (!e || e.pointerType !== 'touch')) {
         fireFpvArrow(Math.max(0.15, fpvState.bowCharge));
         fpvState.bowDrawing = false;
         fpvState.bowCharge = 0;
         fpvState.bowReleaseRecoil = 1.0;
       }
-      isPointerDown = false;
-    });
+      if (activeTouchPointers.size === 0) {
+        isPointerDown = false;
+      }
+    }
+
+    window.addEventListener('pointerup', handlePointerUpOrCancel);
+    window.addEventListener('pointercancel', handlePointerUpOrCancel);
+
+    // --- Mobile Touch Mode Toggle (1-Finger Sculpt vs 1-Finger Camera Orbit) ---
+    const btnTouchMode = document.getElementById('btn-touch-mode');
+    if (btnTouchMode) {
+      btnTouchMode.addEventListener('click', (e) => {
+        e.stopPropagation();
+        touchOneFingerMode = (touchOneFingerMode === 'sculpt') ? 'orbit' : 'sculpt';
+        if (touchOneFingerMode === 'orbit') {
+          controls.touches.ONE = THREE.TOUCH.ROTATE;
+          btnTouchMode.textContent = '🎥 Touch: Orbit';
+          btnTouchMode.classList.add('orbit-active');
+          brushRing.visible = false;
+        } else {
+          controls.touches.ONE = null;
+          btnTouchMode.textContent = '✋ Touch: Sculpt';
+          btnTouchMode.classList.remove('orbit-active');
+        }
+      });
+    }
+
+    // --- Force Landscape Lock Button on Mobile Portrait Overlay ---
+    const btnForceLandscape = document.getElementById('btn-force-landscape');
+    if (btnForceLandscape) {
+      btnForceLandscape.addEventListener('click', async () => {
+        try {
+          if (document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+          }
+          if (screen.orientation && screen.orientation.lock) {
+            await screen.orientation.lock('landscape');
+          }
+        } catch (_) {
+          // Fallback on iOS Safari where screen.orientation.lock is restricted: allow continuing
+        }
+        document.body.classList.add('dismiss-portrait-lock');
+      });
+    }
+
+    // --- Mobile FPV Virtual Thumb Joystick & Jump / Action Touch Pads ---
+    const fpvJoyZone = document.getElementById('fpv-joy-zone');
+    const fpvJoyKnob = document.getElementById('fpv-joy-knob');
+    let joyPointerId = null;
+
+    if (fpvJoyZone && fpvJoyKnob) {
+      const updateJoystick = (clientX, clientY) => {
+        const rect = fpvJoyZone.getBoundingClientRect();
+        const cx = rect.left + rect.width * 0.5;
+        const cy = rect.top + rect.height * 0.5;
+        const maxR = rect.width * 0.38;
+        let dx = clientX - cx;
+        let dy = clientY - cy;
+        const dist = Math.hypot(dx, dy);
+        if (dist > maxR) {
+          dx = (dx / dist) * maxR;
+          dy = (dy / dist) * maxR;
+        }
+        fpvJoyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+        fpvState.joyX = dx / maxR;
+        fpvState.joyY = dy / maxR;
+      };
+
+      fpvJoyZone.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        joyPointerId = e.pointerId;
+        fpvJoyZone.setPointerCapture(e.pointerId);
+        updateJoystick(e.clientX, e.clientY);
+      });
+      fpvJoyZone.addEventListener('pointermove', (e) => {
+        if (e.pointerId !== joyPointerId) return;
+        e.stopPropagation();
+        updateJoystick(e.clientX, e.clientY);
+      });
+      const resetJoystick = (e) => {
+        if (e.pointerId !== joyPointerId) return;
+        joyPointerId = null;
+        fpvJoyKnob.style.transform = 'translate(0px, 0px)';
+        fpvState.joyX = 0;
+        fpvState.joyY = 0;
+      };
+      fpvJoyZone.addEventListener('pointerup', resetJoystick);
+      fpvJoyZone.addEventListener('pointercancel', resetJoystick);
+    }
+
+    const btnFpvTouchJump = document.getElementById('btn-fpv-touch-jump');
+    if (btnFpvTouchJump) {
+      btnFpvTouchJump.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        fpvState.keys.jump = true;
+      });
+      const releaseJump = (e) => {
+        e.stopPropagation();
+        fpvState.keys.jump = false;
+      };
+      btnFpvTouchJump.addEventListener('pointerup', releaseJump);
+      btnFpvTouchJump.addEventListener('pointercancel', releaseJump);
+    }
+
+    const btnFpvTouchAction = document.getElementById('btn-fpv-touch-action');
+    if (btnFpvTouchAction) {
+      btnFpvTouchAction.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        if (params.fpvEquip === 'sculpt') {
+          isPointerDown = true;
+          const pt = updatePointerRay(null);
+          if (pt) applyBrushAtWorld(pt.x, pt.z);
+        } else if (params.fpvEquip === 'bow') {
+          fpvState.bowDrawing = true;
+          fpvState.bowCharge = 0.08;
+        }
+      });
+      const releaseAction = (e) => {
+        e.stopPropagation();
+        if (params.fpvEquip === 'bow' && fpvState.bowDrawing) {
+          fireFpvArrow(Math.max(0.18, fpvState.bowCharge));
+          fpvState.bowDrawing = false;
+          fpvState.bowCharge = 0;
+          fpvState.bowReleaseRecoil = 1.0;
+        }
+        isPointerDown = false;
+      };
+      btnFpvTouchAction.addEventListener('pointerup', releaseAction);
+      btnFpvTouchAction.addEventListener('pointercancel', releaseAction);
+    }
 
     // ============================================================================
     // 14. UI CONTROLS, FIDELITY SLIDER, WEATHER REGIMES & RESET BUTTONS
