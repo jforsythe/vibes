@@ -557,6 +557,23 @@
       border-color: var(--water);
     }
 
+    button.tool-btn[data-tool="lava"] {
+      border-color: rgba(255, 85, 0, 0.38);
+    }
+
+    button.tool-btn[data-tool="lava"]:hover {
+      background: rgba(255, 69, 0, 0.22);
+      border-color: #ff6a00;
+      color: #ffedd5;
+    }
+
+    button.tool-btn[data-tool="lava"].active {
+      background: linear-gradient(135deg, #ff5100 0%, #c21807 100%);
+      color: #fff7ed;
+      border-color: #fde047;
+      box-shadow: 0 0 16px rgba(255, 81, 0, 0.65);
+    }
+
     button.plant-btn:hover {
       background: rgba(16, 185, 129, 0.22);
       border-color: var(--jungle);
@@ -1013,6 +1030,7 @@
   <div class="bottom-dock">
     <button id="btn-touch-mode" class="touch-mode-btn" title="Toggle 1-Finger Touch between Sculpting Terrain and Rotating Camera (2 fingers always pinch-zoom/orbit)">✋ Touch: Sculpt</button>
     <button class="tool-btn active" data-tool="water" title="Pour water that sheds down slopes and collects in the lowest basins">💧 Pour Water</button>
+    <button class="tool-btn" data-tool="lava" title="Pour glowing molten lava that flows down valleys, incinerates flora, melts snow & ice, and glows brightly at night">🌋 Pour Lava</button>
     <button class="tool-btn" data-tool="pour" title="Left-click + drag on terrain to pour sand">⏳ Pour Sand</button>
     <button class="tool-btn" data-tool="seed" title="Plant flora (grows Jungle near open water, Cacti & Scrub in the desert)">🌱 Plant Flora</button>
     <button class="tool-btn" data-tool="fauna" title="Spawn biome animals (Camels & Oryx in desert, Flamingos & Macaws in jungle, Fish in water)">🐪 Spawn Animals</button>
@@ -1319,6 +1337,8 @@
     const obstacleType = new Uint8Array(MAX_CELLS);
     const snowCover = new Float32Array(MAX_CELLS);      // 0..1+ accumulated snowpack depth on terrain & flora
     const iceCover = new Float32Array(MAX_CELLS);       // 0..1 surface ice crust on lakes/pools during snow & ice storms
+    const lavaFrac = new Float32Array(MAX_CELLS);       // 0.0 = water, 1.0 = molten glowing lava
+    const lavaFracNext = new Float32Array(MAX_CELLS);
 
     const params = {
       fidelity: 3,            // 1: Low-Poly Fast, 2: Balanced, 3: High, 4: Ultra, 5: Cinematic Max
@@ -1345,6 +1365,7 @@
       showMoistureOverlay: false,
       showParticles: false,
       totalWaterVol: 0,
+      totalLavaVol: 0,
       junglePlantCount: 0,
       desertPlantCount: 0,
       activePlantCap: 6000,
@@ -1465,6 +1486,12 @@
     const moonAmbientLight = new THREE.DirectionalLight(0x7dd3fc, 0.0);
     moonAmbientLight.position.set(-210, 280, -490);
     scene.add(moonAmbientLight);
+
+    // Dynamic Volcanic Lava PointLights (illuminate surrounding dunes, canyon walls, cacti & wildlife with a warm magma glow at night!)
+    const lavaNightLight = new THREE.PointLight(0xff4800, 0.0, 130.0, 1.25);
+    scene.add(lavaNightLight);
+    const lavaNightLight2 = new THREE.PointLight(0xff6a00, 0.0, 110.0, 1.30);
+    scene.add(lavaNightLight2);
 
     // ============================================================================
     // 2B. CELESTIAL SKYBOX, DAY/NIGHT CYCLE, MOVING SUN, STARFIELD & FIXED GLOWING MOONS
@@ -2252,13 +2279,15 @@
       waterSkirtGeo.attributes.normal.needsUpdate = true;
     }
 
-    // 3D Water Surface Mesh — DoubleSide so it is visible overhead when diving underwater in FPV mode!
+    // 3D Water & Molten Lava Surface Mesh — DoubleSide so it is visible overhead when diving underwater in FPV mode!
     const waterGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, GRID - 1, GRID - 1);
     waterGeo.rotateX(-Math.PI / 2);
     const waterColors = new Float32Array(MAX_CELLS * 3);
     const waterDepthAttr = new Float32Array(MAX_CELLS);
+    const lavaMaskAttr = new Float32Array(MAX_CELLS);
     waterGeo.setAttribute('color', new THREE.BufferAttribute(waterColors, 3));
     waterGeo.setAttribute('waterDepth', new THREE.BufferAttribute(waterDepthAttr, 1));
+    waterGeo.setAttribute('lavaMask', new THREE.BufferAttribute(lavaMaskAttr, 1));
 
     const waterMat = new THREE.MeshStandardMaterial({
       vertexColors: true,
@@ -2275,20 +2304,29 @@
       shader.uniforms.uWindDir = uniforms.uWindDir;
       shader.uniforms.uFidelity = uniforms.uFidelity;
       shader.uniforms.uUnderwater = uniforms.uUnderwater;
+      shader.uniforms.uNightFactor = skyUniforms.uNightFactor;
 
       shader.vertexShader = `
         attribute float waterDepth;
+        attribute float lavaMask;
         uniform float uTime;
         uniform vec2 uWindDir;
         uniform float uFidelity;
         varying vec3 vWaterWorldPos;
         varying float vWaterDepth;
+        varying float vLavaMask;
         ${shader.vertexShader}
       `.replace(
         `#include <begin_vertex>`,
         `#include <begin_vertex>
-         // At Ultra/Cinematic quality (Tier 4 & 5), add gentle 3D surface wave displacement in deeper pools
-         if (uFidelity >= 3.5 && waterDepth > 0.08) {
+         if (lavaMask > 0.25 && waterDepth > 0.06) {
+           // Slow, heavy convecting molten magma boils & bubbles
+           float boilAmp = clamp((waterDepth - 0.06) * 0.16, 0.0, 0.11) * lavaMask;
+           float b1 = sin(position.x * 0.48 + uTime * 1.45) * cos(position.z * 0.48 - uTime * 1.25);
+           float b2 = sin((position.x - position.z) * 0.85 + uTime * 2.35);
+           transformed.y += (b1 * 0.65 + b2 * 0.35) * boilAmp;
+         } else if (uFidelity >= 3.5 && waterDepth > 0.08) {
+           // At Ultra/Cinematic quality (Tier 4 & 5), add gentle 3D surface wave displacement in deeper water pools
            float waveAmp = clamp((waterDepth - 0.08) * 0.12, 0.0, 0.065) * (uFidelity >= 4.5 ? 1.35 : 0.85);
            float phase1 = dot(position.xz, uWindDir) * 0.85 - uTime * 3.2;
            float phase2 = (position.x * 0.62 - position.z * 0.78) - uTime * 2.4;
@@ -2298,7 +2336,8 @@
         `#include <worldpos_vertex>`,
         `#include <worldpos_vertex>
          vWaterWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
-         vWaterDepth = waterDepth;`
+         vWaterDepth = waterDepth;
+         vLavaMask = lavaMask;`
       );
 
       shader.fragmentShader = `
@@ -2306,8 +2345,55 @@
         uniform vec2 uWindDir;
         uniform float uFidelity;
         uniform float uUnderwater;
+        uniform float uNightFactor;
         varying vec3 vWaterWorldPos;
         varying float vWaterDepth;
+        varying float vLavaMask;
+
+        // Procedural 2D noise & cellular magma fissure functions for realistic glowing lava
+        float lavaHash(vec2 p) {
+          p = fract(p * vec2(127.1, 311.7));
+          p += dot(p, p + 34.5);
+          return fract(p.x * p.y);
+        }
+
+        float lavaNoise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(lavaHash(i + vec2(0.0, 0.0)), lavaHash(i + vec2(1.0, 0.0)), u.x),
+            mix(lavaHash(i + vec2(0.0, 1.0)), lavaHash(i + vec2(1.0, 1.0)), u.x),
+            u.y
+          );
+        }
+
+        // Voronoi cellular distance for fracturing cooled basalt crust plates over glowing magma cracks
+        vec2 lavaVoronoi(vec2 x, float t) {
+          vec2 n = floor(x);
+          vec2 f = fract(x);
+          float m1 = 8.0;
+          float m2 = 8.0;
+          for (int j = -1; j <= 1; j++) {
+            for (int i = -1; i <= 1; i++) {
+              vec2 g = vec2(float(i), float(j));
+              vec2 cellId = n + g;
+              float h1 = lavaHash(cellId);
+              float h2 = lavaHash(cellId + vec2(17.3, 41.9));
+              vec2 o = 0.5 + 0.38 * sin(t * 0.65 + 6.2831 * vec2(h1, h2));
+              vec2 r = g - f + o;
+              float d = dot(r, r);
+              if (d < m1) {
+                m2 = m1;
+                m1 = d;
+              } else if (d < m2) {
+                m2 = d;
+              }
+            }
+          }
+          return vec2(sqrt(m1), sqrt(m2) - sqrt(m1));
+        }
+
         ${shader.fragmentShader}
       `.replace(
         `#include <clipping_planes_fragment>`,
@@ -2317,7 +2403,7 @@
         `#include <normal_fragment_maps>`,
         `#include <normal_fragment_maps>
          // At Ultra / Cinematic quality (Tier 4 & 5), apply organic multi-directional wind ripples & expanding water rings
-         if (uFidelity >= 3.5) {
+         if (uFidelity >= 3.5 && vLavaMask < 0.5) {
            float depthFade = smoothstep(0.08, 0.32, vWaterDepth);
            vec2 p = vWaterWorldPos.xz;
            vec2 perp = vec2(-uWindDir.y, uWindDir.x);
@@ -2334,8 +2420,46 @@
       ).replace(
         `#include <dithering_fragment>`,
         `#include <dithering_fragment>
-         // When looking up at the water surface from underwater (Snell's window shimmer)
-         if (uUnderwater > 0.5) {
+         if (vLavaMask > 0.02) {
+           // --- MULTI-LAYERED CONVECTING MOLTEN LAVA & GLOWING MAGMA FISSURE SHADER ---
+           vec2 uv = vWaterWorldPos.xz * 0.30;
+           // Domain warping so magma veins swirl and churn organically
+           float warpX = lavaNoise(uv * 1.3 + vec2(uTime * 0.16, -uTime * 0.12));
+           float warpY = lavaNoise(uv * 1.3 + vec2(-uTime * 0.14, uTime * 0.18) + vec2(11.7, 5.3));
+           vec2 warpedUV = uv + vec2(warpX, warpY) * 0.65;
+
+           // Cellular Voronoi crust plates + glowing magma fissures between plates
+           vec2 vor = lavaVoronoi(warpedUV * 1.45, uTime);
+           float cellEdgeDist = vor.y; // 0 at fissure cracks between cooled basalt plates, larger inside plate centers
+           float fineNoise = lavaNoise(warpedUV * 3.8 - vec2(uTime * 0.32, uTime * 0.22));
+           float slowPulse = 0.5 + 0.5 * sin(uTime * 2.4 + vor.x * 5.0 + fineNoise * 3.5);
+
+           // Glowing magma fissures (brightest along cracks and shallow advancing lava rims)
+           float fissureCrack = 1.0 - smoothstep(0.02, 0.28 + slowPulse * 0.08, cellEdgeDist);
+           float subCrustHeat = smoothstep(0.32, 0.85, fineNoise * 0.65 + (1.0 - vor.x) * 0.55);
+           float rimHeat = smoothstep(0.30, 0.07, vWaterDepth) * 0.65;
+           float totalHeat = clamp(max(fissureCrack * 1.05, subCrustHeat * 0.78) + rimHeat, 0.0, 1.0);
+
+           // Temperature color palette: Cooled Dark Volcanic Basalt Crust -> Deep Magma Red -> Blazing Orange -> White-Hot Gold Core
+           vec3 crustCol   = vec3(0.09, 0.035, 0.025);
+           vec3 deepRedCol = vec3(0.76, 0.06, 0.01);
+           vec3 orangeCol  = vec3(1.00, 0.38, 0.02);
+           vec3 coreHotCol = vec3(1.00, 0.94, 0.45);
+
+           vec3 lavaCol = mix(crustCol, deepRedCol, smoothstep(0.08, 0.38, totalHeat));
+           lavaCol = mix(lavaCol, orangeCol, smoothstep(0.35, 0.72, totalHeat));
+           lavaCol = mix(lavaCol, coreHotCol, smoothstep(0.70, 0.97, totalHeat));
+
+           // Self-illuminating emissive radiance: glows even brighter at night under ACES Filmic tone mapping!
+           float emissiveBoost = 1.15 + uNightFactor * 0.85 + slowPulse * 0.18;
+           vec3 finalLavaRGB = mix(crustCol * (0.65 + uNightFactor * 0.35), lavaCol * emissiveBoost, smoothstep(0.06, 0.30, totalHeat));
+
+           float lavaBlend = smoothstep(0.02, 0.45, vLavaMask);
+           gl_FragColor.rgb = mix(gl_FragColor.rgb, finalLavaRGB, lavaBlend);
+           float lavaAlpha = smoothstep(0.065, 0.14, vWaterDepth) * 0.98;
+           gl_FragColor.a = mix(gl_FragColor.a, lavaAlpha, lavaBlend);
+         } else if (uUnderwater > 0.5) {
+           // When looking up at the water surface from underwater (Snell's window shimmer)
            gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.38, 0.85, 0.98), 0.35);
            gl_FragColor.a = 0.88;
          } else {
@@ -2842,6 +2966,8 @@
     function resetCurrentWaterAndPlants() {
       water.fill(0);
       waterNext.fill(0);
+      lavaFrac.fill(0);
+      lavaFracNext.fill(0);
       soilMoisture.fill(0);
       moistureNext.fill(0);
       waterProximity.fill(0);
@@ -2869,6 +2995,8 @@
       bedrock.fill(0);
       sand.fill(0);
       water.fill(0);
+      lavaFrac.fill(0);
+      lavaFracNext.fill(0);
       soilMoisture.fill(0);
       waterProximity.fill(0);
       veg.fill(0);
@@ -3111,16 +3239,22 @@
 
       for (let i = 0; i < MAX_CELLS; i++) {
         let w = water[i];
-        if (rainAdd > 0) w += rainAdd;
-        if (w > 0) w = Math.max(0, w - evapSub);
+        const lf = lavaFrac[i];
+        if (lf < 0.35) {
+          if (rainAdd > 0) w += rainAdd;
+          if (w > 0) w = Math.max(0, w - evapSub);
+        } else if (w <= 0.001) {
+          lavaFrac[i] = 0;
+        }
         water[i] = w;
       }
 
-      // Gravity downhill flow rate scales smoothly, with a responsive minimum so poured water still settles naturally
+      // Gravity downhill flow rate scales smoothly, with a responsive minimum so poured water & lava settle naturally
       const flowScale = Math.min(1.0, Math.max(stepScale * 2.5, 0.08));
 
       for (let pass = 0; pass < 3; pass++) {
         waterNext.set(water);
+        lavaFracNext.set(lavaFrac);
 
         const forward = (pass % 2 === 0);
         const startY = forward ? 1 : GRID - 2;
@@ -3134,6 +3268,7 @@
             const w = water[i];
             if (w <= 0.00005) continue;
 
+            const cellLava = lavaFrac[i];
             const groundH = bedrock[i] + sand[i];
             const headCenter = groundH + w;
 
@@ -3154,7 +3289,9 @@
             }
 
             if (totalWeightedDiff > 0) {
-              const maxOutflow = Math.min(w, maxDrop * 0.45, totalWeightedDiff * 0.082) * flowScale;
+              // Molten lava flows with thicker viscosity (~0.52x speed) compared to water
+              const viscosityMult = 1.0 - cellLava * 0.48;
+              const maxOutflow = Math.min(w, maxDrop * 0.45, totalWeightedDiff * 0.082) * flowScale * viscosityMult;
               if (maxOutflow > 1e-7) {
                 waterNext[i] -= maxOutflow;
                 const invTotal = maxOutflow / totalWeightedDiff;
@@ -3162,7 +3299,13 @@
                 for (let d = 0; d < 8; d++) {
                   if (diffs[d] > 0) {
                     const ni = i + N8_OFFSETS[d];
-                    waterNext[ni] += diffs[d] * invTotal;
+                    const dFlow = diffs[d] * invTotal;
+                    const prevVol = Math.max(0, waterNext[ni]);
+                    const newVol = prevVol + dFlow;
+                    waterNext[ni] = newVol;
+                    if (newVol > 1e-7) {
+                      lavaFracNext[ni] = (prevVol * lavaFracNext[ni] + dFlow * cellLava) / newVol;
+                    }
                   }
                 }
 
@@ -3185,6 +3328,7 @@
         }
 
         water.set(waterNext);
+        lavaFrac.set(lavaFracNext);
       }
 
       // Domain boundary drainage
@@ -3196,49 +3340,59 @@
         water[idx(k, GRID - 1)] *= edgeDecay;
       }
 
-      // Capillary Soil Moisture & Open-Water Proximity Field
+      // Capillary Soil Moisture, Open-Water Proximity Field & Lava Incineration
       for (let y = 1; y < GRID - 1; y++) {
         for (let x = 1; x < GRID - 1; x++) {
           const i = idx(x, y);
           let m = soilMoisture[i];
           let wp = waterProximity[i];
+          const isLavaCell = (water[i] > 0.025 && lavaFrac[i] >= 0.35);
 
-          if (water[i] > 0 && water[i] < 0.085) {
-            const soak = Math.min(water[i], 0.00055 * stepScale);
-            water[i] -= soak;
-            m = Math.min(0.60, m + soak * 8.0);
-          }
-
-          if (water[i] > 0.16) {
-            m = Math.min(1.0, m + 0.14 * stepScale);
-            wp = 1.0;
+          if (isLavaCell) {
+            // Molten lava incinerates vegetation, vaporizes soil moisture, and melts snow & ice!
+            m = 0.0;
+            wp = 0.0;
+            if (veg[i] > 0) veg[i] = Math.max(0, veg[i] - 0.45 * stepScale);
+            snowCover[i] = 0.0;
+            iceCover[i] = 0.0;
           } else {
-            if (params.rainRate > 0.05) {
-              m = Math.min(0.55, m + params.rainRate * 0.008 * stepScale);
+            if (water[i] > 0 && water[i] < 0.085) {
+              const soak = Math.min(water[i], 0.00055 * stepScale);
+              water[i] -= soak;
+              m = Math.min(0.60, m + soak * 8.0);
             }
-            const maxNeighborWP = Math.max(
-              waterProximity[i + 1],
-              waterProximity[i - 1],
-              waterProximity[i + GRID],
-              waterProximity[i - GRID]
+
+            if (water[i] > 0.16) {
+              m = Math.min(1.0, m + 0.14 * stepScale);
+              wp = 1.0;
+            } else {
+              if (params.rainRate > 0.05) {
+                m = Math.min(0.55, m + params.rainRate * 0.008 * stepScale);
+              }
+              const maxNeighborWP = Math.max(
+                waterProximity[i + 1],
+                waterProximity[i - 1],
+                waterProximity[i + GRID],
+                waterProximity[i - GRID]
+              );
+              const targetWP = Math.max(0.0, maxNeighborWP - 0.075);
+              wp += (targetWP - wp) * Math.min(1.0, 0.35 * flowScale);
+            }
+
+            const maxNeighborM = Math.max(
+              soilMoisture[i + 1],
+              soilMoisture[i - 1],
+              soilMoisture[i + GRID],
+              soilMoisture[i - GRID]
             );
-            const targetWP = Math.max(0.0, maxNeighborWP - 0.075);
-            wp += (targetWP - wp) * Math.min(1.0, 0.35 * flowScale);
-          }
+            if (maxNeighborM > m && sand[i] > 0.02) {
+              m += (maxNeighborM - m) * 0.25 * stepScale;
+            }
 
-          const maxNeighborM = Math.max(
-            soilMoisture[i + 1],
-            soilMoisture[i - 1],
-            soilMoisture[i + GRID],
-            soilMoisture[i - GRID]
-          );
-          if (maxNeighborM > m && sand[i] > 0.02) {
-            m += (maxNeighborM - m) * 0.25 * stepScale;
+            const shadeRetention = 1.0 - clamp(veg[i] * 0.24, 0.0, 0.78);
+            const dryLoss = params.evapRate * (0.0042 + params.windSpeed * 0.00022) * shadeRetention * stepScale;
+            m = clamp(m - dryLoss * 0.5, 0.0, 1.0);
           }
-
-          const shadeRetention = 1.0 - clamp(veg[i] * 0.24, 0.0, 0.78);
-          const dryLoss = params.evapRate * (0.0042 + params.windSpeed * 0.00022) * shadeRetention * stepScale;
-          m = clamp(m - dryLoss * 0.5, 0.0, 1.0);
 
           moistureNext[i] = m;
           waterProxNext[i] = wp;
@@ -3618,9 +3772,15 @@
       const wNorm = waterGeo.attributes.normal.array;
       const wCol = waterGeo.attributes.color.array;
       const wDepth = waterGeo.attributes.waterDepth.array;
+      const wLava = waterGeo.attributes.lavaMask.array;
 
       let totalW = 0;
+      let totalL = 0;
+      let lavaW1 = 0, lavaX1 = 0, lavaY1 = 0, lavaZ1 = 0;
+      let lavaW2 = 0, lavaX2 = 0, lavaY2 = 0, lavaZ2 = 0;
       const cellArea = CELL_SIZE * CELL_SIZE;
+      const nightFactor = skyUniforms.uNightFactor.value || 0.0;
+      const timeNow = uniforms.uTime.value || 0.0;
 
       for (let i = 0; i < MAX_CELLS; i++) {
         if (bedrock[i] < MIN_TERRAIN_HEIGHT) bedrock[i] = MIN_TERRAIN_HEIGHT;
@@ -3631,13 +3791,29 @@
         const b = bedrock[i];
         const s = sand[i];
         const w = water[i];
+        const lf = w > 0.015 ? lavaFrac[i] : 0.0;
         const m = soilMoisture[i];
         const wp = waterProximity[i];
         const v = veg[i];
         const vh = vegHealth[i];
         const isJungleZone = wp >= 0.38;
 
-        if (w > 0.01) totalW += w * cellArea;
+        if (w > 0.01) {
+          const vol = w * cellArea;
+          if (lf >= 0.35) {
+            totalL += vol;
+            const wx = tPos[i * 3];
+            const wz = tPos[i * 3 + 2];
+            const wy = b + s + w;
+            if (wx <= 0) {
+              lavaW1 += vol; lavaX1 += wx * vol; lavaY1 += wy * vol; lavaZ1 += wz * vol;
+            } else {
+              lavaW2 += vol; lavaX2 += wx * vol; lavaY2 += wy * vol; lavaZ2 += wz * vol;
+            }
+          } else {
+            totalW += vol;
+          }
+        }
 
         const groundY = b + s;
         const i3 = i * 3;
@@ -3645,17 +3821,23 @@
 
         wPos[i3 + 1] = groundY + w + 0.04;
         wDepth[i] = w;
+        wLava[i] = lf;
 
         const depthFactor = clamp(w / 2.2, 0.0, 1.0);
         let wr = 0.24 * (1 - depthFactor) + 0.05 * depthFactor;
         let wg = 0.76 * (1 - depthFactor) + 0.42 * depthFactor;
         let wb = 0.88 * (1 - depthFactor) + 0.68 * depthFactor;
         const ice = iceCover[i];
-        if (ice > 0.01) {
+        if (ice > 0.01 && lf < 0.25) {
           const iceBlend = clamp(ice * 0.90, 0.0, 0.90);
           wr = wr * (1 - iceBlend) + 0.84 * iceBlend;
           wg = wg * (1 - iceBlend) + 0.94 * iceBlend;
           wb = wb * (1 - iceBlend) + 1.00 * iceBlend;
+        }
+        if (lf > 0.05) {
+          wr = wr * (1 - lf) + 0.98 * lf;
+          wg = wg * (1 - lf) + 0.34 * lf;
+          wb = wb * (1 - lf) + 0.04 * lf;
         }
         wCol[i3]     = wr;
         wCol[i3 + 1] = wg;
@@ -3716,9 +3898,26 @@
         let tg = bg * (1 - sandBlend) + sg * sandBlend;
         let tb = bb * (1 - sandBlend) + sb * sandBlend;
 
+        // Scorched volcanic basalt bank & radiant magma edge glow on terrain touching or bordering lava!
+        let nearLava = lf;
+        if (i >= GRID && i < MAX_CELLS - GRID) {
+          const nL = (water[i - 1] > 0.03 ? lavaFrac[i - 1] : 0);
+          const nR = (water[i + 1] > 0.03 ? lavaFrac[i + 1] : 0);
+          const nU = (water[i - GRID] > 0.03 ? lavaFrac[i - GRID] : 0);
+          const nD = (water[i + GRID] > 0.03 ? lavaFrac[i + GRID] : 0);
+          nearLava = Math.max(nearLava, Math.max(nL, nR, nU, nD) * 0.85);
+        }
+        if (nearLava > 0.12) {
+          const scorch = clamp(nearLava * 0.82, 0.0, 0.85);
+          const emberGlow = nearLava * (0.32 + nightFactor * 0.75);
+          tr = tr * (1 - scorch) + 0.16 * scorch + emberGlow * 0.88;
+          tg = tg * (1 - scorch) + 0.08 * scorch + emberGlow * 0.24;
+          tb = tb * (1 - scorch) + 0.06 * scorch + emberGlow * 0.03;
+        }
+
         // Accumulated Snow & Frost Layer on Terrain (higher elevations, leeward drifts & boulders hold snow longer)
         const sn = snowCover[i];
-        if (sn > 0.005 && w < 0.05) {
+        if (sn > 0.005 && w < 0.05 && nearLava < 0.1) {
           const snowBlend = clamp(sn * 0.94, 0.0, 0.96);
           tr = tr * (1 - snowBlend) + 0.95 * snowBlend;
           tg = tg * (1 - snowBlend) + 0.97 * snowBlend;
@@ -3774,6 +3973,33 @@
       }
 
       params.totalWaterVol = Math.round(totalW);
+      params.totalLavaVol = Math.round(totalL);
+
+      // Update Dynamic Volcanic Lava PointLights (bathes dunes, rocks, flora & wildlife in flickering orange magma light at night!)
+      const lavaFlicker = 0.92 + 0.10 * Math.sin(timeNow * 7.3) + 0.06 * Math.cos(timeNow * 13.1);
+      if (lavaW1 > 1.0) {
+        lavaNightLight.position.set(lavaX1 / lavaW1, (lavaY1 / lavaW1) + 4.5, lavaZ1 / lavaW1);
+        lavaNightLight.intensity = (1.6 + nightFactor * 5.2) * clamp(lavaW1 / 240.0, 0.25, 1.5) * lavaFlicker;
+      } else {
+        lavaNightLight.intensity = 0.0;
+      }
+      if (lavaW2 > 1.0) {
+        lavaNightLight2.position.set(lavaX2 / lavaW2, (lavaY2 / lavaW2) + 4.5, lavaZ2 / lavaW2);
+        lavaNightLight2.intensity = (1.6 + nightFactor * 5.2) * clamp(lavaW2 / 240.0, 0.25, 1.5) * lavaFlicker;
+      } else {
+        lavaNightLight2.intensity = 0.0;
+      }
+
+      // Tint the boundary fluid cross-section skirt orange-red if lava dominates the pools
+      if (totalL > totalW * 0.5 && totalL > 10) {
+        waterSkirtMat.color.setHex(0xea3c00);
+        waterSkirtMat.emissive = waterSkirtMat.emissive || new THREE.Color();
+        waterSkirtMat.emissive.setHex(0xc22800);
+        waterSkirtMat.emissiveIntensity = 0.75 + nightFactor * 0.65;
+      } else {
+        waterSkirtMat.color.setHex(0x168aad);
+        if (waterSkirtMat.emissive) waterSkirtMat.emissiveIntensity = 0.0;
+      }
 
       terrainGeo.attributes.position.needsUpdate = true;
       terrainGeo.attributes.normal.needsUpdate = true;
@@ -3783,6 +4009,7 @@
       waterGeo.attributes.normal.needsUpdate = true;
       waterGeo.attributes.color.needsUpdate = true;
       waterGeo.attributes.waterDepth.needsUpdate = true;
+      waterGeo.attributes.lavaMask.needsUpdate = true;
 
       updateTerrainSideSkirt();
     }
@@ -5242,8 +5469,8 @@
         }
       };
 
-      trySpawnInBiome('fish', targetFish, (i) => water[i] > 0.11);
-      trySpawnInBiome('flamingo', targetFlamingos, (i) => (water[i] > 0.02 && water[i] < 0.45) || (waterProximity[i] > 0.65 && water[i] < 0.45));
+      trySpawnInBiome('fish', targetFish, (i) => water[i] > 0.11 && lavaFrac[i] < 0.2);
+      trySpawnInBiome('flamingo', targetFlamingos, (i) => ((water[i] > 0.02 && water[i] < 0.45) || (waterProximity[i] > 0.65 && water[i] < 0.45)) && lavaFrac[i] < 0.2);
       trySpawnInBiome('macaw', targetMacaws, (i) => waterProximity[i] >= 0.38 && veg[i] > 1.2);
       trySpawnInBiome('camel', targetCamels, (i) => water[i] < 0.01 && waterProximity[i] < 0.45 && obstacleType[i] === 0);
       trySpawnInBiome('oryx', targetOryx, (i) => water[i] < 0.01 && waterProximity[i] < 0.38 && obstacleType[i] === 0);
@@ -5257,7 +5484,7 @@
       // Spawn the rare Biome Apex Predators (1-2 max each)
       trySpawnInBiome('jaguar', targetJaguars, (i) => waterProximity[i] >= 0.42 && water[i] < 0.10 && veg[i] > 0.5);
       trySpawnInBiome('lion', targetLions, (i) => water[i] < 0.01 && waterProximity[i] < 0.30 && obstacleType[i] === 0);
-      trySpawnInBiome('croc', targetCrocs, (i) => water[i] > 0.12 && water[i] < 0.85);
+      trySpawnInBiome('croc', targetCrocs, (i) => water[i] > 0.12 && water[i] < 0.85 && lavaFrac[i] < 0.2);
     }
 
     function updateWildlife(dt) {
@@ -5272,10 +5499,11 @@
 
       for (let i = faunaAgents.length - 1; i >= 0; i--) {
         const a = faunaAgents[i];
-        const { groundY, waterDepth, localIce, waterSurfaceY } = sampleHeightsAtWorld(a.x, a.z);
-        const isHardIceSurface = (localIce >= 0.12) && (waterDepth > 0.03);
+        const { groundY, waterDepth, localIce, localLava, waterSurfaceY } = sampleHeightsAtWorld(a.x, a.z);
+        const isHardIceSurface = (localIce >= 0.12) && (waterDepth > 0.03) && (localLava < 0.25);
         const walkSurfaceY = isHardIceSurface ? waterSurfaceY : groundY;
         const effectiveWaterDepth = isHardIceSurface ? 0.0 : waterDepth;
+        const isInMoltenLava = (waterDepth > 0.035 && localLava >= 0.30);
 
         // --- SKELETON STATE: Rest on lakebed/ground, sink into sand, then disappear ---
         if (a.state === 'skeleton') {
@@ -5325,12 +5553,12 @@
         const cellIdx = idx(gx, gz);
         const wp = waterProximity[cellIdx];
 
-        // Despawn aquatic fish/crocs if their pool dries up, or jungle birds/bats/jaguars if all water & jungle vanish
-        if (a.type === 'fish' && waterDepth < 0.068) {
+        // Despawn aquatic fish/crocs if their pool dries up (or turns into lava for fish), or jungle birds/bats/jaguars if all water & jungle vanish
+        if (a.type === 'fish' && (waterDepth < 0.068 || localLava > 0.25)) {
           faunaAgents.splice(i, 1);
           continue;
         }
-        if (a.type === 'croc' && params.totalWaterVol < 40) {
+        if (a.type === 'croc' && params.totalWaterVol < 40 && !isInMoltenLava) {
           disposeApexRig(a);
           faunaAgents.splice(i, 1);
           continue;
@@ -5341,8 +5569,8 @@
           continue;
         }
 
-        // --- DROWNING & UN-DROWNING CHECK FOR NON-AQUATIC ANIMALS ---
-        // Animals ONLY drown when they are FULLY SUBMERGED in liquid water (not walking on top of hard ice!).
+        // --- DROWNING, LAVA INCINERATION & UN-DROWNING CHECK FOR ANIMALS ---
+        // Animals ONLY drown in water when FULLY SUBMERGED; however, stepping into molten lava rapidly burns any ground animal into a skeleton!
         let isDrowning = false;
         const isFlyer = (a.type === 'macaw' || a.type === 'hawk' || a.type === 'bat' || a.type === 'owl');
         const speciesFullHeight = {
@@ -5352,6 +5580,7 @@
           fennec: 0.88,
           lion: 1.24,
           jaguar: 1.08,
+          croc: 0.65,
           macaw: 999,
           hawk: 999,
           bat: 999,
@@ -5359,9 +5588,18 @@
         };
         const fullSubmergeDepth = (speciesFullHeight[a.type] || 1.45) * a.scale;
         const fleeThreshold = a.type === 'flamingo' ? 0.36 : (isFlyer ? 999 : 0.04);
-        const isInHazardousWetArea = (a.type !== 'fish' && a.type !== 'croc') && (effectiveWaterDepth > fleeThreshold);
+        const isInHazardousWetArea = (!isFlyer && isInMoltenLava) || ((a.type !== 'fish' && a.type !== 'croc') && (effectiveWaterDepth > fleeThreshold));
 
-        if (a.type !== 'fish' && a.type !== 'croc') {
+        if (!isFlyer && isInMoltenLava) {
+          isDrowning = true;
+          a.submergedTime += dt * 4.2; // Rapid incineration in molten lava (~0.95s)
+          if (a.submergedTime >= 4.0) {
+            disposeApexRig(a);
+            a.state = 'skeleton';
+            a.skeletonTimer = 0;
+            continue;
+          }
+        } else if (a.type !== 'fish' && a.type !== 'croc') {
           const headTopY = a.y + fullSubmergeDepth;
           isDrowning = !isHardIceSurface && ((effectiveWaterDepth >= fullSubmergeDepth) || (waterSurfaceY >= headTopY));
 
@@ -5387,7 +5625,7 @@
           a.heading += diff * Math.min(1.0, dt * turnSpeed);
         };
 
-        // Multi-ring radial search (7m, 16m, 28m across 12 directions) so animals actively flee wet/flooding zones toward dry ground
+        // Multi-ring radial search (7m, 16m, 28m across 12 directions) so animals actively flee wet/flooding or molten lava zones toward safe dry ground
         const steerToHighDryGround = () => {
           let bestAngle = a.heading;
           let bestScore = -99999;
@@ -5402,9 +5640,10 @@
               const tx = clamp(a.x + sinA * dist, -halfBound, halfBound);
               const tz = clamp(a.z + cosA * dist, -halfBound, halfBound);
               const th = sampleHeightsAtWorld(tx, tz);
-              // Strongly reward dry ground (waterDepth == 0) and higher elevation
-              const dryBonus = th.waterDepth < fleeThreshold ? 18.0 : 0.0;
-              dirScore += dryBonus - th.waterDepth * 35.0 + Math.min(th.groundY - groundY, 3.0) * 2.5;
+              // Strongly reward dry ground (waterDepth == 0), higher elevation, and heavily penalize molten lava!
+              const dryBonus = (th.waterDepth < fleeThreshold && th.localLava < 0.15) ? 18.0 : 0.0;
+              const lavaPenalty = (th.waterDepth > 0.02 && th.localLava > 0.2) ? 95.0 : 0.0;
+              dirScore += dryBonus - th.waterDepth * 35.0 - lavaPenalty + Math.min(th.groundY - groundY, 3.0) * 2.5;
             }
             if (dirScore > bestScore) {
               bestScore = dirScore;
@@ -5817,7 +6056,33 @@
     const particleSystem = new THREE.Points(particleGeo, particleMat);
     scene.add(particleSystem);
 
-    // Bilinear height interpolation for smooth FPV walking, surface ice solidity & underwater detection
+    // 11B. 3D RISING VOLCANIC LAVA EMBERS & SPARKS PARTICLE SYSTEM (Always active above molten lava pools, glowing at night!)
+    const LAVA_EMBER_COUNT = 520;
+    const lavaEmberGeo = new THREE.BufferGeometry();
+    const lavaEmberPos = new Float32Array(LAVA_EMBER_COUNT * 3);
+    const lavaEmberCol = new Float32Array(LAVA_EMBER_COUNT * 3);
+    const lavaEmberLife = new Float32Array(LAVA_EMBER_COUNT);
+    for (let i = 0; i < LAVA_EMBER_COUNT; i++) {
+      lavaEmberPos[i * 3] = 0;
+      lavaEmberPos[i * 3 + 1] = -999;
+      lavaEmberPos[i * 3 + 2] = 0;
+      lavaEmberLife[i] = Math.random();
+    }
+    lavaEmberGeo.setAttribute('position', new THREE.BufferAttribute(lavaEmberPos, 3));
+    lavaEmberGeo.setAttribute('color', new THREE.BufferAttribute(lavaEmberCol, 3));
+    const lavaEmberMat = new THREE.PointsMaterial({
+      size: 1.05,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.92,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const lavaEmberSystem = new THREE.Points(lavaEmberGeo, lavaEmberMat);
+    lavaEmberSystem.visible = false;
+    scene.add(lavaEmberSystem);
+
+    // Bilinear height interpolation for smooth FPV walking, surface ice solidity, molten lava & underwater detection
     function sampleHeightsAtWorld(wx, wz) {
       const fx = clamp(((wx / WORLD_SIZE) + 0.5) * (GRID - 1), 0, GRID - 1.001);
       const fz = clamp(((wz / WORLD_SIZE) + 0.5) * (GRID - 1), 0, GRID - 1.001);
@@ -5849,10 +6114,17 @@
       const ic11 = iceCover[i11];
       const localIce = (ic00 * (1 - tx) + ic10 * tx) * (1 - tz) + (ic01 * (1 - tx) + ic11 * tx) * tz;
 
+      const lv00 = lavaFrac[i00];
+      const lv10 = lavaFrac[i10];
+      const lv01 = lavaFrac[i01];
+      const lv11 = lavaFrac[i11];
+      const localLava = (lv00 * (1 - tx) + lv10 * tx) * (1 - tz) + (lv01 * (1 - tx) + lv11 * tx) * tz;
+
       return {
         groundY,
         waterDepth,
         localIce,
+        localLava,
         waterSurfaceY: waterDepth > 0.015 ? groundY + waterDepth + 0.04 : -999
       };
     }
@@ -5864,7 +6136,64 @@
       return bedrock[i] + sand[i] + water[i];
     }
 
+    function updateLavaEmbers(dt) {
+      if (params.totalLavaVol < 3) {
+        lavaEmberSystem.visible = false;
+        return;
+      }
+      lavaEmberSystem.visible = true;
+      const time = uniforms.uTime.value;
+      const nightFactor = skyUniforms.uNightFactor.value || 0.0;
+      lavaEmberMat.size = 0.95 + nightFactor * 0.45;
+
+      const rad = THREE.MathUtils.degToRad(params.windDirDeg);
+      const wx = Math.cos(rad);
+      const wz = Math.sin(rad);
+
+      for (let i = 0; i < LAVA_EMBER_COUNT; i++) {
+        const i3 = i * 3;
+        let life = lavaEmberLife[i] + dt * (0.28 + (i % 5) * 0.07);
+        if (life >= 1.0 || lavaEmberPos[i3 + 1] < -100) {
+          // Respawn ember above a random active lava cell
+          life = life % 1.0;
+          let spawned = false;
+          for (let attempt = 0; attempt < 18; attempt++) {
+            const rx = 2 + Math.floor(Math.random() * (GRID - 4));
+            const ry = 2 + Math.floor(Math.random() * (GRID - 4));
+            const ci = idx(rx, ry);
+            if (water[ci] > 0.065 && lavaFrac[ci] > 0.35) {
+              lavaEmberPos[i3]     = ((rx / (GRID - 1)) - 0.5) * WORLD_SIZE + (Math.random() - 0.5) * 1.4;
+              lavaEmberPos[i3 + 1] = bedrock[ci] + sand[ci] + water[ci] + 0.12 + Math.random() * 0.6;
+              lavaEmberPos[i3 + 2] = ((ry / (GRID - 1)) - 0.5) * WORLD_SIZE + (Math.random() - 0.5) * 1.4;
+              spawned = true;
+              break;
+            }
+          }
+          if (!spawned) {
+            lavaEmberPos[i3 + 1] = -999;
+          }
+        } else {
+          // Rise & swirl in convective thermal drafts above the molten lava
+          const swirlX = Math.sin(time * 3.1 + i * 1.3) * 1.8;
+          const swirlZ = Math.cos(time * 2.7 + i * 1.7) * 1.8;
+          lavaEmberPos[i3]     += (wx * params.windSpeed * 0.14 + swirlX) * dt;
+          lavaEmberPos[i3 + 1] += (2.8 + (i % 4) * 0.9) * dt;
+          lavaEmberPos[i3 + 2] += (wz * params.windSpeed * 0.14 + swirlZ) * dt;
+        }
+        lavaEmberLife[i] = life;
+
+        // Glow bright white-yellow at birth, cooling through fiery orange to deep ember red as it rises
+        const heat = 1.0 - life;
+        lavaEmberCol[i3]     = clamp(heat * 1.6, 0.2, 1.0);
+        lavaEmberCol[i3 + 1] = clamp(Math.pow(heat, 1.7) * 1.15, 0.04, 0.96);
+        lavaEmberCol[i3 + 2] = clamp(Math.pow(heat, 3.2) * 0.65, 0.0, 0.55);
+      }
+      lavaEmberGeo.attributes.position.needsUpdate = true;
+      lavaEmberGeo.attributes.color.needsUpdate = true;
+    }
+
     function updateParticles(dt) {
+      updateLavaEmbers(dt);
       // Automatically show falling snowflakes, monsoon rain, or haboob dust storms during severe weather, OR whenever user toggles Particles ON
       const isBadStormActive = (params.snowRate > 0.05) || (params.rainRate > 0.35) || (params.weatherMode === 'haboob');
       particleSystem.visible = (params.showParticles || isBadStormActive) && (params.windSpeed > 1 || params.rainRate > 0.05 || params.snowRate > 0.05);
@@ -6483,9 +6812,9 @@
         const euler = new THREE.Euler(fpvState.pitch, fpvState.yaw, 0, 'YXZ');
         camera.quaternion.setFromEuler(euler);
 
-        // Sample current height, water depth, and ice thickness before moving
+        // Sample current height, water depth, lava fraction, and ice thickness before moving
         const preSample = sampleHeightsAtWorld(camera.position.x, camera.position.z);
-        const isFrozenNow = (preSample.localIce >= 0.12) || (params.weatherMode === 'snow' && preSample.waterDepth > 0.06);
+        const isFrozenNow = ((preSample.localIce >= 0.12) || (params.weatherMode === 'snow' && preSample.waterDepth > 0.06)) && (preSample.localLava < 0.25);
 
         // Determine if player is trapped beneath hard lake ice (entered underwater before/when ice hit)
         if (isFrozenNow && preSample.waterDepth > 0.08) {
@@ -6541,8 +6870,8 @@
           camera.position.z = candZ;
         }
 
-        const { groundY, waterDepth, localIce, waterSurfaceY } = sampleHeightsAtWorld(camera.position.x, camera.position.z);
-        const isHardIceHere = ((localIce >= 0.12) || (params.weatherMode === 'snow')) && (waterDepth > 0.04);
+        const { groundY, waterDepth, localIce, localLava, waterSurfaceY } = sampleHeightsAtWorld(camera.position.x, camera.position.z);
+        const isHardIceHere = ((localIce >= 0.12) || (params.weatherMode === 'snow')) && (waterDepth > 0.04) && (localLava < 0.25);
 
         // When water freezes hard and the player is NOT trapped underneath it, the frozen surface is solid walkable ground!
         const supportSurfaceY = (isHardIceHere && !fpvState.trappedUnderIce) ? waterSurfaceY : groundY;
@@ -6686,25 +7015,31 @@
 
       updateFpvArrows(dt);
 
-      // Check if Camera is currently Underwater (works in both FPV Walk Mode and Orbit Mode!)
-      const { waterDepth, localIce, waterSurfaceY } = sampleHeightsAtWorld(camera.position.x, camera.position.z);
+      // Check if Camera is currently Underwater or Submerged in Lava (works in both FPV Walk Mode and Orbit Mode!)
+      const { waterDepth, localIce, localLava, waterSurfaceY } = sampleHeightsAtWorld(camera.position.x, camera.position.z);
       const submergeDepth = waterSurfaceY - camera.position.y;
       const nowUnderwater = (waterDepth > 0.08 && submergeDepth > 0.02) || (params.fpvMode && fpvState.trappedUnderIce);
 
       if (nowUnderwater) {
         params.isUnderwater = true;
-        uniforms.uUnderwater.value = 1.0;
+        uniforms.uUnderwater.value = localLava >= 0.35 ? 0.0 : 1.0;
 
-        // Deep underwater turquoise-marine fog & background (icy slate-blue when trapped under frozen ice)
-        const uwHex = fpvState.trappedUnderIce ? 0x0c2d42 : 0x093b52;
+        const isLavaSubmerged = localLava >= 0.35;
+        // Deep underwater turquoise-marine fog & background (fiery magma crimson when submerged in lava, icy slate-blue under frozen ice)
+        const uwHex = isLavaSubmerged ? 0x5c1403 : (fpvState.trappedUnderIce ? 0x0c2d42 : 0x093b52);
         scene.background.setHex(uwHex);
         scene.fog.color.setHex(uwHex);
-        scene.fog.density = fpvState.trappedUnderIce ? 0.042 : 0.034;
+        scene.fog.density = isLavaSubmerged ? 0.058 : (fpvState.trappedUnderIce ? 0.042 : 0.034);
 
+        underwaterTint.style.background = isLavaSubmerged
+          ? 'radial-gradient(circle at 50% 35%, rgba(255, 115, 15, 0.38) 0%, rgba(185, 28, 8, 0.68) 65%, rgba(75, 10, 4, 0.88) 100%)'
+          : '';
         underwaterTint.style.opacity = '1';
         underwaterOverlay.style.opacity = '1';
         underwaterBadge.style.opacity = '1';
-        if (fpvState.trappedUnderIce) {
+        if (isLavaSubmerged) {
+          underwaterBadge.textContent = `🌋 SUBMERGED IN MOLTEN LAVA · Depth -${Math.max(0.1, submergeDepth).toFixed(1)} m`;
+        } else if (fpvState.trappedUnderIce) {
           underwaterBadge.textContent = `🧊 TRAPPED UNDER ICE · Wait for Thaw (-${Math.max(0.2, submergeDepth).toFixed(1)} m)`;
         } else {
           underwaterBadge.textContent = `🌊 UNDERWATER · Depth -${submergeDepth.toFixed(1)} m`;
@@ -6712,6 +7047,7 @@
       } else if (params.isUnderwater) {
         params.isUnderwater = false;
         uniforms.uUnderwater.value = 0.0;
+        underwaterTint.style.background = '';
 
         // Restore atmospheric sky color & fog density for current time of day
         updateSunPosition();
@@ -6723,7 +7059,7 @@
     }
 
     // ============================================================================
-    // 13. INTERACTIVE SCULPTING, WATER POURING & ZONE-AWARE PLANTING
+    // 13. INTERACTIVE SCULPTING, WATER/LAVA POURING & ZONE-AWARE PLANTING
     // ============================================================================
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
@@ -6738,15 +7074,16 @@
         // Spawn matching biome wildlife (daytime vs. nocturnal species) at brush click/drag position
         const centerIdx = idx(clamp(cx, 0, GRID - 1), clamp(cy, 0, GRID - 1));
         const w = water[centerIdx];
+        const lf = lavaFrac[centerIdx];
         const wp = waterProximity[centerIdx];
         const jx = wx + (Math.random() - 0.5) * params.brushRadius;
         const jz = wz + (Math.random() - 0.5) * params.brushRadius;
         const hr = ((params.timeOfDay % 24) + 24) % 24;
         const isNightTime = (hr >= 19.0 || hr < 5.5) || ((skyUniforms.uNightFactor.value || 0) > 0.55);
 
-        if (w > 0.25) {
+        if (w > 0.25 && lf < 0.25) {
           spawnAnimalAgent('fish', jx, jz);
-        } else if (w > 0.02 || wp >= 0.42) {
+        } else if ((w > 0.02 && lf < 0.25) || wp >= 0.42) {
           if (isNightTime) {
             spawnAnimalAgent('bat', jx, jz);
           } else {
@@ -6778,7 +7115,18 @@
           if (params.tool === 'water') {
             const maxWaterDepth = Math.max(0, MAX_TERRAIN_HEIGHT - (bedrock[i] + sand[i]));
             water[i] = Math.min(maxWaterDepth, water[i] + falloff * 0.85);
+            lavaFrac[i] = Math.max(0.0, lavaFrac[i] - falloff * 0.90);
             soilMoisture[i] = Math.min(1.0, soilMoisture[i] + falloff * 0.5);
+          } else if (params.tool === 'lava') {
+            const maxLavaDepth = Math.max(0, MAX_TERRAIN_HEIGHT - (bedrock[i] + sand[i]));
+            water[i] = Math.min(maxLavaDepth, water[i] + falloff * 0.85);
+            lavaFrac[i] = 1.0;
+            // Molten lava immediately vaporizes soil moisture, melts snow/ice, and incinerates flora in the brush radius
+            soilMoisture[i] = 0.0;
+            waterProximity[i] = 0.0;
+            veg[i] = 0.0;
+            snowCover[i] = 0.0;
+            iceCover[i] = 0.0;
           } else if (params.tool === 'pour') {
             const maxSand = Math.max(0, MAX_TERRAIN_HEIGHT - bedrock[i]);
             sand[i] = Math.min(maxSand, sand[i] + falloff * 0.65);
@@ -6820,6 +7168,7 @@
             obstacleType[i] = 0;
             veg[i] = 0;
             water[i] = 0;
+            lavaFrac[i] = 0;
             bedrock[i] = clamp(bedrock[i] * (1 - falloff * 0.35) + 1.5 * (falloff * 0.35), MIN_TERRAIN_HEIGHT, MAX_TERRAIN_HEIGHT);
           }
         }
@@ -7201,6 +7550,7 @@
         params.tool = btn.dataset.tool;
         const ringColors = {
           water: 0x38bdf8,
+          lava: 0xff4500,
           pour: 0xffc56d,
           seed: 0x4ade80,
           fauna: 0xf472b6,
@@ -7369,7 +7719,15 @@
         let sn = snowCover[i];
         let ic = iceCover[i];
         const w = water[i];
+        const lf = lavaFrac[i];
         const groundY = bedrock[i] + sand[i];
+
+        if (w > 0.02 && lf > 0.25) {
+          // Molten lava never freezes or holds snow!
+          snowCover[i] = 0;
+          iceCover[i] = 0;
+          continue;
+        }
 
         if (isSnowing) {
           // Higher dune crests, rocky mesas, and wind-sheltered leeward slopes accumulate snow faster
@@ -7662,7 +8020,16 @@
       if (frameCount % 4 === 0) {
         document.getElementById('stat-wind').textContent =
           `${params.windSpeed.toFixed(1)} m/s · ${cardinalFromDeg(params.windDirDeg)}`;
-        document.getElementById('stat-water').textContent = `${params.totalWaterVol.toLocaleString()} m³`;
+        const statWaterEl = document.getElementById('stat-water');
+        if (params.totalLavaVol > 10) {
+          statWaterEl.textContent = params.totalWaterVol > 10
+            ? `${params.totalWaterVol.toLocaleString()} m³ · 🌋 ${params.totalLavaVol.toLocaleString()} m³`
+            : `🌋 ${params.totalLavaVol.toLocaleString()} m³`;
+          statWaterEl.style.color = '#fb923c';
+        } else {
+          statWaterEl.textContent = `${params.totalWaterVol.toLocaleString()} m³`;
+          statWaterEl.style.color = '';
+        }
         document.getElementById('stat-jungle').textContent = `${params.junglePlantCount.toLocaleString()}`;
         document.getElementById('stat-desert-flora').textContent = `${params.desertPlantCount.toLocaleString()}`;
         document.getElementById('stat-fauna').textContent = `${faunaAgents.length.toLocaleString()}`;
