@@ -3279,10 +3279,10 @@
         }
       }
 
-      // Gravity downhill flow rate scales smoothly, with a responsive minimum so poured water & lava settle naturally
-      const flowScale = Math.min(1.0, Math.max(stepScale * 2.5, 0.08));
+      // Gravity downhill flow rate: water rushes briskly down slopes & valleys, while molten lava flows as a thick viscous magma (~4x slower)
+      const flowScale = Math.min(1.0, Math.max(stepScale * 8.5, 0.34));
 
-      for (let pass = 0; pass < 3; pass++) {
+      for (let pass = 0; pass < 4; pass++) {
         waterNext.set(water);
         lavaFracNext.set(lavaFrac);
 
@@ -3319,9 +3319,10 @@
             }
 
             if (totalWeightedDiff > 0) {
-              // Molten lava flows with thicker viscosity (~0.52x speed) compared to water
-              const viscosityMult = 1.0 - cellLava * 0.48;
-              const maxOutflow = Math.min(w, maxDrop * 0.45, totalWeightedDiff * 0.082) * flowScale * viscosityMult;
+              // Fast-flowing liquid water (1.0x) vs. thick, slow-moving molten lava (~0.24x) and frozen surface ice
+              const iceDamp = (cellLava < 0.25 && iceCover[i] > 0.1) ? (1.0 - clamp(iceCover[i] * 0.9, 0.0, 0.92)) : 1.0;
+              const viscosityMult = (1.0 - cellLava * 0.76) * iceDamp;
+              const maxOutflow = Math.min(w, maxDrop * 0.52, totalWeightedDiff * 0.145) * flowScale * viscosityMult;
               if (maxOutflow > 1e-7) {
                 waterNext[i] -= maxOutflow;
                 const invTotal = maxOutflow / totalWeightedDiff;
