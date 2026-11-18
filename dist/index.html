@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vibes — Interactive 3D & Web Experiments</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: rgba(26, 20, 14, 0.88);
+      --border: rgba(232, 168, 76, 0.32);
+      --accent: #e8a84c;
+      --accent-bright: #ffc56d;
+      --water: #38bdf8;
+      --jungle: #34d399;
+      --text: #f5ebe1;
+      --text-dim: #b4a392;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at 20% 20%, #1c3d47 0%, #16181d 55%, #0c0a08 100%);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 760px;
+    }
+
+    header {
+      margin-bottom: 28px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 32px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent-bright);
+      margin-bottom: 8px;
+    }
+
+    p.subtitle {
+      color: var(--text-dim);
+      font-size: 15px;
+    }
+
+    .project-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+
+    a.project-card {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px 26px;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    a.project-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--accent-bright);
+      box-shadow: 0 18px 48px rgba(232, 168, 76, 0.22);
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent-bright);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .launch-pill {
+      background: linear-gradient(135deg, #e8a84c, #c97b28);
+      color: #16110b;
+      font-weight: 700;
+      font-size: 12.5px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .card-desc {
+      color: var(--text-dim);
+      font-size: 14px;
+      line-height: 1.55;
+      margin-bottom: 16px;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .tag {
+      font-size: 11.5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Vibes</h1>
+      <p class="subtitle">Interactive 3D Simulations &amp; WebGL Experiments</p>
+    </header>
+
+    <div class="project-grid">
+      <a class="project-card" href="./sandsim.html">
+        <div class="card-top">
+          <div class="card-title">
+            <span>🏜️ Aeolian &amp; Oasis 3D — Sand, Water &amp; Biome Simulator</span>
+          </div>
+          <span class="launch-pill">Launch Simulator →</span>
+        </div>
+        <p class="card-desc">
+          Interactive 3D WebGL sand dune physics, watershed hydrology, riparian jungle &amp; desert cactus succession,
+          articulated apex predators, diurnal/nocturnal wildlife, dynamic snow &amp; ice weather, day/night cycle with twin moons,
+          and First-Person Walk &amp; Underwater Diving Mode with Bow &amp; Arrow and Torch.
+        </p>
+        <div class="tag-row">
+          <span class="tag">Three.js WebGL</span>
+          <span class="tag">Aeolian Sand &amp; Hydrology</span>
+          <span class="tag">Articulated Wildlife &amp; Apex Predators</span>
+          <span class="tag">Snow &amp; Ice Weather</span>
+          <span class="tag">FPV Walk &amp; Dive Mode</span>
+        </div>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
