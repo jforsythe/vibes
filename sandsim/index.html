@@ -1240,6 +1240,14 @@
 
         <div class="control-row">
           <div class="control-label">
+            <span>Water Absorption (Sand Porosity)</span>
+            <span class="control-val" id="val-absorption">25% · Firm Sand</span>
+          </div>
+          <input type="range" id="slider-absorption" min="0" max="100" step="1" value="25" title="0% = current low baseline soak; 100% = Loose Sand (water sinks into sand very quickly)" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
             <span>Upwind Sand Supply</span>
             <span class="control-val" id="val-supply">40%</span>
           </div>
@@ -1348,6 +1356,7 @@
       sandSupply: 0.40,
       rainRate: 0.18,
       evapRate: 0.22,
+      absorptionRate: 0.25,   // 0.0 = current baseline low soak; 1.0 = Loose Sand (water sinks into the sand very quickly)
       simSteps: 0.01,
       brushRadius: 12.0,
       sunElevation: 34.0,
@@ -3416,10 +3425,20 @@
             snowCover[i] = 0.0;
             iceCover[i] = 0.0;
           } else {
-            if (water[i] > 0 && water[i] < 0.085) {
-              const soak = Math.min(water[i], 0.00055 * stepScale);
-              water[i] -= soak;
-              m = Math.min(0.60, m + soak * 8.0);
+            // Sand Water Absorption: scales from 0% (current baseline shallow film soak)
+            // up to 100% Loose Sand (water of any depth sinks rapidly into underlying sand!)
+            const soakStep = Math.max(stepScale * 4.0, 0.04);
+            if (water[i] > 0 && sand[i] > 0.01 && iceCover[i] < 0.25) {
+              const baseSoak = (water[i] < 0.085) ? (0.00055 * stepScale) : 0.0;
+              // Deeper loose sand beds & drier sand absorb surface water faster
+              const sandDepthFactor = clamp(sand[i] / 0.40, 0.18, 1.65);
+              const drySandHunger = 1.40 - m * 0.65;
+              const looseSandSoak = Math.pow(params.absorptionRate, 1.35) * 0.058 * soakStep * sandDepthFactor * drySandHunger;
+              const soak = Math.min(water[i], baseSoak + looseSandSoak);
+              if (soak > 0) {
+                water[i] -= soak;
+                m = Math.min(1.0, m + soak * (6.5 + params.absorptionRate * 8.5));
+              }
             }
 
             if (water[i] > 0.16) {
@@ -3446,7 +3465,8 @@
               soilMoisture[i - GRID]
             );
             if (maxNeighborM > m && sand[i] > 0.02) {
-              m += (maxNeighborM - m) * 0.25 * stepScale;
+              const wickingRate = (0.25 + params.absorptionRate * 0.45) * Math.max(stepScale, soakStep * 0.35);
+              m += (maxNeighborM - m) * Math.min(0.85, wickingRate);
             }
 
             const shadeRetention = 1.0 - clamp(veg[i] * 0.24, 0.0, 0.78);
@@ -7532,6 +7552,7 @@
     const sliderWindDir = document.getElementById('slider-wind-dir');
     const sliderRain = document.getElementById('slider-rain');
     const sliderEvap = document.getElementById('slider-evap');
+    const sliderAbsorption = document.getElementById('slider-absorption');
     const sliderSupply = document.getElementById('slider-supply');
     const sliderSimSteps = document.getElementById('slider-sim-steps');
     const sliderBrushSize = document.getElementById('slider-brush-size');
@@ -7547,11 +7568,21 @@
       return dirs[Math.round(d / 45) % 8];
     }
 
+    function formatAbsorptionLabel(rate) {
+      const pct = Math.round(rate * 100);
+      if (pct <= 8) return `${pct}% · Baseline`;
+      if (pct <= 35) return `${pct}% · Firm Sand`;
+      if (pct <= 70) return `${pct}% · Porous Sand`;
+      return `${pct}% · Loose Sand`;
+    }
+
     function syncUILabels() {
       document.getElementById('val-wind-speed').textContent = `${params.windSpeed.toFixed(1)} m/s`;
       document.getElementById('val-wind-dir').textContent = `${Math.round(params.windDirDeg)}° (→ ${cardinalFromDeg(params.windDirDeg)})`;
       document.getElementById('val-rain').textContent = `${Math.round(params.rainRate * 100)}%`;
       document.getElementById('val-evap').textContent = `${Math.round(params.evapRate * 100)}%`;
+      const absEl = document.getElementById('val-absorption');
+      if (absEl) absEl.textContent = formatAbsorptionLabel(params.absorptionRate);
       document.getElementById('val-supply').textContent = `${Math.round(params.sandSupply * 100)}%`;
       document.getElementById('val-sim-steps').textContent = `${params.simSteps.toFixed(3)}x`;
       document.getElementById('val-brush-size').textContent = `${Math.round(params.brushRadius)} m`;
@@ -7585,6 +7616,13 @@
       params.evapRate = parseFloat(e.target.value) / 100;
       syncUILabels();
     });
+
+    if (sliderAbsorption) {
+      sliderAbsorption.addEventListener('input', (e) => {
+        params.absorptionRate = parseFloat(e.target.value) / 100;
+        syncUILabels();
+      });
+    }
 
     sliderSupply.addEventListener('input', (e) => {
       params.sandSupply = parseFloat(e.target.value) / 100;
