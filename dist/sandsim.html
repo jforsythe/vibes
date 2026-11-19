@@ -9106,7 +9106,7 @@
       root.add(kiteGroup);
 
       const kiteDiamondGroup = new THREE.Group();
-      kiteDiamondGroup.position.set(0, 7.6, 3.8);
+      kiteDiamondGroup.position.set(0, 15.2, 6.4);
       kiteGroup.add(kiteDiamondGroup);
 
       const kitePanelColors = [0xef4444, 0xfacc15, 0x38bdf8, 0xec4899];
@@ -9134,7 +9134,7 @@
 
       const kiteStrPos = new Float32Array([
         -0.38, 1.32, 0.25,
-         0.00, 7.60, 3.80
+         0.00, 15.20, 6.40
       ]);
       const kiteStrGeo = new THREE.BufferGeometry();
       kiteStrGeo.setAttribute('position', new THREE.BufferAttribute(kiteStrPos, 3));
@@ -10989,11 +10989,11 @@
         rig.armRPivot.rotation.set(-1.65 + Math.sin(time * 2.8) * 0.14, -0.15, -0.12);
         rig.headPivot.rotation.set(-0.48, Math.sin(time * 1.5) * 0.22, 0);
 
-        // Animate kite dancing in the wind + trailing tail ribbons + string from right hand to kite!
+        // Animate kite dancing high in the wind (twice as high!) + trailing tail ribbons + string from right hand to kite!
         const windFactor = clamp(params.windSpeed / 14.0, 0.5, 1.8);
-        const kx = Math.sin(time * 2.1) * 1.35 * windFactor;
-        const ky = 6.8 + Math.sin(time * 1.7) * 0.95 + windFactor * 0.8;
-        const kz = 3.6 + Math.cos(time * 1.4) * 0.75;
+        const kx = Math.sin(time * 2.1) * 1.95 * windFactor;
+        const ky = 13.6 + Math.sin(time * 1.7) * 1.90 + windFactor * 1.6;
+        const kz = 6.2 + Math.cos(time * 1.4) * 1.25;
         rig.kiteDiamondGroup.position.set(kx, ky, kz);
         rig.kiteDiamondGroup.rotation.z = Math.PI * 0.25 + Math.sin(time * 3.2) * 0.24;
         rig.kiteDiamondGroup.rotation.y = Math.cos(time * 2.1) * 0.28;
