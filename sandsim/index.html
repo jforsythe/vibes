@@ -4617,21 +4617,21 @@
             const fwdZ = Math.cos(it.yaw);
             const rightX = Math.cos(it.yaw);
             const rightZ = -Math.sin(it.yaw);
-            // Left & Right front headlights projecting 2 twin beams out in front of the truck at night
+            // Left & Right front headlights projecting 2 long-range twin beams out in front of the truck at night
             activeTruckHeadlights.push(
               {
                 hx: it.x + fwdX * 1.85 - rightX * 0.62,
                 hz: it.z + fwdZ * 1.85 - rightZ * 0.62,
-                dirX: Math.sin(it.yaw - 0.055),
-                dirZ: Math.cos(it.yaw - 0.055),
-                strength: lanternNightGlow * 1.15
+                dirX: Math.sin(it.yaw - 0.048),
+                dirZ: Math.cos(it.yaw - 0.048),
+                strength: lanternNightGlow * 2.65
               },
               {
                 hx: it.x + fwdX * 1.85 + rightX * 0.62,
                 hz: it.z + fwdZ * 1.85 + rightZ * 0.62,
-                dirX: Math.sin(it.yaw + 0.055),
-                dirZ: Math.cos(it.yaw + 0.055),
-                strength: lanternNightGlow * 1.15
+                dirX: Math.sin(it.yaw + 0.048),
+                dirZ: Math.cos(it.yaw + 0.048),
+                strength: lanternNightGlow * 2.65
               }
             );
           }
@@ -4845,7 +4845,7 @@
           tb = tb * (1 - snowBlend) + 1.00 * snowBlend;
         }
 
-        // Offroad Truck Twin Headlight Beams Projected Out in Front of the Vehicle at Night
+        // Offroad Truck Twin Headlight Beams Projected Far Out in Front of the Vehicle at Night (78m range!)
         if (activeTruckHeadlights.length > 0) {
           const cellWx = tPos[i3];
           const cellWz = tPos[i3 + 2];
@@ -4855,21 +4855,21 @@
             const dx = cellWx - hl.hx;
             const dz = cellWz - hl.hz;
             const fwdDist = dx * hl.dirX + dz * hl.dirZ;
-            if (fwdDist > 0.3 && fwdDist < 34.0) {
+            if (fwdDist > 0.3 && fwdDist < 78.0) {
               const latDist = Math.abs(dx * (-hl.dirZ) + dz * hl.dirX);
-              const coneHalfW = 0.48 + fwdDist * 0.27;
+              const coneHalfW = 0.55 + fwdDist * 0.25;
               if (latDist < coneHalfW) {
                 const latFalloff = 1.0 - (latDist / coneHalfW);
-                const distFalloff = 1.0 - (fwdDist / 34.0);
-                beamBoost += latFalloff * latFalloff * distFalloff * hl.strength;
+                const distFalloff = 1.0 - (fwdDist / 78.0);
+                beamBoost += latFalloff * latFalloff * Math.pow(distFalloff, 0.75) * hl.strength;
               }
             }
           }
           if (beamBoost > 0.001) {
-            const bbVal = Math.min(1.35, beamBoost);
-            tr = Math.min(1.0, tr + bbVal * 0.72);
-            tg = Math.min(1.0, tg + bbVal * 0.66);
-            tb = Math.min(1.0, tb + bbVal * 0.50);
+            const bbVal = Math.min(2.25, beamBoost);
+            tr = Math.min(1.0, tr + bbVal * 0.92);
+            tg = Math.min(1.0, tg + bbVal * 0.85);
+            tb = Math.min(1.0, tb + bbVal * 0.68);
           }
         }
 
@@ -10848,9 +10848,12 @@
     // ============================================================================
     // 11G-2. DRIVABLE 4x4 OFFROAD BAJA TRUCK (Item + Drive Mode + Twin Night Headlights + V8/Drift Audio)
     // ============================================================================
-    // Pre-allocated PointLight at startup (intensity = 0.0) so activating truck headlights at night has ZERO shader recompile stutter!
-    const truckHeadlightPoint = new THREE.PointLight(0xfff1c4, 0.0, 52.0, 1.30);
+    // Pre-allocated PointLights at startup (intensity = 0.0) so activating truck headlights at night has ZERO shader recompile stutter
+    // and reaches far out in front of the truck to illuminate 3D plants, cacti, boulders & wildlife!
+    const truckHeadlightPoint = new THREE.PointLight(0xfff1c4, 0.0, 92.0, 1.05);
     scene.add(truckHeadlightPoint);
+    const truckHeadlightPointFar = new THREE.PointLight(0xfff1c4, 0.0, 110.0, 1.05);
+    scene.add(truckHeadlightPointFar);
 
     const sharedTruckPaintMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.36, metalness: 0.38 });
     const sharedTruckDarkMetalMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.62, metalness: 0.55 });
@@ -10980,9 +10983,9 @@
       grille.position.set(0, 0.88, 1.77);
       chassisGroup.add(grille);
 
-      // Volumetric beam cone geometry (apex at origin (0,0,0), opening forward along +Z to length 15.5m)
-      const beamConeGeo = new THREE.ConeGeometry(2.35, 15.5, 14, 1, true);
-      beamConeGeo.translate(0, -15.5 * 0.5, 0);
+      // Volumetric beam cone geometry (apex at origin (0,0,0), opening forward along +Z to length 34.0m)
+      const beamConeGeo = new THREE.ConeGeometry(3.8, 34.0, 14, 1, true);
+      beamConeGeo.translate(0, -34.0 * 0.5, 0);
       beamConeGeo.rotateX(-Math.PI / 2);
 
       const headlightBeams = [];
@@ -10992,12 +10995,12 @@
         hlLens.position.set(side * 0.58, 0.90, 1.78);
         chassisGroup.add(hlLens);
 
-        // Volumetric Forward Headlight Cone (shines out in front of the truck at night!)
+        // Volumetric Forward Headlight Cone (shines far out in front of the truck at night!)
         const beamCone = new THREE.Mesh(beamConeGeo, sharedTruckHeadlightBeamMat);
         beamCone.position.set(side * 0.58, 0.88, 1.82);
         // Aim slightly downward toward the terrain ahead and slightly splayed outward
-        beamCone.rotation.x = 0.095;
-        beamCone.rotation.y = side * 0.05;
+        beamCone.rotation.x = 0.052;
+        beamCone.rotation.y = side * 0.045;
         beamCone.renderOrder = 18;
         beamCone.visible = false;
         chassisGroup.add(beamCone);
@@ -11314,27 +11317,32 @@
       const time = uniforms.uTime.value || 0.0;
       const absSpd = Math.abs(activeTruck.speed || 0.0);
 
-      // 3-speed offroad gear RPM curve so accelerating revs through gears with a throaty V8 roar!
+      // 4-speed offroad gear RPM curve (with 4th-gear overdrive shift at high speed so full speed settles into a lower, deeper V8 rumble!)
       let gearRatio = 0.0;
-      if (absSpd < 8.5) {
-        gearRatio = absSpd / 8.5;
-      } else if (absSpd < 17.5) {
-        gearRatio = 0.32 + ((absSpd - 8.5) / 9.0) * 0.68;
+      const isOverdrive4th = (absSpd >= 19.5);
+      if (absSpd < 6.8) {
+        gearRatio = absSpd / 6.8;
+      } else if (absSpd < 13.4) {
+        gearRatio = 0.30 + ((absSpd - 6.8) / 6.6) * 0.65;
+      } else if (absSpd < 19.5) {
+        gearRatio = 0.34 + ((absSpd - 13.4) / 6.1) * 0.56;
       } else {
-        gearRatio = 0.42 + clamp((absSpd - 17.5) / 11.5, 0.0, 0.72);
+        // 4th Gear Overdrive: drops RPM down into a deeper, lower-pitched high-speed cruise
+        gearRatio = 0.22 + clamp((absSpd - 19.5) / 10.0, 0.0, 0.28);
       }
 
       const accelLoad = Math.max(0.0, Math.abs(throttleInput));
-      const driftRevBoost = (isDrifting && absSpd > 2.0) ? 22.0 : 0.0;
-      const rpmJitter = Math.sin(time * 32.0) * 1.4;
-      const rpmFreq = 42.0 + gearRatio * 78.0 + accelLoad * 26.0 + driftRevBoost + rpmJitter;
+      const overdriveToneScale = isOverdrive4th ? 0.55 : 1.0;
+      const driftRevBoost = (isDrifting && absSpd > 2.0) ? 18.0 : 0.0;
+      const rpmJitter = Math.sin(time * 32.0) * 1.2;
+      const rpmFreq = 40.0 + gearRatio * 74.0 + accelLoad * 24.0 * overdriveToneScale + driftRevBoost + rpmJitter;
 
       loops.engOsc1.frequency.setTargetAtTime(rpmFreq, now, 0.05);
       loops.engOsc2.frequency.setTargetAtTime(rpmFreq * 0.5, now, 0.05);
       loops.engOsc3.frequency.setTargetAtTime(rpmFreq * 1.498, now, 0.05);
-      loops.exhaustBP.frequency.setTargetAtTime(rpmFreq * 2.2, now, 0.05);
+      loops.exhaustBP.frequency.setTargetAtTime(rpmFreq * 2.1, now, 0.05);
 
-      const filterCutoff = 130.0 + accelLoad * 440.0 + clamp(absSpd / 25.0, 0.0, 1.0) * 260.0 + (isDrifting ? 140.0 : 0.0);
+      const filterCutoff = 125.0 + (accelLoad * 390.0 + clamp(absSpd / 25.0, 0.0, 1.0) * 230.0) * overdriveToneScale + (isDrifting ? 120.0 : 0.0);
       loops.engineLP.frequency.setTargetAtTime(filterCutoff, now, 0.05);
 
       const targetEngGain = 0.065 + accelLoad * 0.14 + clamp(absSpd / 24.0, 0.0, 1.0) * 0.10;
@@ -11378,8 +11386,8 @@
         sharedLanternGlassMat.emissiveIntensity = 1.85 * nightGlow * sharedFlicker;
         sharedLanternHaloMat.opacity = 0.44 * nightGlow * sharedFlicker;
         sharedLanternGroundPoolMat.opacity = 0.17 * nightGlow * sharedFlicker;
-        sharedTruckHeadlightLensMat.emissiveIntensity = 2.4 * nightGlow;
-        sharedTruckHeadlightBeamMat.opacity = 0.22 * nightGlow;
+        sharedTruckHeadlightLensMat.emissiveIntensity = 3.8 * nightGlow;
+        sharedTruckHeadlightBeamMat.opacity = 0.34 * nightGlow;
       } else {
         sharedLanternGlassMat.emissiveIntensity = 0.04;
         sharedLanternHaloMat.opacity = 0.0;
@@ -11390,6 +11398,7 @@
 
       let waterAddedByTaps = false;
       let hasActiveTrucks = false;
+      let plantsDestroyedByTruck = false;
       const activeDrivenTruck = params.driveMode ? getLatestPlacedTruck() : null;
       _activeLanternCandidates.length = 0;
 
@@ -11763,17 +11772,84 @@
             }
           }
 
-          // 4. Tire Rooster-Tail Dust / Drift Smoke & Pond Splash FX + Audio
+          // 4. Vehicle Collision with Plants (explodes plant!) and Animals (kills animal to a skeleton!)
+          if (absSpd > 0.85) {
+            // 4A. Check grid cells under the truck's oriented footprint for plants
+            for (let dy = -2; dy <= 2; dy++) {
+              for (let dx = -2; dx <= 2; dx++) {
+                const txCell = gx + dx;
+                const tzCell = gz + dy;
+                if (txCell < 1 || txCell >= GRID - 1 || tzCell < 1 || tzCell >= GRID - 1) continue;
+                const ci = idx(txCell, tzCell);
+                if (veg[ci] < 0.12) continue;
+                const cellWx = ((txCell / (GRID - 1)) - 0.5) * WORLD_SIZE;
+                const cellWz = ((tzCell / (GRID - 1)) - 0.5) * WORLD_SIZE;
+                const relX = cellWx - it.x;
+                const relZ = cellWz - it.z;
+                const localFwd = relX * fwdX + relZ * fwdZ;
+                const localSide = relX * rightX + relZ * rightZ;
+                if (Math.abs(localFwd) < 2.25 && Math.abs(localSide) < 1.28) {
+                  // Explode the plant into flying 3D shards and remove it!
+                  const isJunglePlant = waterProximity[ci] >= 0.38;
+                  const plantPalette = isJunglePlant
+                    ? [0x16a34a, 0x4ade80, 0x713f12]
+                    : [0x4d7c0f, 0x84cc16, 0xfacc15];
+                  spawnExplosionShards(cellWx, avgWheelGroundY + 0.85, cellWz, grassMask[ci] === 1 ? 5 : 10, plantPalette);
+                  veg[ci] = 0.0;
+                  vegHealth[ci] = 0.0;
+                  grassMask[ci] = 0;
+                  plantBurnTimer[ci] = 0.0;
+                  plantSubmergedTimer[ci] = 0.0;
+                  plantsDestroyedByTruck = true;
+                }
+              }
+            }
+
+            // 4B. Check collision against alive animals -> hitting an animal kills it into a 3D skeleton!
+            if (typeof faunaAgents !== 'undefined') {
+              for (let aIdx = 0; aIdx < faunaAgents.length; aIdx++) {
+                const a = faunaAgents[aIdx];
+                if (a.state !== 'alive') continue;
+                if (Math.abs(a.y - avgWheelGroundY) > 2.6) continue;
+                const relX = a.x - it.x;
+                const relZ = a.z - it.z;
+                const localFwd = relX * fwdX + relZ * fwdZ;
+                const localSide = relX * rightX + relZ * rightZ;
+                if (Math.abs(localFwd) < 2.38 && Math.abs(localSide) < 1.38) {
+                  if (a.rig && typeof disposeApexRig === 'function') disposeApexRig(a);
+                  a.state = 'skeleton';
+                  a.skeletonTimer = 0;
+                  a.isBurning = false;
+                  spawnExplosionShards(a.x, a.y + 0.55, a.z, 7, [0xe7e5e4, 0xd6d3c9, a.colorHex || 0xd97706]);
+                }
+              }
+            }
+          }
+
+          // 5. Subtle Low-Profile Tire Sand Kickup & Pond Splash FX + Audio (never obscures chase camera view!)
           const cornerSquealLoad = (absSpd > 7.5 && Math.abs(it.steerAngle) > 0.16)
             ? clamp(((Math.abs(it.steerAngle) * absSpd) - 2.6) / 4.8, 0.0, 1.0)
             : 0.0;
           const isSkidding = (isDrifting && absSpd > 2.5) || (cornerSquealLoad > 0.25);
 
-          if (isSkidding && Math.random() < 0.75) {
+          if (isSkidding && Math.random() < 0.28) {
+            // Subtle low-altitude tire sand/gravel kickup right at wheel height (instead of giant opaque steam clouds)
             const rearX = it.x - fwdX * 1.25;
             const rearZ = it.z - fwdZ * 1.25;
-            spawnSteamPuffAtWorld(rearX - rightX * 0.78, avgWheelGroundY + 0.25, rearZ - rightZ * 0.78, isDrifting ? 2 : 1);
-            spawnSteamPuffAtWorld(rearX + rightX * 0.78, avgWheelGroundY + 0.25, rearZ + rightZ * 0.78, isDrifting ? 2 : 1);
+            const sideSign = Math.random() < 0.5 ? -1.0 : 1.0;
+            const idxP = tapDropletHead;
+            tapDropletHead = (tapDropletHead + 1) % TAP_DROPLET_COUNT;
+            const p3 = idxP * 3;
+            tapDropletPos[p3]     = rearX + rightX * 0.78 * sideSign + (Math.random() - 0.5) * 0.25;
+            tapDropletPos[p3 + 1] = avgWheelGroundY + 0.20;
+            tapDropletPos[p3 + 2] = rearZ + rightZ * 0.78 * sideSign + (Math.random() - 0.5) * 0.25;
+            tapDropletVel[p3]     = -fwdX * 1.8 + (Math.random() - 0.5) * 1.4;
+            tapDropletVel[p3 + 1] = 0.55 + Math.random() * 0.65;
+            tapDropletVel[p3 + 2] = -fwdZ * 1.8 + (Math.random() - 0.5) * 1.4;
+            tapDropletCol[p3]     = 0.68;
+            tapDropletCol[p3 + 1] = 0.60;
+            tapDropletCol[p3 + 2] = 0.48;
+            tapDropletLife[idxP]  = 0.45;
           } else if (absSpd > 5.0 && waterDepth > 0.08 && Math.random() < 0.85) {
             emitTapWaterDroplet(
               it.x - fwdX * 1.1 + (Math.random() - 0.5) * 1.4,
@@ -11822,20 +11898,32 @@
         updateTruckAudio(null, false, 0, false, 0);
       }
 
-      // Position the pre-allocated 3D headlight PointLight in front of the active/latest truck at night (lights up 3D plants, cacti & animals with zero shader-compile cost!)
+      // Position the 2 pre-allocated 3D headlight PointLights (near & far beam throw) in front of the active/latest truck at night!
       const headlightTruck = activeDrivenTruck || getLatestPlacedTruck();
       if (isNightTime && headlightTruck) {
-        const nightGlow = clamp((nightFactor - 0.15) / 0.65, 0.30, 1.0);
+        const nightGlow = clamp((nightFactor - 0.15) / 0.65, 0.35, 1.0);
         const fwdX = Math.sin(headlightTruck.yaw);
         const fwdZ = Math.cos(headlightTruck.yaw);
         truckHeadlightPoint.position.set(
-          headlightTruck.x + fwdX * 6.8,
-          headlightTruck.y + 2.1,
-          headlightTruck.z + fwdZ * 6.8
+          headlightTruck.x + fwdX * 11.5,
+          headlightTruck.y + 2.5,
+          headlightTruck.z + fwdZ * 11.5
         );
-        truckHeadlightPoint.intensity = 3.8 * nightGlow;
+        truckHeadlightPoint.intensity = 8.5 * nightGlow;
+
+        truckHeadlightPointFar.position.set(
+          headlightTruck.x + fwdX * 30.0,
+          headlightTruck.y + 3.4,
+          headlightTruck.z + fwdZ * 30.0
+        );
+        truckHeadlightPointFar.intensity = 9.5 * nightGlow;
       } else {
         truckHeadlightPoint.intensity = 0.0;
+        truckHeadlightPointFar.intensity = 0.0;
+      }
+
+      if (plantsDestroyedByTruck) {
+        rebuildFloraInstances();
       }
 
       // Assign the 6 pre-allocated THREE.PointLights to the 6 lanterns nearest the camera at night!
