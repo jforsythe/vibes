@@ -992,14 +992,17 @@
 
     /* Floating 3D-Projected Voice Bubble for the Wandering Voxel Human Artist */
     #voxel-human-bubble {
+      --bubble-scale: 1;
       position: fixed;
       left: 0;
       top: 0;
-      transform: translate(-50%, -100%);
+      transform: translate(-50%, -100%) scale(var(--bubble-scale, 1));
+      transform-origin: 50% calc(100% + 7px);
       display: none;
       align-items: center;
       justify-content: center;
       gap: 6px;
+      min-height: 36px;
       padding: 6px 11px;
       border-radius: 999px;
       background: rgba(255, 252, 245, 0.96);
@@ -1014,7 +1017,8 @@
       user-select: none;
       -webkit-user-select: none;
       white-space: nowrap;
-      transition: transform 0.14s ease, box-shadow 0.18s ease;
+      will-change: transform, left, top;
+      transition: box-shadow 0.18s ease;
     }
 
     #voxel-human-bubble::after {
@@ -1038,7 +1042,7 @@
     }
 
     #voxel-human-bubble.painting-ready:hover {
-      transform: translate(-50%, -105%) scale(1.09);
+      transform: translate(-50%, -104%) scale(calc(var(--bubble-scale, 1) * 1.12));
       border-color: #ea580c;
     }
 
@@ -1053,8 +1057,8 @@
     }
 
     @keyframes pulsePaintingBubble {
-      0% { transform: translate(-50%, -100%) scale(1.0); }
-      100% { transform: translate(-50%, -104%) scale(1.07); }
+      0% { transform: translate(-50%, -100%) scale(var(--bubble-scale, 1)); }
+      100% { transform: translate(-50%, -103%) scale(calc(var(--bubble-scale, 1) * 1.08)); }
     }
 
     /* Voxel Human Landscape Painting Viewer & Download Modal */
@@ -11193,8 +11197,29 @@
           voxelHumanBubbleEl.style.display = 'none';
           voxelHumanBubbleEl.classList.remove('painting-ready');
         } else {
-          _bubbleProjVec.set(voxelHuman.x, voxelHuman.y + 2.55, voxelHuman.z);
+          // Account for seated vs. standing posture so the bubble hovers directly above the hat crown
+          const isSeatedRoutine = (
+            voxelHuman.routine === 'LANDSCAPE_PAINTING' ||
+            voxelHuman.routine === 'PAINTING_READY' ||
+            voxelHuman.routine === 'POND_FISHING' ||
+            voxelHuman.routine === 'CAMP_REST'
+          );
+          const headAnchorWorldY = voxelHuman.y + (isSeatedRoutine ? 2.18 : 2.52);
+          _bubbleProjVec.set(voxelHuman.x, headAnchorWorldY, voxelHuman.z);
           _bubbleProjVec.project(camera);
+
+          // Scale the chat bubble with 3D camera distance:
+          // - Close up: at least as big as the person's 3D head + straw hat (~0.62m tall in world space)
+          // - Far away: stays clearly visible at its smallest minimum scale (0.52x)
+          const camDist = Math.max(1.8, camera.position.distanceTo(rig.root.position));
+          const fovRad = THREE.MathUtils.degToRad(camera.fov || 50);
+          const focalLenPx = (window.innerHeight * 0.5) / Math.tan(fovRad * 0.5);
+          const headWorldSizeM = 0.62 * (voxelHuman.scale || 1.15); // ~0.71m (at least as large as the person's head & hat)
+          const projectedHeadPx = (headWorldSizeM / camDist) * focalLenPx;
+          const baseBubbleHeightPx = 36.0;
+          const rawScale = projectedHeadPx / baseBubbleHeightPx;
+          const bubbleScale = clamp(rawScale, 0.52, 2.85);
+          voxelHumanBubbleEl.style.setProperty('--bubble-scale', bubbleScale.toFixed(3));
 
           const isReady = (voxelHuman.routine === 'PAINTING_READY');
           // If behind camera or offscreen: when PAINTING_READY is active, clamp the clickable 🖼️ bubble to the screen margin so the player never misses the 60s window!
@@ -11209,8 +11234,8 @@
               sx = window.innerWidth - sx;
               sy = window.innerHeight - 65;
             }
-            const marginX = 48;
-            const marginY = 58;
+            const marginX = Math.round(38 * bubbleScale + 14);
+            const marginY = Math.round(44 * bubbleScale + 16);
             if (isReady) {
               sx = clamp(sx, marginX, window.innerWidth - marginX);
               sy = clamp(sy, marginY, window.innerHeight - marginY);
