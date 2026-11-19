@@ -284,6 +284,26 @@
       color: var(--desert-plant);
     }
 
+    .audio-btn {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(5, 150, 105, 0.32));
+      border: 1px solid rgba(52, 211, 153, 0.55);
+      color: #a7f3d0;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .audio-btn:hover {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.36), rgba(5, 150, 105, 0.48));
+      border-color: #6ee7b7;
+      color: #ecfdf5;
+    }
+
+    .audio-btn.muted {
+      background: rgba(30, 27, 24, 0.65);
+      border-color: rgba(148, 163, 184, 0.32);
+      color: var(--text-dim);
+    }
+
     /* Wind Compass Widget */
     .compass-widget {
       width: 42px;
@@ -1155,6 +1175,9 @@
       <button id="btn-fpv-mode" class="fpv-btn" title="Walk around on the terrain & dive underwater (Shortcut: V)">
         🚶 FPV Walk Mode
       </button>
+      <button id="btn-audio-toggle" class="audio-btn" title="Toggle Global Sound Effects On/Off (Shortcut: M)">
+        🔊 Audio: ON
+      </button>
       <button id="btn-screenshot" title="Capture a PNG screenshot of the 3D scene and save it to your computer (Shortcut: P)">
         📸 Screenshot
       </button>
@@ -1452,6 +1475,7 @@
 
         <div class="toggle-row">
           <button id="btn-toggle-day-cycle" class="active" title="Automatically cycle the Sun across the terrain through Day, Sunset, Starry Night, and Dawn">🌓 Auto Day/Night</button>
+          <button id="btn-toggle-audio-panel" class="active" title="Toggle Global Sound Effects On/Off (Shortcut: M)">🔊 Audio SFX</button>
           <button id="btn-toggle-shadow-vis" title="Highlight leeward wind-shadow drift zones">👁️ Wind Shadow</button>
           <button id="btn-toggle-moisture-vis" title="Highlight underground capillary soil moisture">💧 Moisture Map</button>
           <button id="btn-toggle-particles" title="Toggle blowing sand & rain particles">✨ Particles</button>
@@ -1555,6 +1579,7 @@
       fpvMode: false,
       fpvEquip: 'sculpt',     // 'sculpt' | 'none' | 'bow' | 'torch'
       isUnderwater: false,
+      audioEnabled: true,
       skyColorHex: 0xd5a87a,
       skyFogDensity: 0.0020
     };
@@ -7881,6 +7906,371 @@
       return [f(0), f(8), f(4)];
     }
 
+    // ============================================================================
+    // 11F-AUDIO. GLOBAL WEB AUDIO API SOUND EFFECTS & PYROTECHNIC SYNTHESIZER
+    //            (Rocket Mortar Launch, Ascending Whistle, Aerial Explosion Boom, Star Sizzle & Crackle)
+    // ============================================================================
+    let audioCtx = null;
+    let audioMasterGain = null;
+    let audioCompressor = null;
+    let whiteNoiseBuffer = null;
+    let pinkNoiseBuffer = null;
+    let activeFireworkAudioVoices = 0;
+    const MAX_FIREWORK_AUDIO_VOICES = 12;
+    const _audioTmpVec = new THREE.Vector3();
+
+    // Restore persisted audio toggle preference (defaults to ON)
+    try {
+      const savedAudioPref = localStorage.getItem('sandsim_audio_enabled');
+      if (savedAudioPref === 'false') {
+        params.audioEnabled = false;
+      }
+    } catch (_) {}
+
+    function syncAudioToggleUI() {
+      const topBtn = document.getElementById('btn-audio-toggle');
+      if (topBtn) {
+        topBtn.textContent = params.audioEnabled ? '🔊 Audio: ON' : '🔇 Audio: OFF';
+        topBtn.classList.toggle('muted', !params.audioEnabled);
+      }
+      const panelBtn = document.getElementById('btn-toggle-audio-panel');
+      if (panelBtn) {
+        panelBtn.textContent = params.audioEnabled ? '🔊 Audio SFX' : '🔇 Audio Off';
+        panelBtn.classList.toggle('active', params.audioEnabled);
+      }
+    }
+    syncAudioToggleUI();
+
+    function ensureAudioContext() {
+      if (!params.audioEnabled) return null;
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return null;
+        audioCtx = new AudioContextClass();
+
+        audioCompressor = audioCtx.createDynamicsCompressor();
+        audioCompressor.threshold.setValueAtTime(-14, audioCtx.currentTime);
+        audioCompressor.knee.setValueAtTime(18, audioCtx.currentTime);
+        audioCompressor.ratio.setValueAtTime(6, audioCtx.currentTime);
+        audioCompressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
+        audioCompressor.release.setValueAtTime(0.18, audioCtx.currentTime);
+
+        audioMasterGain = audioCtx.createGain();
+        audioMasterGain.gain.setValueAtTime(params.audioEnabled ? 0.85 : 0.0, audioCtx.currentTime);
+        audioCompressor.connect(audioMasterGain);
+        audioMasterGain.connect(audioCtx.destination);
+
+        // Precompute reusable 2.6-second White & Pink Noise buffers (zero per-effect buffer allocations)
+        const sampleRate = audioCtx.sampleRate;
+        const bufLen = Math.floor(sampleRate * 2.6);
+        whiteNoiseBuffer = audioCtx.createBuffer(1, bufLen, sampleRate);
+        pinkNoiseBuffer = audioCtx.createBuffer(1, bufLen, sampleRate);
+        const wData = whiteNoiseBuffer.getChannelData(0);
+        const pData = pinkNoiseBuffer.getChannelData(0);
+
+        let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+        for (let i = 0; i < bufLen; i++) {
+          const white = Math.random() * 2 - 1;
+          wData[i] = white;
+          b0 = 0.99886 * b0 + white * 0.0555179;
+          b1 = 0.99332 * b1 + white * 0.0750759;
+          b2 = 0.96900 * b2 + white * 0.1538520;
+          b3 = 0.86650 * b3 + white * 0.3104856;
+          b4 = 0.55000 * b4 + white * 0.5329522;
+          b5 = -0.7616 * b5 - white * 0.0168980;
+          pData[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+          b6 = white * 0.115926;
+        }
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+      return audioCtx;
+    }
+
+    function setGlobalAudioEnabled(enabled) {
+      params.audioEnabled = !!enabled;
+      try {
+        localStorage.setItem('sandsim_audio_enabled', params.audioEnabled ? 'true' : 'false');
+      } catch (_) {}
+      syncAudioToggleUI();
+
+      if (params.audioEnabled) {
+        const ctx = ensureAudioContext();
+        if (ctx && audioMasterGain) {
+          const now = ctx.currentTime;
+          audioMasterGain.gain.cancelScheduledValues(now);
+          audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
+          audioMasterGain.gain.linearRampToValueAtTime(0.85, now + 0.04);
+        }
+      } else if (audioCtx && audioMasterGain) {
+        const now = audioCtx.currentTime;
+        audioMasterGain.gain.cancelScheduledValues(now);
+        audioMasterGain.gain.setValueAtTime(audioMasterGain.gain.value, now);
+        audioMasterGain.gain.linearRampToValueAtTime(0.0, now + 0.04);
+      }
+    }
+
+    function computeWorldAudioSpatial(wx, wy, wz) {
+      _audioTmpVec.set(wx, wy, wz);
+      const dist = camera.position.distanceTo(_audioTmpVec);
+      // Smooth distance attenuation (loud nearby, audible across the entire 220m desert basin)
+      const distGain = clamp(1.18 / (1.0 + dist * 0.0065), 0.22, 1.0);
+      _audioTmpVec.project(camera);
+      const pan = clamp(_audioTmpVec.x * 0.78, -0.88, 0.88);
+      return { distGain, pan };
+    }
+
+    function createSpatialPanner(ctx, pan) {
+      if (typeof ctx.createStereoPanner === 'function') {
+        const p = ctx.createStereoPanner();
+        p.pan.setValueAtTime(pan, ctx.currentTime);
+        p.connect(audioCompressor);
+        return p;
+      }
+      return audioCompressor;
+    }
+
+    // 1. Firework Mortar Rocket Launch ("Thoomp + Whoosh!") & Ascending Pyrotechnic Whistle ("Wheeeeeeet!")
+    function playFireworkLaunchAndWhistle(wx, sy, wz, fuseDuration) {
+      if (!params.audioEnabled || activeFireworkAudioVoices >= MAX_FIREWORK_AUDIO_VOICES) return null;
+      const ctx = ensureAudioContext();
+      if (!ctx || !whiteNoiseBuffer || !pinkNoiseBuffer) return null;
+
+      activeFireworkAudioVoices++;
+      const now = ctx.currentTime;
+      const { distGain, pan } = computeWorldAudioSpatial(wx, sy, wz);
+      const outBus = createSpatialPanner(ctx, pan);
+
+      // A. Mortar Tube Thump (155 Hz -> 36 Hz pitch drop over 0.19s)
+      const thumpOsc = ctx.createOscillator();
+      const thumpGain = ctx.createGain();
+      thumpOsc.type = 'sine';
+      thumpOsc.frequency.setValueAtTime(148 + Math.random() * 24, now);
+      thumpOsc.frequency.exponentialRampToValueAtTime(36, now + 0.19);
+      thumpGain.gain.setValueAtTime(0.001, now);
+      thumpGain.gain.linearRampToValueAtTime(0.38 * distGain, now + 0.007);
+      thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.21);
+      thumpOsc.connect(thumpGain);
+      thumpGain.connect(outBus);
+      thumpOsc.start(now);
+      thumpOsc.stop(now + 0.22);
+
+      // B. Propellant Ignition Whoosh (Bandpass Pink Noise Rush out of the tube)
+      const whooshSrc = ctx.createBufferSource();
+      whooshSrc.buffer = pinkNoiseBuffer;
+      const whooshFilter = ctx.createBiquadFilter();
+      whooshFilter.type = 'bandpass';
+      whooshFilter.frequency.setValueAtTime(480, now);
+      whooshFilter.frequency.exponentialRampToValueAtTime(1150, now + 0.24);
+      whooshFilter.Q.setValueAtTime(1.6, now);
+      const whooshGain = ctx.createGain();
+      whooshGain.gain.setValueAtTime(0.001, now);
+      whooshGain.gain.linearRampToValueAtTime(0.26 * distGain, now + 0.02);
+      whooshGain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+      whooshSrc.connect(whooshFilter);
+      whooshFilter.connect(whooshGain);
+      whooshGain.connect(outBus);
+      whooshSrc.start(now, Math.random() * 1.2, 0.28);
+
+      // C. Ascending Rocket Whistle ("Wheeeeeeet!" screaming upward until detonation)
+      const whistleDur = Math.max(0.45, fuseDuration - 0.04);
+      const startFreq = 1120 + Math.random() * 340;
+      const peakFreq = 2650 + Math.random() * 680;
+
+      const whistleOsc = ctx.createOscillator();
+      whistleOsc.type = 'sine';
+      whistleOsc.frequency.setValueAtTime(startFreq, now + 0.03);
+      whistleOsc.frequency.exponentialRampToValueAtTime(peakFreq, now + 0.03 + whistleDur * 0.88);
+      whistleOsc.frequency.exponentialRampToValueAtTime(peakFreq * 0.92, now + 0.03 + whistleDur);
+
+      // Spin-flutter vibrato LFO (18-24 Hz warble characteristic of spinning firework whistle rockets)
+      const vibratoOsc = ctx.createOscillator();
+      const vibratoGain = ctx.createGain();
+      vibratoOsc.frequency.setValueAtTime(18 + Math.random() * 6, now);
+      vibratoGain.gain.setValueAtTime(34, now);
+      vibratoOsc.connect(vibratoGain);
+      vibratoGain.connect(whistleOsc.frequency);
+
+      // Breathy air-whistle harmonic layer (high-Q bandpass white noise tracking the whistle pitch)
+      const breathSrc = ctx.createBufferSource();
+      breathSrc.buffer = whiteNoiseBuffer;
+      const breathFilter = ctx.createBiquadFilter();
+      breathFilter.type = 'bandpass';
+      breathFilter.Q.setValueAtTime(14.0, now);
+      breathFilter.frequency.setValueAtTime(startFreq, now + 0.03);
+      breathFilter.frequency.exponentialRampToValueAtTime(peakFreq, now + 0.03 + whistleDur * 0.88);
+
+      const whistleGain = ctx.createGain();
+      whistleGain.gain.setValueAtTime(0.0001, now);
+      whistleGain.gain.linearRampToValueAtTime(0.115 * distGain, now + 0.09);
+      whistleGain.gain.setValueAtTime(0.105 * distGain, now + whistleDur * 0.82);
+      whistleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.03 + whistleDur);
+
+      const breathGain = ctx.createGain();
+      breathGain.gain.setValueAtTime(0.0001, now);
+      breathGain.gain.linearRampToValueAtTime(0.08 * distGain, now + 0.09);
+      breathGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.03 + whistleDur);
+
+      whistleOsc.connect(whistleGain);
+      whistleGain.connect(outBus);
+
+      breathSrc.connect(breathFilter);
+      breathFilter.connect(breathGain);
+      breathGain.connect(outBus);
+
+      const stopTime = now + 0.04 + whistleDur;
+      whistleOsc.start(now + 0.03);
+      vibratoOsc.start(now + 0.03);
+      breathSrc.start(now + 0.03, Math.random() * 0.8, whistleDur + 0.05);
+      whistleOsc.stop(stopTime);
+      vibratoOsc.stop(stopTime);
+
+      let cleanedUp = false;
+      const releaseVoice = () => {
+        if (!cleanedUp) {
+          cleanedUp = true;
+          activeFireworkAudioVoices = Math.max(0, activeFireworkAudioVoices - 1);
+        }
+      };
+      whistleOsc.onended = releaseVoice;
+
+      return {
+        stopEarly() {
+          if (cleanedUp || !audioCtx) return;
+          try {
+            const t = audioCtx.currentTime;
+            whistleGain.gain.cancelScheduledValues(t);
+            whistleGain.gain.setValueAtTime(Math.max(0.0001, whistleGain.gain.value), t);
+            whistleGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+            breathGain.gain.cancelScheduledValues(t);
+            breathGain.gain.setValueAtTime(Math.max(0.0001, breathGain.gain.value), t);
+            breathGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+            whistleOsc.stop(t + 0.03);
+            vibratoOsc.stop(t + 0.03);
+            breathSrc.stop(t + 0.03);
+          } catch (_) {}
+          releaseVoice();
+        }
+      };
+    }
+
+    // 2. Aerial Shell Explosion Boom + Shimmering Star Sizzle + Multi-Pop Strobe Crackle
+    function playFireworkExplosionSizzleCrackle(wx, wy, wz, pattern) {
+      if (!params.audioEnabled || activeFireworkAudioVoices >= MAX_FIREWORK_AUDIO_VOICES) return;
+      const ctx = ensureAudioContext();
+      if (!ctx || !whiteNoiseBuffer || !pinkNoiseBuffer) return;
+
+      activeFireworkAudioVoices++;
+      const now = ctx.currentTime;
+      const { distGain, pan } = computeWorldAudioSpatial(wx, wy, wz);
+      const outBus = createSpatialPanner(ctx, pan);
+
+      // A. Sharp Shell Break Crack + Deep Chest-Thumping Sub-Bass Boom ("KABOOM!")
+      const subOsc = ctx.createOscillator();
+      const subGain = ctx.createGain();
+      subOsc.type = 'triangle';
+      subOsc.frequency.setValueAtTime(105 + Math.random() * 20, now);
+      subOsc.frequency.exponentialRampToValueAtTime(24, now + 0.54);
+      subGain.gain.setValueAtTime(0.001, now);
+      subGain.gain.linearRampToValueAtTime(0.62 * distGain, now + 0.006);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.58);
+      subOsc.connect(subGain);
+      subGain.connect(outBus);
+      subOsc.start(now);
+      subOsc.stop(now + 0.60);
+
+      // Explosion broadband noise blast + low-frequency rolling thunder rumble
+      const boomSrc = ctx.createBufferSource();
+      boomSrc.buffer = pinkNoiseBuffer;
+      const boomFilter = ctx.createBiquadFilter();
+      boomFilter.type = 'lowpass';
+      boomFilter.frequency.setValueAtTime(1450, now);
+      boomFilter.frequency.exponentialRampToValueAtTime(95, now + 0.82);
+      const boomGain = ctx.createGain();
+      boomGain.gain.setValueAtTime(0.001, now);
+      boomGain.gain.linearRampToValueAtTime(0.58 * distGain, now + 0.005);
+      boomGain.gain.exponentialRampToValueAtTime(0.14 * distGain, now + 0.16);
+      // Secondary canyon echo swell at +0.18s
+      boomGain.gain.linearRampToValueAtTime(0.20 * distGain, now + 0.21);
+      boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.92);
+      boomSrc.connect(boomFilter);
+      boomFilter.connect(boomGain);
+      boomGain.connect(outBus);
+      boomSrc.start(now, Math.random() * 0.9, 0.96);
+
+      // B. Burning Star Canopy Sizzle ("Ssssssssshhhh..." as burning stars streak through the air)
+      const sizzleDur = (pattern === 'willow' || pattern === 'palm') ? 1.75 : 1.35;
+      const sizzleSrc = ctx.createBufferSource();
+      sizzleSrc.buffer = whiteNoiseBuffer;
+      const sizzleFilter = ctx.createBiquadFilter();
+      sizzleFilter.type = 'bandpass';
+      sizzleFilter.frequency.setValueAtTime(4800, now + 0.04);
+      sizzleFilter.frequency.exponentialRampToValueAtTime(2400, now + sizzleDur);
+      sizzleFilter.Q.setValueAtTime(1.15, now);
+
+      const sizzleGain = ctx.createGain();
+      sizzleGain.gain.setValueAtTime(0.0001, now);
+      sizzleGain.gain.linearRampToValueAtTime(0.13 * distGain, now + 0.14);
+      sizzleGain.gain.setValueAtTime(0.11 * distGain, now + 0.42);
+      sizzleGain.gain.exponentialRampToValueAtTime(0.0001, now + sizzleDur);
+      sizzleSrc.connect(sizzleFilter);
+      sizzleFilter.connect(sizzleGain);
+      sizzleGain.connect(outBus);
+      sizzleSrc.start(now + 0.03, Math.random() * 0.6, sizzleDur + 0.05);
+
+      // C. Pyrotechnic Strobe & Crossette Crackle ("Snap-crackle-pop-pop-pop!")
+      // Schedule 18-28 sharp micro-transient pops on a single high-Q noise channel for zero node overhead
+      const crackleDur = 1.55;
+      const crackleSrc = ctx.createBufferSource();
+      crackleSrc.buffer = whiteNoiseBuffer;
+
+      const crackleHP = ctx.createBiquadFilter();
+      crackleHP.type = 'highpass';
+      crackleHP.frequency.setValueAtTime(1950, now);
+
+      const crackleBP = ctx.createBiquadFilter();
+      crackleBP.type = 'peaking';
+      crackleBP.frequency.setValueAtTime(3400, now);
+      crackleBP.Q.setValueAtTime(2.4, now);
+      crackleBP.gain.setValueAtTime(9.0, now);
+
+      const crackleGain = ctx.createGain();
+      crackleGain.gain.setValueAtTime(0.0001, now);
+
+      const numPops = (pattern === 'saturn' || pattern === 'palm') ? 26 : 20;
+      // Generate sorted pop timestamps between +0.16s and +1.42s
+      const popOffsets = [];
+      for (let p = 0; p < numPops; p++) {
+        popOffsets.push(0.16 + Math.pow(Math.random(), 1.15) * 1.24);
+      }
+      popOffsets.sort((a, b) => a - b);
+
+      let lastPopEnd = now + 0.12;
+      for (let p = 0; p < popOffsets.length; p++) {
+        const popStart = Math.max(lastPopEnd + 0.004, now + popOffsets[p]);
+        if (popStart >= now + crackleDur - 0.03) break;
+        const popDecay = 0.009 + Math.random() * 0.011;
+        const envFade = 1.0 - (popOffsets[p] / 1.55) * 0.55;
+        const popAmp = (0.18 + Math.random() * 0.24) * distGain * envFade;
+
+        crackleGain.gain.setValueAtTime(0.0001, popStart);
+        crackleGain.gain.linearRampToValueAtTime(popAmp, popStart + 0.0018);
+        crackleGain.gain.exponentialRampToValueAtTime(0.0001, popStart + popDecay);
+        lastPopEnd = popStart + popDecay;
+      }
+
+      crackleSrc.connect(crackleHP);
+      crackleHP.connect(crackleBP);
+      crackleBP.connect(crackleGain);
+      crackleGain.connect(outBus);
+      crackleSrc.start(now + 0.12, Math.random() * 0.8, crackleDur);
+
+      crackleSrc.onended = () => {
+        activeFireworkAudioVoices = Math.max(0, activeFireworkAudioVoices - 1);
+      };
+    }
+
     function launchFireworkAtWorld(wx, wz, forceImmediate = false) {
       const nowMs = performance.now();
       if (!forceImmediate && nowMs - lastFireworkLaunchMs < 115) return;
@@ -7897,6 +8287,8 @@
 
         const palette = FIREWORK_PALETTES[Math.floor(Math.random() * FIREWORK_PALETTES.length)];
         const pattern = FIREWORK_PATTERNS[Math.floor(Math.random() * FIREWORK_PATTERNS.length)];
+        const fuse = 1.06 + Math.random() * 0.40;
+        const audioHandle = playFireworkLaunchAndWhistle(jx, sy, jz, fuse);
 
         activeFireworkRockets.push({
           x: jx,
@@ -7905,9 +8297,10 @@
           vx: (Math.random() - 0.5) * 5.2,
           vy: 42.0 + Math.random() * 14.5,
           vz: (Math.random() - 0.5) * 5.2,
-          fuse: 1.06 + Math.random() * 0.40,
+          fuse,
           palette,
-          pattern
+          pattern,
+          audioHandle
         });
 
         // Ground mortar launch sparks & smoke puff
@@ -7927,7 +8320,11 @@
     }
 
     function detonateFireworkRocket(r) {
-      const { x, y, z, palette, pattern } = r;
+      const { x, y, z, palette, pattern, audioHandle } = r;
+      if (audioHandle && typeof audioHandle.stopEarly === 'function') {
+        audioHandle.stopEarly();
+      }
+      playFireworkExplosionSizzleCrackle(x, y, z, pattern);
       const p1 = palette.primary;
       const p2 = palette.secondary;
 
@@ -9980,6 +10377,36 @@
       btnParticles.classList.toggle('active', params.showParticles);
     });
 
+    const btnAudioToggle = document.getElementById('btn-audio-toggle');
+    if (btnAudioToggle) {
+      btnAudioToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setGlobalAudioEnabled(!params.audioEnabled);
+      });
+    }
+
+    const btnToggleAudioPanel = document.getElementById('btn-toggle-audio-panel');
+    if (btnToggleAudioPanel) {
+      btnToggleAudioPanel.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setGlobalAudioEnabled(!params.audioEnabled);
+      });
+    }
+
+    // Keyboard shortcut 'M' to toggle Global Audio Mute/Unmute, and unlock Web Audio on first user interaction
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        setGlobalAudioEnabled(!params.audioEnabled);
+      } else if (params.audioEnabled) {
+        ensureAudioContext();
+      }
+    });
+    window.addEventListener('pointerdown', () => {
+      if (params.audioEnabled) {
+        ensureAudioContext();
+      }
+    }, { passive: true });
+
     document.getElementById('btn-cloudburst').addEventListener('click', () => {
       for (let i = 0; i < MAX_CELLS; i++) {
         if (water[i] > 0.02 && lavaFrac[i] >= 0.25) {
@@ -10336,6 +10763,9 @@
       clock.stop();
       isPointerDown = false;
       fpvState.bowDrawing = false;
+      if (audioCtx && audioCtx.state === 'running') {
+        audioCtx.suspend().catch(() => {});
+      }
       if (document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
         document.exitPointerLock();
       }
@@ -10386,6 +10816,7 @@
 
       // 2. Restore simulation parameters & camera/FPV state
       Object.assign(params, snap.paramsCopy);
+      setGlobalAudioEnabled(params.audioEnabled);
       simTick = snap.simTick || 0;
       uniforms.uTime.value = snap.timeVal || 0;
 
