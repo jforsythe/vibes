@@ -990,6 +990,155 @@
       color: #6ee7b7;
     }
 
+    /* Floating 3D-Projected Voice Bubble for the Wandering Voxel Human Artist */
+    #voxel-human-bubble {
+      position: fixed;
+      left: 0;
+      top: 0;
+      transform: translate(-50%, -100%);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 11px;
+      border-radius: 999px;
+      background: rgba(255, 252, 245, 0.96);
+      border: 2px solid #d97706;
+      color: #1c1917;
+      font-size: 19px;
+      line-height: 1;
+      font-weight: 800;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+      z-index: 35;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+      white-space: nowrap;
+      transition: transform 0.14s ease, box-shadow 0.18s ease;
+    }
+
+    #voxel-human-bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -7px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 7px 6px 0 6px;
+      border-style: solid;
+      border-color: #d97706 transparent transparent transparent;
+    }
+
+    #voxel-human-bubble.painting-ready {
+      pointer-events: auto;
+      cursor: pointer;
+      background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+      border: 2.5px solid #f59e0b;
+      box-shadow: 0 0 22px rgba(251, 191, 36, 0.85), 0 8px 24px rgba(0, 0, 0, 0.65);
+      animation: pulsePaintingBubble 1.3s ease-in-out infinite alternate;
+    }
+
+    #voxel-human-bubble.painting-ready:hover {
+      transform: translate(-50%, -105%) scale(1.09);
+      border-color: #ea580c;
+    }
+
+    #voxel-human-bubble .bubble-timer {
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 800;
+      color: #92400e;
+      background: rgba(245, 158, 11, 0.22);
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+
+    @keyframes pulsePaintingBubble {
+      0% { transform: translate(-50%, -100%) scale(1.0); }
+      100% { transform: translate(-50%, -104%) scale(1.07); }
+    }
+
+    /* Voxel Human Landscape Painting Viewer & Download Modal */
+    #human-painting-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 8, 6, 0.78);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 150;
+      padding: 18px;
+    }
+
+    #human-painting-modal.open {
+      display: flex;
+    }
+
+    .painting-modal-card {
+      background: linear-gradient(160deg, #241c14 0%, #16110c 100%);
+      border: 2px solid rgba(255, 197, 109, 0.65);
+      border-radius: 18px;
+      padding: 18px 20px;
+      max-width: 580px;
+      width: 100%;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.88);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      color: var(--text);
+    }
+
+    .painting-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .painting-modal-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--accent-bright);
+      letter-spacing: 0.02em;
+    }
+
+    .painting-modal-sub {
+      font-size: 11.5px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .painting-frame-wrap {
+      background: #3e2714;
+      border: 8px solid #5c3a1d;
+      outline: 2px solid #eab308;
+      border-radius: 10px;
+      box-shadow: inset 0 0 18px rgba(0,0,0,0.75), 0 10px 28px rgba(0,0,0,0.65);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      aspect-ratio: 4 / 3;
+      width: 100%;
+      background-image: radial-gradient(circle, #2a1b0e 0%, #140d06 100%);
+    }
+
+    #human-painting-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .painting-modal-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     kbd {
       background: rgba(255,255,255,0.1);
       border: 1px solid rgba(255,255,255,0.18);
@@ -1730,6 +1879,34 @@
     </div>
   </div>
 
+  <!-- Floating 3D Voice Bubble for the Wandering Voxel Human Artist -->
+  <div id="voxel-human-bubble" title="Click to view &amp; download the Voxel Artist's landscape painting!">
+    <span id="voxel-human-bubble-emoji">🎨</span>
+    <span id="voxel-human-bubble-timer" class="bubble-timer" style="display:none;">60s</span>
+  </div>
+
+  <!-- Voxel Human Landscape Painting Viewer & Download Modal -->
+  <div id="human-painting-modal">
+    <div class="painting-modal-card">
+      <div class="painting-modal-header">
+        <div>
+          <div class="painting-modal-title" id="human-painting-title">🖼️ Plein-Air Oasis Landscape</div>
+          <div class="painting-modal-sub" id="human-painting-subjects">Painted by the Wandering Voxel Artist</div>
+        </div>
+        <button type="button" id="btn-close-painting-modal" style="padding:6px 11px; font-weight:700;">✕ Close</button>
+      </div>
+      <div class="painting-frame-wrap">
+        <img id="human-painting-img" alt="Voxel Artist Landscape Painting" />
+      </div>
+      <div class="painting-modal-actions">
+        <span id="human-painting-expiry-note" style="font-size:11px; color:var(--text-dim);">Captured live from the artist's easel viewpoint</span>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="btn-download-human-painting" class="primary" style="padding:7px 14px; font-weight:700;">⬇️ Download Painting (.png)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Right Control Sidebar (Collapsed to Small Icons by Default, Auto-Collapses after 20s Inactivity) -->
   <aside class="control-panel collapsed" id="control-panel">
     <!-- Compact Icon Strip (Shown when Collapsed) -->
@@ -1922,6 +2099,15 @@
             <span class="guild-dot" style="background:#e2e8f0; border:1px solid #94a3b8;"></span>
             <span>🦉 Night Owl (Night)</span>
           </div>
+        </div>
+
+        <div class="zone-label" style="color:#fde047; margin-top:8px;">
+          <span>🧑‍🎨 Wandering Voxel Landscape Artist</span>
+          <span class="fidelity-badge" id="val-voxel-human-status" style="font-size:10px;">🚶 Wandering</span>
+        </div>
+        <div class="btn-grid" style="margin-top:4px;">
+          <button type="button" id="btn-locate-voxel-human" title="Focus camera on the wandering Voxel Human artist">👁️ Find Artist</button>
+          <button type="button" id="btn-trigger-human-paint" title="Prompt the Voxel Human to set up their chair &amp; easel right here (or finish their active painting so you can click 🖼️)">🎨 Paint / Finish</button>
         </div>
       </div>
 
@@ -8543,6 +8729,1085 @@
         inst.count = count;
         inst.instanceMatrix.needsUpdate = true;
         if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+      }
+
+      updateVoxelHumanArtist(dt);
+    }
+
+    // ============================================================================
+    // 10B. WANDERING VOXEL HUMAN & PLEIN-AIR LANDSCAPE PAINTING ROUTINE (1-3 MIN)
+    // ============================================================================
+    const easelWorkCanvas = document.createElement('canvas');
+    easelWorkCanvas.width = 640;
+    easelWorkCanvas.height = 480;
+    const easelWorkCtx = easelWorkCanvas.getContext('2d');
+
+    const painterSnapshotCanvas = document.createElement('canvas');
+    painterSnapshotCanvas.width = 320;
+    painterSnapshotCanvas.height = 240;
+    const painterSnapshotCtx = painterSnapshotCanvas.getContext('2d');
+    const painterPixelBuf = new Uint8Array(320 * 240 * 4);
+    const painterImgData = painterSnapshotCtx.createImageData(320, 240);
+
+    const painterRenderTarget = new THREE.WebGLRenderTarget(320, 240, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat
+    });
+    const painterPovCamera = new THREE.PerspectiveCamera(54, 4 / 3, 0.7, 210);
+
+    const easelCanvasTex = new THREE.CanvasTexture(easelWorkCanvas);
+    const easelCanvasMat = new THREE.MeshBasicMaterial({ map: easelCanvasTex, side: THREE.DoubleSide });
+
+    function clearEaselCanvasToLinen() {
+      easelWorkCtx.fillStyle = '#f3ead8';
+      easelWorkCtx.fillRect(0, 0, easelWorkCanvas.width, easelWorkCanvas.height);
+      // Warm woven linen canvas texture
+      easelWorkCtx.fillStyle = 'rgba(180, 155, 118, 0.14)';
+      for (let y = 0; y < easelWorkCanvas.height; y += 6) {
+        easelWorkCtx.fillRect(0, y, easelWorkCanvas.width, 1);
+      }
+      for (let x = 0; x < easelWorkCanvas.width; x += 6) {
+        easelWorkCtx.fillRect(x, 0, 1, easelWorkCanvas.height);
+      }
+      easelCanvasTex.needsUpdate = true;
+    }
+    clearEaselCanvasToLinen();
+
+    function createVoxelHumanArtistRig() {
+      const root = new THREE.Group();
+
+      const skinMat = new THREE.MeshStandardMaterial({ color: 0xf4c29f, roughness: 0.68 });
+      const hatMat = new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.78 });
+      const hatBandMat = new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.72 });
+      const shirtMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.65 });
+      const vestMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.75 });
+      const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.78 });
+      const bootMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.82 });
+      const woodMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.76 });
+      const darkWoodMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1d, roughness: 0.80 });
+      const clothMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.85 });
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111827 });
+
+      // 1. Articulated Voxel Human Body Group (drops slightly when seated on the camp chair!)
+      const bodyGroup = new THREE.Group();
+      root.add(bodyGroup);
+
+      // Voxel Legs (Pivot at hips y = 0.74)
+      const legLPivot = new THREE.Group();
+      legLPivot.position.set(-0.14, 0.74, 0);
+      bodyGroup.add(legLPivot);
+      const legLMesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.56, 0.22), pantsMat);
+      legLMesh.position.set(0, -0.28, 0);
+      legLMesh.castShadow = true;
+      legLPivot.add(legLMesh);
+      const bootLMesh = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.29), bootMat);
+      bootLMesh.position.set(0, -0.62, 0.03);
+      bootLMesh.castShadow = true;
+      legLPivot.add(bootLMesh);
+
+      const legRPivot = new THREE.Group();
+      legRPivot.position.set(0.14, 0.74, 0);
+      bodyGroup.add(legRPivot);
+      const legRMesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.56, 0.22), pantsMat);
+      legRMesh.position.set(0, -0.28, 0);
+      legRMesh.castShadow = true;
+      legRPivot.add(legRMesh);
+      const bootRMesh = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.29), bootMat);
+      bootRMesh.position.set(0, -0.62, 0.03);
+      bootRMesh.castShadow = true;
+      legRPivot.add(bootRMesh);
+
+      // Voxel Torso & Explorer Vest + Backpack
+      const torsoMesh = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.64, 0.30), shirtMat);
+      torsoMesh.position.set(0, 1.06, 0);
+      torsoMesh.castShadow = true;
+      bodyGroup.add(torsoMesh);
+
+      const vestMesh = new THREE.Mesh(new THREE.BoxGeometry(0.57, 0.54, 0.32), vestMat);
+      vestMesh.position.set(0, 1.04, 0);
+      vestMesh.castShadow = true;
+      bodyGroup.add(vestMesh);
+
+      const packMesh = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.48, 0.22), darkWoodMat);
+      packMesh.position.set(0, 1.06, -0.24);
+      packMesh.castShadow = true;
+      bodyGroup.add(packMesh);
+
+      // Voxel Head + Eyes + Straw Artist Hat
+      const headPivot = new THREE.Group();
+      headPivot.position.set(0, 1.40, 0);
+      bodyGroup.add(headPivot);
+
+      const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.44, 0.44), skinMat);
+      headMesh.position.set(0, 0.22, 0);
+      headMesh.castShadow = true;
+      headPivot.add(headMesh);
+
+      for (const side of [-1, 1]) {
+        const eye = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.08, 0.04), eyeMat);
+        eye.position.set(side * 0.10, 0.24, 0.225);
+        headPivot.add(eye);
+      }
+      const nose = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.06), skinMat);
+      nose.position.set(0, 0.19, 0.24);
+      headPivot.add(nose);
+
+      // Artist Sun-Hat
+      const hatBrim = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.07, 0.74), hatMat);
+      hatBrim.position.set(0, 0.44, 0);
+      hatBrim.castShadow = true;
+      headPivot.add(hatBrim);
+      const hatBand = new THREE.Mesh(new THREE.BoxGeometry(0.49, 0.08, 0.49), hatBandMat);
+      hatBand.position.set(0, 0.49, 0);
+      headPivot.add(hatBand);
+      const hatCrown = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.18, 0.46), hatMat);
+      hatCrown.position.set(0, 0.56, 0);
+      hatCrown.castShadow = true;
+      headPivot.add(hatCrown);
+
+      // Voxel Left Arm + Wooden Paint Palette (Held in Left Hand during Painting!)
+      const armLPivot = new THREE.Group();
+      armLPivot.position.set(0.38, 1.32, 0);
+      bodyGroup.add(armLPivot);
+      const armLMesh = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.56, 0.20), shirtMat);
+      armLMesh.position.set(0, -0.24, 0);
+      armLMesh.castShadow = true;
+      armLPivot.add(armLMesh);
+      const handLMesh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.18), skinMat);
+      handLMesh.position.set(0, -0.56, 0);
+      armLPivot.add(handLMesh);
+
+      const paletteGroup = new THREE.Group();
+      paletteGroup.position.set(0.06, -0.60, 0.18);
+      paletteGroup.visible = false;
+      armLPivot.add(paletteGroup);
+      const paletteBoard = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.04, 0.28), woodMat);
+      paletteGroup.add(paletteBoard);
+      const dabColors = [0xef4444, 0xfacc15, 0x38bdf8, 0x22c55e, 0xffffff];
+      const dabCoords = [[-0.12, 0.07], [-0.04, 0.10], [0.05, 0.09], [0.12, 0.04], [0.10, -0.06]];
+      for (let d = 0; d < dabColors.length; d++) {
+        const dab = new THREE.Mesh(
+          new THREE.BoxGeometry(0.06, 0.03, 0.06),
+          new THREE.MeshBasicMaterial({ color: dabColors[d] })
+        );
+        dab.position.set(dabCoords[d][0], 0.03, dabCoords[d][1]);
+        paletteGroup.add(dab);
+      }
+
+      // Voxel Right Arm + Paintbrush (Held in Right Hand during Painting!)
+      const armRPivot = new THREE.Group();
+      armRPivot.position.set(-0.38, 1.32, 0);
+      bodyGroup.add(armRPivot);
+      const armRMesh = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.56, 0.20), shirtMat);
+      armRMesh.position.set(0, -0.24, 0);
+      armRMesh.castShadow = true;
+      armRPivot.add(armRMesh);
+      const handRMesh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.18), skinMat);
+      handRMesh.position.set(0, -0.56, 0);
+      armRPivot.add(handRMesh);
+
+      const brushGroup = new THREE.Group();
+      brushGroup.position.set(0, -0.58, 0.14);
+      brushGroup.visible = false;
+      armRPivot.add(brushGroup);
+      const brushHandle = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.38), darkWoodMat);
+      brushHandle.position.set(0, 0, 0.14);
+      brushGroup.add(brushHandle);
+      const brushTip = new THREE.Mesh(
+        new THREE.BoxGeometry(0.07, 0.07, 0.10),
+        new THREE.MeshBasicMaterial({ color: 0xf97316 })
+      );
+      brushTip.position.set(0, 0, 0.36);
+      brushGroup.add(brushTip);
+
+      // 2. Small Voxel Folding Camp Chair (Unfolded behind the human when sitting/painting!)
+      const chairGroup = new THREE.Group();
+      chairGroup.position.set(0, 0, -0.14);
+      chairGroup.visible = false;
+      root.add(chairGroup);
+
+      for (const side of [-1, 1]) {
+        const legF = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.52, 0.06), darkWoodMat);
+        legF.position.set(side * 0.24, 0.24, 0.0);
+        legF.rotation.x = 0.38;
+        legF.castShadow = true;
+        chairGroup.add(legF);
+
+        const legB = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.52, 0.06), darkWoodMat);
+        legB.position.set(side * 0.24, 0.24, 0.0);
+        legB.rotation.x = -0.38;
+        legB.castShadow = true;
+        chairGroup.add(legB);
+
+        const postBack = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.48, 0.06), darkWoodMat);
+        postBack.position.set(side * 0.24, 0.68, -0.20);
+        postBack.rotation.x = -0.12;
+        chairGroup.add(postBack);
+      }
+      const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.07, 0.48), clothMat);
+      chairSeat.position.set(0, 0.46, 0.0);
+      chairSeat.castShadow = true;
+      chairGroup.add(chairSeat);
+
+      const chairBack = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.28, 0.06), clothMat);
+      chairBack.position.set(0, 0.78, -0.22);
+      chairBack.rotation.x = -0.12;
+      chairBack.castShadow = true;
+      chairGroup.add(chairBack);
+
+      // 3. Wooden Tripod Easel & Framed Canvas (Erected in front of the human during LANDSCAPE_PAINTING & PAINTING_READY!)
+      const easelGroup = new THREE.Group();
+      easelGroup.position.set(0, 0, 0.94);
+      easelGroup.visible = false;
+      root.add(easelGroup);
+
+      for (const side of [-1, 1]) {
+        const frontLeg = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.82, 0.07), woodMat);
+        frontLeg.position.set(side * 0.38, 0.88, -0.06);
+        frontLeg.rotation.z = side * 0.14;
+        frontLeg.rotation.x = 0.15;
+        frontLeg.castShadow = true;
+        easelGroup.add(frontLeg);
+      }
+      const rearLeg = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.86, 0.07), darkWoodMat);
+      rearLeg.position.set(0, 0.88, 0.36);
+      rearLeg.rotation.x = -0.34;
+      rearLeg.castShadow = true;
+      easelGroup.add(rearLeg);
+
+      const easelShelf = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.08, 0.16), darkWoodMat);
+      easelShelf.position.set(0, 0.94, -0.12);
+      easelShelf.castShadow = true;
+      easelGroup.add(easelShelf);
+
+      // Framed Canvas Board resting on the Easel Shelf (tilted slightly back)
+      const canvasBoardGroup = new THREE.Group();
+      canvasBoardGroup.position.set(0, 1.32, -0.10);
+      canvasBoardGroup.rotation.x = 0.15;
+      easelGroup.add(canvasBoardGroup);
+
+      const canvasBacking = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.78, 0.06), darkWoodMat);
+      canvasBacking.castShadow = true;
+      canvasBoardGroup.add(canvasBacking);
+
+      const easelCanvasMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.96, 0.72), easelCanvasMat);
+      easelCanvasMesh.position.set(0, 0, -0.034);
+      easelCanvasMesh.rotation.y = Math.PI; // Faces the seated voxel artist!
+      canvasBoardGroup.add(easelCanvasMesh);
+
+      // Also show the painting on the front side of the canvas so the player can see it from any angle!
+      const easelCanvasFrontMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.96, 0.72), easelCanvasMat);
+      easelCanvasFrontMesh.position.set(0, 0, 0.034);
+      canvasBoardGroup.add(easelCanvasFrontMesh);
+
+      scene.add(root);
+      return {
+        root,
+        bodyGroup,
+        headPivot,
+        armLPivot,
+        armRPivot,
+        legLPivot,
+        legRPivot,
+        paletteGroup,
+        brushGroup,
+        brushTip,
+        chairGroup,
+        easelGroup
+      };
+    }
+
+    const voxelHuman = {
+      active: false,
+      x: 0,
+      y: 0,
+      z: 0,
+      heading: 0,
+      targetHeading: 0,
+      speed: 2.8,
+      scale: 1.15,
+      routine: 'WANDER',          // 'WANDER' | 'SURVEY_HORIZON' | 'CAMP_REST' | 'NATURE_OBSERVE' | 'LANDSCAPE_PAINTING' | 'PAINTING_READY'
+      routineTimer: 0,
+      routineDuration: 14.0,
+      routinesSinceLastPaint: 1,
+      bubbleEmoji: '',
+      bubbleTimer: 0.0,
+      nextEmojiTimer: 0.0,
+      paintRenderStepTimer: 0.0,
+      paintReadyTimer: 0.0,       // Counts down from 60.0s after painting finishes!
+      detectedSubjects: [],
+      paintedSubjectHistory: [],
+      finishedPaintingDataUrl: '',
+      finishedPaintingTitle: '',
+      finishedPaintingFilename: '',
+      rig: createVoxelHumanArtistRig()
+    };
+
+    const voxelHumanBubbleEl = document.getElementById('voxel-human-bubble');
+    const voxelHumanBubbleEmojiEl = document.getElementById('voxel-human-bubble-emoji');
+    const voxelHumanBubbleTimerEl = document.getElementById('voxel-human-bubble-timer');
+    const valVoxelHumanStatusEl = document.getElementById('val-voxel-human-status');
+    const humanPaintingModalEl = document.getElementById('human-painting-modal');
+    const humanPaintingImgEl = document.getElementById('human-painting-img');
+    const humanPaintingTitleEl = document.getElementById('human-painting-title');
+    const humanPaintingSubjectsEl = document.getElementById('human-painting-subjects');
+    const humanPaintingExpiryEl = document.getElementById('human-painting-expiry-note');
+
+    function spawnOrRelocateVoxelHuman() {
+      const halfBound = WORLD_SIZE * 0.40;
+      let bestX = 0;
+      let bestZ = 0;
+      let bestScore = -1e9;
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const tx = (Math.random() - 0.5) * 2.0 * halfBound;
+        const tz = (Math.random() - 0.5) * 2.0 * halfBound;
+        const h = sampleHeightsAtWorld(tx, tz);
+        if (h.waterDepth > 0.02 || h.localLava > 0.08) continue;
+        const gx = clamp(Math.floor(((tx / WORLD_SIZE) + 0.5) * (GRID - 1)), 2, GRID - 3);
+        const gz = clamp(Math.floor(((tz / WORLD_SIZE) + 0.5) * (GRID - 1)), 2, GRID - 3);
+        const ci = idx(gx, gz);
+        if (obstacleType[ci] === 2) continue;
+        // Prefer dry scenic overlooks near the oasis edge (`waterProximity` around 0.25..0.60)
+        const wp = waterProximity[ci];
+        const oasisEdgeBonus = (wp >= 0.18 && wp <= 0.68) ? 35.0 : 0.0;
+        const score = oasisEdgeBonus + h.groundY * 2.2 - Math.hypot(tx, tz) * 0.15;
+        if (score > bestScore) {
+          bestScore = score;
+          bestX = tx;
+          bestZ = tz;
+        }
+      }
+      const { groundY } = sampleHeightsAtWorld(bestX, bestZ);
+      voxelHuman.x = bestX;
+      voxelHuman.y = groundY;
+      voxelHuman.z = bestZ;
+      voxelHuman.heading = Math.atan2(-bestX, -bestZ);
+      voxelHuman.targetHeading = voxelHuman.heading;
+      voxelHuman.active = true;
+      voxelHuman.routine = 'WANDER';
+      voxelHuman.routineDuration = 10.0 + Math.random() * 6.0;
+      voxelHuman.routineTimer = 0.0;
+      voxelHuman.routinesSinceLastPaint = 2; // Ready to set up chair & easel soon after their initial stroll!
+      voxelHuman.rig.root.visible = true;
+      voxelHuman.rig.root.position.set(bestX, groundY, bestZ);
+      voxelHuman.rig.root.rotation.y = voxelHuman.heading;
+    }
+
+    // Score 12 directions around (hx, hz) to aim the easel toward the most scenic landscape vista!
+    function chooseBestVistaHeading(hx, hz) {
+      let bestHeading = Math.atan2(-hx, -hz);
+      let bestVistaScore = -1e9;
+      for (let d = 0; d < 12; d++) {
+        const ang = (d / 12) * Math.PI * 2;
+        const sA = Math.sin(ang);
+        const cA = Math.cos(ang);
+        let score = 0;
+        for (const dist of [10, 22, 38, 56]) {
+          const sx = hx + sA * dist;
+          const sz = hz + cA * dist;
+          if (Math.abs(sx) > WORLD_SIZE * 0.47 || Math.abs(sz) > WORLD_SIZE * 0.47) {
+            score -= 25;
+            continue;
+          }
+          const gx = clamp(Math.floor(((sx / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+          const gz = clamp(Math.floor(((sz / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+          const ci = idx(gx, gz);
+          if (water[ci] > 0.08) score += 22;
+          if (veg[ci] > 0.3) score += 18;
+          if (surfaceMaterial[ci] >= 2) score += 10;
+          score += (bedrock[ci] + sand[ci]) * 0.8;
+        }
+        // Bonus for wildlife & placed items in this viewing direction
+        for (let i = 0; i < faunaAgents.length; i++) {
+          const a = faunaAgents[i];
+          if (a.state !== 'alive') continue;
+          const dx = a.x - hx;
+          const dz = a.z - hz;
+          const dist = Math.hypot(dx, dz);
+          if (dist > 4 && dist < 68 && (dx * sA + dz * cA) / dist > 0.65) {
+            score += 12;
+          }
+        }
+        if (score > bestVistaScore) {
+          bestVistaScore = score;
+          bestHeading = ang;
+        }
+      }
+      return bestHeading;
+    }
+
+    // Scan what items, terrain features, plants & animals the Voxel Human actually sees in front of their easel!
+    function scanPainterVisibleSubjects() {
+      const hx = voxelHuman.x;
+      const hz = voxelHuman.z;
+      const fwdX = Math.sin(voxelHuman.heading);
+      const fwdZ = Math.cos(voxelHuman.heading);
+
+      const subjects = [];
+      const seenEmojis = new Set();
+      const addSubj = (emoji, label) => {
+        if (!seenEmojis.has(emoji)) {
+          seenEmojis.add(emoji);
+          subjects.push({ emoji, label });
+        }
+      };
+
+      // 1. Sky / Weather / Time of Day
+      const hr = ((params.timeOfDay % 24) + 24) % 24;
+      const isNight = (hr >= 19.0 || hr < 5.5) || ((skyUniforms.uNightFactor.value || 0) > 0.50);
+      if (params.weatherMode === 'thunderstorm') addSubj('⛈️', 'Thunderstorm Sky');
+      else if (params.weatherMode === 'snow') addSubj('❄️', 'Snowfall');
+      else if (params.weatherMode === 'haboob') addSubj('🌪️', 'Haboob Dust Cloud');
+      else if (params.weatherMode === 'monsoon') addSubj('🌧️', 'Monsoon Rain');
+      else if (isNight) addSubj('🌙', 'Starlit Twin Moons');
+      else if (hr < 7.6 || hr >= 16.8) addSubj('🌅', 'Desert Sunset');
+      else addSubj('☀️', 'Golden Desert Sun');
+
+      // 2. Sample forward frustum rays for terrain, water, lava, roads, boulders & flora
+      let sawWater = false;
+      let sawLava = false;
+      let sawJungle = false;
+      let sawCactus = false;
+      let sawLily = false;
+      let sawRoad = false;
+      let sawRock = false;
+      let sawDunes = false;
+
+      for (let rDist = 5; rDist <= 78; rDist += 5) {
+        for (let lat = -0.52; lat <= 0.52; lat += 0.26) {
+          const rayAng = voxelHuman.heading + lat;
+          const sx = hx + Math.sin(rayAng) * rDist;
+          const sz = hz + Math.cos(rayAng) * rDist;
+          if (Math.abs(sx) > WORLD_SIZE * 0.48 || Math.abs(sz) > WORLD_SIZE * 0.48) continue;
+          const gx = clamp(Math.floor(((sx / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+          const gz = clamp(Math.floor(((sz / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+          const ci = idx(gx, gz);
+          if (water[ci] > 0.08 && lavaFrac[ci] < 0.25) {
+            sawWater = true;
+            if (pondAge[ci] >= 10.0) sawLily = true;
+          }
+          if (water[ci] > 0.04 && lavaFrac[ci] >= 0.30) sawLava = true;
+          if (veg[ci] >= 0.25) {
+            if (waterProximity[ci] >= 0.38) sawJungle = true;
+            else sawCactus = true;
+          }
+          if (surfaceMaterial[ci] >= 2) sawRoad = true;
+          if (obstacleType[ci] > 0) sawRock = true;
+          if (sand[ci] > 1.2) sawDunes = true;
+        }
+      }
+
+      if (sawDunes) addSubj('🏜️', 'Sand Dunes');
+      if (sawWater) addSubj('🌊', 'Oasis Pond');
+      if (sawJungle) addSubj('🌴', 'Jungle Palms');
+      if (sawCactus) addSubj('🌵', 'Saguaro Cacti');
+      if (sawLily) addSubj('🪷', 'Pond Lily Pads');
+      if (sawLava) addSubj('🌋', 'Glowing Lava');
+      if (sawRoad) addSubj('🛣️', 'Desert Road');
+      if (sawRock) addSubj('🪨', 'Boulders');
+
+      // 3. Placed World Items in front of the painter
+      if (typeof placedWorldItems !== 'undefined') {
+        const itemEmojiMap = {
+          'item-truck':   ['🛻', 'Offroad Truck'],
+          'item-lantern': ['🏮', 'Lantern'],
+          'item-tap':     ['🚰', 'Water Tap'],
+          'item-feeder':  ['🌾', 'Animal Feeder']
+        };
+        for (let i = 0; i < placedWorldItems.length; i++) {
+          const it = placedWorldItems[i];
+          const dx = it.x - hx;
+          const dz = it.z - hz;
+          const dist = Math.hypot(dx, dz);
+          if (dist > 2.0 && dist < 85.0 && (dx * fwdX + dz * fwdZ) / dist > 0.45) {
+            const pair = itemEmojiMap[it.type];
+            if (pair) addSubj(pair[0], pair[1]);
+          }
+        }
+      }
+
+      // 4. Wildlife in front of the painter
+      const faunaEmojiMap = {
+        camel:    ['🐪', 'Camel'],
+        oryx:     ['🦌', 'Desert Oryx'],
+        flamingo: ['🦩', 'Flamingo'],
+        macaw:    ['🦜', 'Macaw'],
+        frog:     ['🐸', 'Coquí Frog'],
+        croc:     ['🐊', 'Alligator'],
+        lion:     ['🦁', 'Desert Lion'],
+        jaguar:   ['🐆', 'Jaguar'],
+        rabbit:   ['🐇', 'Jackrabbit'],
+        fennec:   ['🦊', 'Fennec Fox'],
+        bat:      ['🦇', 'Fruit Bat'],
+        hawk:     ['🦅', 'Desert Hawk'],
+        owl:      ['🦉', 'Night Owl'],
+        fish:     ['🐠', 'Oasis Koi']
+      };
+      for (let i = 0; i < faunaAgents.length; i++) {
+        const a = faunaAgents[i];
+        if (a.state !== 'alive') continue;
+        const dx = a.x - hx;
+        const dz = a.z - hz;
+        const dist = Math.hypot(dx, dz);
+        if (dist > 2.0 && dist < 82.0 && (dx * fwdX + dz * fwdZ) / dist > 0.46) {
+          const pair = faunaEmojiMap[a.type];
+          if (pair) addSubj(pair[0], pair[1]);
+        }
+      }
+
+      if (subjects.length === 0) {
+        addSubj('🏜️', 'Sand Dunes');
+      }
+      return subjects;
+    }
+
+    // Capture the 3D scene from the Voxel Human's viewpoint and paint progressive oil/impressionist brushstrokes onto easelWorkCanvas!
+    function renderPainterViewToEaselCanvas(progressFrac, isFinalFinish = false) {
+      if (!voxelHuman.active) return;
+
+      const fwdX = Math.sin(voxelHuman.heading);
+      const fwdZ = Math.cos(voxelHuman.heading);
+      const eyeX = voxelHuman.x + fwdX * 1.15;
+      const eyeY = voxelHuman.y + 1.56;
+      const eyeZ = voxelHuman.z + fwdZ * 1.15;
+
+      painterPovCamera.position.set(eyeX, eyeY, eyeZ);
+      painterPovCamera.lookAt(eyeX + fwdX * 26.0, eyeY - 1.25, eyeZ + fwdZ * 26.0);
+      painterPovCamera.updateMatrixWorld();
+
+      // Hide cursor ring & voxel human rig during the offscreen eye capture
+      const wasRingVis = brushRing.visible;
+      const wasHumanVis = voxelHuman.rig.root.visible;
+      brushRing.visible = false;
+      voxelHuman.rig.root.visible = false;
+
+      const prevRenderTarget = renderer.getRenderTarget();
+      renderer.setRenderTarget(painterRenderTarget);
+      renderer.render(scene, painterPovCamera);
+      renderer.readRenderTargetPixels(painterRenderTarget, 0, 0, 320, 240, painterPixelBuf);
+      renderer.setRenderTarget(prevRenderTarget);
+
+      brushRing.visible = wasRingVis;
+      voxelHuman.rig.root.visible = wasHumanVis;
+
+      // Flip WebGL bottom-up pixels into top-down 2D canvas ImageData with slight warm painterly color boost
+      const dst = painterImgData.data;
+      for (let y = 0; y < 240; y++) {
+        const srcRow = (239 - y) * 320 * 4;
+        const dstRow = y * 320 * 4;
+        for (let x = 0; x < 320; x++) {
+          const si = srcRow + x * 4;
+          const di = dstRow + x * 4;
+          dst[di]     = Math.min(255, Math.round(painterPixelBuf[si] * 1.06));
+          dst[di + 1] = Math.min(255, Math.round(painterPixelBuf[si + 1] * 1.04));
+          dst[di + 2] = painterPixelBuf[si + 2];
+          dst[di + 3] = 255;
+        }
+      }
+      painterSnapshotCtx.putImageData(painterImgData, 0, 0);
+
+      const cw = easelWorkCanvas.width;
+      const ch = easelWorkCanvas.height;
+
+      if (isFinalFinish) {
+        // Final Completed Landscape Painting: Base wash + 1,450 layered oil brushstrokes + canvas grain & artist signature!
+        easelWorkCtx.save();
+        easelWorkCtx.globalAlpha = 0.88;
+        easelWorkCtx.drawImage(painterSnapshotCanvas, 0, 0, cw, ch);
+        easelWorkCtx.restore();
+      }
+
+      // Layer expressive oil/plein-air brushstrokes sampled from the live snapshot!
+      const numStrokes = isFinalFinish ? 1150 : 190;
+      const minRadius = isFinalFinish ? 3.5 : Math.max(4.0, 15.0 - progressFrac * 10.5);
+      const maxRadius = isFinalFinish ? 11.0 : Math.max(8.0, 24.0 - progressFrac * 14.0);
+
+      easelWorkCtx.save();
+      for (let s = 0; s < numStrokes; s++) {
+        // Progressively fill from sky/horizon downward, plus full-canvas detail passes
+        const bandBias = isFinalFinish ? Math.random() : clamp(Math.random() * (0.25 + progressFrac * 0.95), 0.0, 0.999);
+        const sx = Math.floor(Math.random() * 320);
+        const sy = Math.floor(bandBias * 240);
+        const pIdx = ((239 - sy) * 320 + sx) * 4;
+        const r = Math.min(255, Math.round(painterPixelBuf[pIdx] * 1.06));
+        const g = Math.min(255, Math.round(painterPixelBuf[pIdx + 1] * 1.04));
+        const b = painterPixelBuf[pIdx + 2];
+
+        const cx = (sx / 320) * cw;
+        const cy = (sy / 240) * ch;
+        const radW = minRadius + Math.random() * (maxRadius - minRadius);
+        const radH = radW * (0.42 + Math.random() * 0.35);
+        const tilt = (Math.random() - 0.5) * 0.55;
+
+        easelWorkCtx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isFinalFinish ? 0.78 : 0.72})`;
+        easelWorkCtx.beginPath();
+        easelWorkCtx.ellipse(cx, cy, radW, radH, tilt, 0, Math.PI * 2);
+        easelWorkCtx.fill();
+      }
+
+      if (isFinalFinish) {
+        // Subtle canvas weave & artist signature in bottom-right corner
+        easelWorkCtx.fillStyle = 'rgba(255, 248, 231, 0.06)';
+        for (let y = 0; y < ch; y += 4) {
+          easelWorkCtx.fillRect(0, y, cw, 1);
+        }
+        easelWorkCtx.font = 'italic 700 16px Georgia, serif';
+        easelWorkCtx.fillStyle = 'rgba(24, 16, 10, 0.75)';
+        easelWorkCtx.textAlign = 'right';
+        easelWorkCtx.fillText('~ Voxel Artist', cw - 16, ch - 14);
+        easelWorkCtx.fillStyle = 'rgba(254, 240, 138, 0.88)';
+        easelWorkCtx.fillText('~ Voxel Artist', cw - 17, ch - 15);
+      }
+      easelWorkCtx.restore();
+      easelCanvasTex.needsUpdate = true;
+    }
+
+    function setVoxelHumanBubble(emojiStr, durationSec = 4.0) {
+      voxelHuman.bubbleEmoji = emojiStr;
+      voxelHuman.bubbleTimer = durationSec;
+      if (voxelHumanBubbleEmojiEl) {
+        voxelHumanBubbleEmojiEl.textContent = emojiStr;
+      }
+    }
+
+    function startVoxelHumanPaintingRoutine() {
+      if (!voxelHuman.active) spawnOrRelocateVoxelHuman();
+      const { groundY } = sampleHeightsAtWorld(voxelHuman.x, voxelHuman.z);
+      voxelHuman.y = groundY;
+      voxelHuman.heading = chooseBestVistaHeading(voxelHuman.x, voxelHuman.z);
+      voxelHuman.targetHeading = voxelHuman.heading;
+      voxelHuman.routine = 'LANDSCAPE_PAINTING';
+      // 1 to 3 minutes duration (60 to 180 seconds) as requested!
+      voxelHuman.routineDuration = 60.0 + Math.random() * 120.0;
+      voxelHuman.routineTimer = 0.0;
+      voxelHuman.routinesSinceLastPaint = 0;
+      voxelHuman.paintRenderStepTimer = 0.2;
+      voxelHuman.nextEmojiTimer = 1.8;
+      voxelHuman.detectedSubjects = scanPainterVisibleSubjects();
+      voxelHuman.paintedSubjectHistory = [];
+
+      clearEaselCanvasToLinen();
+      const firstSubj = voxelHuman.detectedSubjects[0] || { emoji: '🎨', label: 'Landscape' };
+      setVoxelHumanBubble(firstSubj.emoji, 4.2);
+      voxelHuman.paintedSubjectHistory.push(firstSubj);
+    }
+
+    function finishVoxelHumanPaintingRoutine() {
+      voxelHuman.detectedSubjects = scanPainterVisibleSubjects();
+      for (const s of voxelHuman.detectedSubjects) {
+        if (!voxelHuman.paintedSubjectHistory.some((h) => h.emoji === s.emoji)) {
+          voxelHuman.paintedSubjectHistory.push(s);
+        }
+      }
+      renderPainterViewToEaselCanvas(1.0, true);
+
+      const paintTitle = generateCartridgeTitle(true);
+      voxelHuman.finishedPaintingTitle = paintTitle;
+      voxelHuman.finishedPaintingFilename = `painting-${titleToCartridgeSlug(paintTitle)}.png`;
+      voxelHuman.finishedPaintingDataUrl = easelWorkCanvas.toDataURL('image/png');
+
+      // Enter 60-second PAINTING_READY window with clickable 🖼️ voice bubble!
+      voxelHuman.routine = 'PAINTING_READY';
+      voxelHuman.paintReadyTimer = 60.0;
+      voxelHuman.bubbleEmoji = '🖼️';
+      voxelHuman.bubbleTimer = 60.0;
+      showCartridgeToast(`🖼️ Voxel Artist finished painting "${paintTitle}"! Click 🖼️ bubble within 60s to view & download`);
+    }
+
+    function openVoxelHumanPaintingModal() {
+      if (voxelHuman.routine !== 'PAINTING_READY' || !voxelHuman.finishedPaintingDataUrl) return;
+      if (humanPaintingImgEl) {
+        humanPaintingImgEl.src = voxelHuman.finishedPaintingDataUrl;
+      }
+      if (humanPaintingTitleEl) {
+        humanPaintingTitleEl.textContent = `🖼️ "${voxelHuman.finishedPaintingTitle || 'Oasis Plein-Air'}"`;
+      }
+      if (humanPaintingSubjectsEl) {
+        const subjStr = voxelHuman.paintedSubjectHistory.length > 0
+          ? voxelHuman.paintedSubjectHistory.map((s) => `${s.emoji} ${s.label}`).slice(0, 6).join('  ·  ')
+          : '🏜️ Desert Oasis Landscape';
+        humanPaintingSubjectsEl.textContent = `Featured in Painting: ${subjStr}`;
+      }
+      if (humanPaintingModalEl) {
+        humanPaintingModalEl.classList.add('open');
+      }
+    }
+
+    function closeVoxelHumanPaintingModal() {
+      if (humanPaintingModalEl) {
+        humanPaintingModalEl.classList.remove('open');
+      }
+    }
+
+    function downloadVoxelHumanPainting() {
+      if (!voxelHuman.finishedPaintingDataUrl) return;
+      const link = document.createElement('a');
+      link.href = voxelHuman.finishedPaintingDataUrl;
+      link.download = voxelHuman.finishedPaintingFilename || 'voxel-artist-painting.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showCartridgeToast(`⬇️ Downloaded Painting: ${link.download}`);
+    }
+
+    if (voxelHumanBubbleEl) {
+      voxelHumanBubbleEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (voxelHuman.routine === 'PAINTING_READY') {
+          openVoxelHumanPaintingModal();
+        }
+      });
+    }
+    const btnClosePaintingModal = document.getElementById('btn-close-painting-modal');
+    if (btnClosePaintingModal) {
+      btnClosePaintingModal.addEventListener('click', closeVoxelHumanPaintingModal);
+    }
+    if (humanPaintingModalEl) {
+      humanPaintingModalEl.addEventListener('click', (e) => {
+        if (e.target === humanPaintingModalEl) closeVoxelHumanPaintingModal();
+      });
+    }
+    const btnDownloadHumanPainting = document.getElementById('btn-download-human-painting');
+    if (btnDownloadHumanPainting) {
+      btnDownloadHumanPainting.addEventListener('click', downloadVoxelHumanPainting);
+    }
+
+    const btnLocateVoxelHuman = document.getElementById('btn-locate-voxel-human');
+    if (btnLocateVoxelHuman) {
+      btnLocateVoxelHuman.addEventListener('click', () => {
+        if (!voxelHuman.active) spawnOrRelocateVoxelHuman();
+        if (params.driveMode) toggleDriveMode(false);
+        if (params.fpvMode) toggleFPVMode(false);
+        const fwdX = Math.sin(voxelHuman.heading);
+        const fwdZ = Math.cos(voxelHuman.heading);
+        controls.target.set(voxelHuman.x + fwdX * 1.2, voxelHuman.y + 1.2, voxelHuman.z + fwdZ * 1.2);
+        camera.position.set(voxelHuman.x - fwdX * 6.5 + fwdZ * 4.5, voxelHuman.y + 4.2, voxelHuman.z - fwdZ * 6.5 - fwdX * 4.5);
+        controls.update();
+        showCartridgeToast(`👁️ Focused on Wandering Voxel Artist`);
+      });
+    }
+
+    const btnTriggerHumanPaint = document.getElementById('btn-trigger-human-paint');
+    if (btnTriggerHumanPaint) {
+      btnTriggerHumanPaint.addEventListener('click', () => {
+        if (!voxelHuman.active) spawnOrRelocateVoxelHuman();
+        if (voxelHuman.routine === 'LANDSCAPE_PAINTING') {
+          // If already painting, complete the painting immediately so the player can click 🖼️ right away!
+          finishVoxelHumanPaintingRoutine();
+        } else if (voxelHuman.routine === 'PAINTING_READY') {
+          openVoxelHumanPaintingModal();
+        } else {
+          startVoxelHumanPaintingRoutine();
+          showCartridgeToast(`🎨 Voxel Artist set up chair & easel to paint the landscape!`);
+        }
+      });
+    }
+
+    const _bubbleProjVec = new THREE.Vector3();
+
+    function updateVoxelHumanArtist(dt) {
+      if (!voxelHuman.active) {
+        spawnOrRelocateVoxelHuman();
+      }
+
+      const time = uniforms.uTime.value || 0.0;
+      const halfBound = WORLD_SIZE * 0.44;
+      const { groundY, waterDepth, localLava } = sampleHeightsAtWorld(voxelHuman.x, voxelHuman.z);
+
+      // If lava or deep water floods the human's spot, pack up and relocate to safe ground!
+      if ((waterDepth > 0.35 || (waterDepth > 0.02 && localLava > 0.18)) && voxelHuman.routine !== 'WANDER') {
+        if (voxelHuman.routine !== 'PAINTING_READY') {
+          voxelHuman.routine = 'WANDER';
+          voxelHuman.routineTimer = 0.0;
+          voxelHuman.routineDuration = 10.0;
+        }
+      }
+      if (waterDepth > 1.35 || (waterDepth > 0.03 && localLava > 0.25)) {
+        spawnOrRelocateVoxelHuman();
+        return;
+      }
+
+      voxelHuman.y = groundY;
+      const rig = voxelHuman.rig;
+
+      // Advance active routine state machine
+      if (voxelHuman.routine === 'PAINTING_READY') {
+        // 60-Second Window where the 🖼️ bubble is clickable to view & download the finished painting!
+        voxelHuman.paintReadyTimer -= dt;
+        voxelHuman.bubbleEmoji = '🖼️';
+        voxelHuman.bubbleTimer = voxelHuman.paintReadyTimer;
+
+        // Seated proudly beside the finished easel canvas
+        rig.chairGroup.visible = true;
+        rig.easelGroup.visible = true;
+        rig.paletteGroup.visible = true;
+        rig.brushGroup.visible = true;
+        rig.bodyGroup.position.y = -0.22;
+        rig.legLPivot.rotation.x = -Math.PI * 0.46;
+        rig.legRPivot.rotation.x = -Math.PI * 0.46;
+        rig.armLPivot.rotation.set(-0.55, 0.20, 0.12);
+        rig.armRPivot.rotation.set(-0.45 + Math.sin(time * 2.5) * 0.08, -0.15, -0.10);
+        rig.headPivot.rotation.set(0.05, Math.sin(time * 1.4) * 0.28, 0);
+
+        if (humanPaintingExpiryEl && humanPaintingModalEl && humanPaintingModalEl.classList.contains('open')) {
+          humanPaintingExpiryEl.textContent = `Available on easel for ${Math.max(0, Math.ceil(voxelHuman.paintReadyTimer))}s`;
+        }
+
+        if (voxelHuman.paintReadyTimer <= 0.0) {
+          // 60 seconds expired -> pack up chair & easel, close modal if open, and resume wandering!
+          voxelHuman.finishedPaintingDataUrl = '';
+          voxelHuman.bubbleTimer = 0.0;
+          closeVoxelHumanPaintingModal();
+          voxelHuman.routine = 'WANDER';
+          voxelHuman.routineTimer = 0.0;
+          voxelHuman.routineDuration = 14.0 + Math.random() * 10.0;
+        }
+      } else if (voxelHuman.routine === 'LANDSCAPE_PAINTING') {
+        // 1 to 3 Minute Plein-Air Landscape Painting Routine!
+        voxelHuman.routineTimer += dt;
+        const progress = clamp(voxelHuman.routineTimer / Math.max(1.0, voxelHuman.routineDuration), 0.0, 1.0);
+
+        rig.chairGroup.visible = true;
+        rig.easelGroup.visible = true;
+        rig.paletteGroup.visible = true;
+        rig.brushGroup.visible = true;
+
+        // Seated on the small folding chair in front of the tripod easel
+        rig.bodyGroup.position.y = -0.22;
+        rig.legLPivot.rotation.x = -Math.PI * 0.46;
+        rig.legRPivot.rotation.x = -Math.PI * 0.46;
+
+        // Left arm holds the paint palette steady; Right arm dabs the paintbrush across the canvas!
+        rig.armLPivot.rotation.set(-0.78, 0.28, 0.15);
+        const dabStrokeX = -1.05 + Math.sin(time * 7.8) * 0.24 + Math.cos(time * 13.0) * 0.08;
+        const dabStrokeY = -0.12 + Math.cos(time * 5.4) * 0.22;
+        rig.armRPivot.rotation.set(dabStrokeX, dabStrokeY, -0.08);
+        rig.headPivot.rotation.set(
+          Math.sin(time * 1.9) * 0.12 - 0.04,
+          Math.sin(time * 1.1) * 0.18,
+          Math.cos(time * 2.3) * 0.05
+        );
+
+        // Progressive brushstroke rendering onto the easel canvas every ~1.4 seconds
+        voxelHuman.paintRenderStepTimer -= dt;
+        if (voxelHuman.paintRenderStepTimer <= 0.0) {
+          voxelHuman.paintRenderStepTimer = 1.45;
+          renderPainterViewToEaselCanvas(progress, false);
+        }
+
+        // Occasionally emit a Voice Bubble with an emoji of an interesting item in the landscape they are painting!
+        voxelHuman.nextEmojiTimer -= dt;
+        if (voxelHuman.nextEmojiTimer <= 0.0) {
+          voxelHuman.nextEmojiTimer = 5.2 + Math.random() * 4.2;
+          voxelHuman.detectedSubjects = scanPainterVisibleSubjects();
+          if (voxelHuman.detectedSubjects.length > 0) {
+            const pick = voxelHuman.detectedSubjects[Math.floor(Math.random() * voxelHuman.detectedSubjects.length)];
+            setVoxelHumanBubble(pick.emoji, 3.8);
+            if (!voxelHuman.paintedSubjectHistory.some((h) => h.emoji === pick.emoji)) {
+              voxelHuman.paintedSubjectHistory.push(pick);
+            }
+            // Tint the voxel paintbrush tip to match the subject being painted
+            const tipColors = [0xef4444, 0xfacc15, 0x38bdf8, 0x22c55e, 0xf97316, 0xa855f7];
+            rig.brushTip.material.color.setHex(tipColors[Math.floor(Math.random() * tipColors.length)]);
+          }
+        }
+
+        if (voxelHuman.routineTimer >= voxelHuman.routineDuration) {
+          finishVoxelHumanPaintingRoutine();
+        }
+      } else {
+        // Non-painting routines: WANDER, SURVEY_HORIZON, CAMP_REST, NATURE_OBSERVE
+        voxelHuman.routineTimer += dt;
+        rig.easelGroup.visible = false;
+        rig.paletteGroup.visible = false;
+        rig.brushGroup.visible = false;
+
+        if (voxelHuman.routine === 'WANDER') {
+          rig.chairGroup.visible = false;
+          rig.bodyGroup.position.y = Math.abs(Math.sin(time * 7.5)) * 0.05;
+
+          // Probe ahead to avoid water, lava, steep walls & world edges
+          const lookX = voxelHuman.x + Math.sin(voxelHuman.heading) * 4.5;
+          const lookZ = voxelHuman.z + Math.cos(voxelHuman.heading) * 4.5;
+          const lookH = sampleHeightsAtWorld(lookX, lookZ);
+          if (
+            Math.abs(lookX) > halfBound ||
+            Math.abs(lookZ) > halfBound ||
+            lookH.waterDepth > 0.04 ||
+            lookH.localLava > 0.08 ||
+            Math.abs(lookH.groundY - groundY) > 2.2
+          ) {
+            voxelHuman.targetHeading = Math.atan2(-voxelHuman.x + (Math.random() - 0.5) * 40, -voxelHuman.z + (Math.random() - 0.5) * 40);
+          } else if (Math.random() < 0.02) {
+            voxelHuman.targetHeading += (Math.random() - 0.5) * 1.4;
+          }
+
+          let diff = voxelHuman.targetHeading - voxelHuman.heading;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          voxelHuman.heading += diff * Math.min(1.0, dt * 4.2);
+
+          voxelHuman.x = clamp(voxelHuman.x + Math.sin(voxelHuman.heading) * voxelHuman.speed * dt, -halfBound, halfBound);
+          voxelHuman.z = clamp(voxelHuman.z + Math.cos(voxelHuman.heading) * voxelHuman.speed * dt, -halfBound, halfBound);
+
+          const swing = Math.sin(time * 7.5) * 0.65;
+          rig.legLPivot.rotation.x = swing;
+          rig.legRPivot.rotation.x = -swing;
+          rig.armLPivot.rotation.set(-swing * 0.75, 0, 0);
+          rig.armRPivot.rotation.set(swing * 0.75, 0, 0);
+          rig.headPivot.rotation.set(0, Math.sin(time * 1.6) * 0.22, 0);
+
+        } else if (voxelHuman.routine === 'SURVEY_HORIZON') {
+          // Shades eyes with right hand, looking left & right across the desert vista
+          rig.chairGroup.visible = false;
+          rig.bodyGroup.position.y = 0.0;
+          rig.legLPivot.rotation.x = 0.0;
+          rig.legRPivot.rotation.x = 0.0;
+          rig.armLPivot.rotation.set(0.10, 0, 0.08);
+          rig.armRPivot.rotation.set(-2.15, -0.35, -0.20);
+          const scanYaw = Math.sin(time * 1.35) * 0.55;
+          rig.headPivot.rotation.set(-0.08, scanYaw, 0);
+
+        } else if (voxelHuman.routine === 'CAMP_REST') {
+          // Unfolds the small folding chair and sits down for a rest
+          rig.chairGroup.visible = true;
+          rig.bodyGroup.position.y = -0.22;
+          rig.legLPivot.rotation.x = -Math.PI * 0.46;
+          rig.legRPivot.rotation.x = -Math.PI * 0.46;
+          rig.armLPivot.rotation.set(-0.45, 0.15, 0.10);
+          rig.armRPivot.rotation.set(-0.45, -0.15, -0.10);
+          rig.headPivot.rotation.set(-0.12 + Math.sin(time * 1.2) * 0.08, Math.sin(time * 0.9) * 0.30, 0);
+
+        } else if (voxelHuman.routine === 'NATURE_OBSERVE') {
+          // Leans forward slightly to admire nearby flora or wildlife
+          rig.chairGroup.visible = false;
+          rig.bodyGroup.position.y = -0.05;
+          rig.legLPivot.rotation.x = -0.18;
+          rig.legRPivot.rotation.x = 0.18;
+          rig.armLPivot.rotation.set(-0.55, 0.2, 0);
+          rig.armRPivot.rotation.set(-0.55, -0.2, 0);
+          rig.headPivot.rotation.set(0.18, Math.sin(time * 2.0) * 0.25, 0);
+        }
+
+        // Transition to next routine when routineTimer finishes
+        if (voxelHuman.routineTimer >= voxelHuman.routineDuration) {
+          voxelHuman.routineTimer = 0.0;
+          voxelHuman.routinesSinceLastPaint++;
+
+          // Every so often (after 2-3 short routines, or 45% chance after 1 routine), launch the 1-3 minute LANDSCAPE_PAINTING routine!
+          if (
+            waterDepth < 0.03 &&
+            localLava < 0.05 &&
+            (voxelHuman.routinesSinceLastPaint >= 3 || (voxelHuman.routinesSinceLastPaint >= 2 && Math.random() < 0.65))
+          ) {
+            startVoxelHumanPaintingRoutine();
+          } else if (voxelHuman.routine !== 'WANDER') {
+            voxelHuman.routine = 'WANDER';
+            voxelHuman.routineDuration = 11.0 + Math.random() * 11.0;
+            voxelHuman.targetHeading = voxelHuman.heading + (Math.random() - 0.5) * 2.2;
+            if (Math.random() < 0.55) setVoxelHumanBubble('🧭', 3.0);
+          } else {
+            const pickR = Math.random();
+            if (pickR < 0.36) {
+              voxelHuman.routine = 'SURVEY_HORIZON';
+              voxelHuman.routineDuration = 7.0 + Math.random() * 5.0;
+              setVoxelHumanBubble('🔭', 3.8);
+            } else if (pickR < 0.68) {
+              voxelHuman.routine = 'CAMP_REST';
+              voxelHuman.routineDuration = 8.0 + Math.random() * 6.0;
+              const hr = ((params.timeOfDay % 24) + 24) % 24;
+              const isNight = (hr >= 19.0 || hr < 5.5);
+              setVoxelHumanBubble(isNight ? '🌙' : '💧', 3.8);
+            } else {
+              voxelHuman.routine = 'NATURE_OBSERVE';
+              voxelHuman.routineDuration = 7.0 + Math.random() * 5.0;
+              const subjs = scanPainterVisibleSubjects();
+              const pick = subjs[Math.floor(Math.random() * subjs.length)] || { emoji: '🌵' };
+              setVoxelHumanBubble(pick.emoji, 3.8);
+            }
+          }
+        }
+      }
+
+      // Position & orient 3D Voxel Human root
+      rig.root.position.set(voxelHuman.x, voxelHuman.y, voxelHuman.z);
+      rig.root.rotation.y = voxelHuman.heading;
+      rig.root.scale.setScalar(voxelHuman.scale);
+
+      // Update sidebar status badge
+      if (valVoxelHumanStatusEl && frameCount % 6 === 0) {
+        if (voxelHuman.routine === 'LANDSCAPE_PAINTING') {
+          const pct = Math.min(99, Math.round((voxelHuman.routineTimer / Math.max(1, voxelHuman.routineDuration)) * 100));
+          valVoxelHumanStatusEl.textContent = `🎨 Painting (${pct}%)`;
+        } else if (voxelHuman.routine === 'PAINTING_READY') {
+          valVoxelHumanStatusEl.textContent = `🖼️ Ready (${Math.ceil(voxelHuman.paintReadyTimer)}s)`;
+        } else if (voxelHuman.routine === 'SURVEY_HORIZON') {
+          valVoxelHumanStatusEl.textContent = '🔭 Surveying';
+        } else if (voxelHuman.routine === 'CAMP_REST') {
+          valVoxelHumanStatusEl.textContent = '🪑 Resting';
+        } else if (voxelHuman.routine === 'NATURE_OBSERVE') {
+          valVoxelHumanStatusEl.textContent = '🌿 Observing';
+        } else {
+          valVoxelHumanStatusEl.textContent = '🚶 Wandering';
+        }
+      }
+
+      // Project floating 2D Voice Bubble above the Voxel Human's head
+      if (voxelHuman.bubbleTimer > 0.0 && voxelHuman.routine !== 'PAINTING_READY') {
+        voxelHuman.bubbleTimer = Math.max(0.0, voxelHuman.bubbleTimer - dt);
+      }
+
+      const showBubble = (voxelHuman.routine === 'PAINTING_READY') || (voxelHuman.bubbleTimer > 0.0 && voxelHuman.bubbleEmoji);
+      if (voxelHumanBubbleEl) {
+        if (!showBubble) {
+          voxelHumanBubbleEl.style.display = 'none';
+          voxelHumanBubbleEl.classList.remove('painting-ready');
+        } else {
+          _bubbleProjVec.set(voxelHuman.x, voxelHuman.y + 2.55, voxelHuman.z);
+          _bubbleProjVec.project(camera);
+
+          const isReady = (voxelHuman.routine === 'PAINTING_READY');
+          // If behind camera or offscreen: when PAINTING_READY is active, clamp the clickable 🖼️ bubble to the screen margin so the player never misses the 60s window!
+          const isBehind = (_bubbleProjVec.z > 1.0);
+          let sx = (_bubbleProjVec.x * 0.5 + 0.5) * window.innerWidth;
+          let sy = (-_bubbleProjVec.y * 0.5 + 0.5) * window.innerHeight;
+
+          if (isBehind && !isReady) {
+            voxelHumanBubbleEl.style.display = 'none';
+          } else {
+            if (isBehind) {
+              sx = window.innerWidth - sx;
+              sy = window.innerHeight - 65;
+            }
+            const marginX = 48;
+            const marginY = 58;
+            if (isReady) {
+              sx = clamp(sx, marginX, window.innerWidth - marginX);
+              sy = clamp(sy, marginY, window.innerHeight - marginY);
+            } else if (sx < 10 || sx > window.innerWidth - 10 || sy < 10 || sy > window.innerHeight - 10) {
+              voxelHumanBubbleEl.style.display = 'none';
+              return;
+            }
+
+            voxelHumanBubbleEl.style.display = 'inline-flex';
+            voxelHumanBubbleEl.style.left = `${Math.round(sx)}px`;
+            voxelHumanBubbleEl.style.top = `${Math.round(sy)}px`;
+            voxelHumanBubbleEl.classList.toggle('painting-ready', isReady);
+
+            if (voxelHumanBubbleEmojiEl) {
+              voxelHumanBubbleEmojiEl.textContent = isReady ? '🖼️' : voxelHuman.bubbleEmoji;
+            }
+            if (voxelHumanBubbleTimerEl) {
+              if (isReady) {
+                voxelHumanBubbleTimerEl.style.display = 'inline-block';
+                voxelHumanBubbleTimerEl.textContent = `${Math.max(1, Math.ceil(voxelHuman.paintReadyTimer))}s`;
+              } else {
+                voxelHumanBubbleTimerEl.style.display = 'none';
+              }
+            }
+          }
+        }
       }
     }
 
