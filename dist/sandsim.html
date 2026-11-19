@@ -8857,17 +8857,17 @@
       const harmGain = ctx.createGain();
       harmGain.gain.setValueAtTime(0.18, now);
 
-      // Vocal-sac peaking filter so the "CO-QUÍ!" rings out loud and clear across the oasis at night
+      // Vocal-sac peaking filter so the "CO-QUÍ!" rings out clearly across the oasis at night
       const vocalPeak = ctx.createBiquadFilter();
       vocalPeak.type = 'peaking';
       vocalPeak.frequency.setValueAtTime(2150, now);
       vocalPeak.Q.setValueAtTime(1.8, now);
-      vocalPeak.gain.setValueAtTime(4.5, now);
+      vocalPeak.gain.setValueAtTime(2.0, now);
 
       const envGain = ctx.createGain();
-      const loudGain = clamp(distGain * 1.45, 0.48, 1.0);
-      const coVol = 0.38 * loudGain;
-      const quiVol = 0.58 * loudGain; // "QUÍ!" syllable is louder and carries further
+      const loudGain = clamp(distGain, 0.24, 0.88);
+      const coVol = 0.11 * loudGain;
+      const quiVol = 0.17 * loudGain; // "QUÍ!" syllable is slightly brighter than "CO"
 
       envGain.gain.setValueAtTime(0.0001, now);
       // Syllable 1: "CO"
