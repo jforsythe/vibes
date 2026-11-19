@@ -1219,13 +1219,14 @@
         <div class="btn-grid">
           <button class="weather-btn active" data-weather="oasis">🌤️ Oasis Spring Breeze</button>
           <button class="weather-btn" data-weather="calm">☀️ Golden Calm</button>
+          <button class="weather-btn" data-weather="thunderstorm">⛈️ Thunderstorm</button>
           <button class="weather-btn" data-weather="monsoon">🌧️ Monsoon Cloudburst</button>
           <button class="weather-btn" data-weather="snow">❄️ Snow & Ice Storm</button>
           <button class="weather-btn" data-weather="haboob">🌪️ Arid Haboob Storm</button>
           <button class="weather-btn" data-weather="star">🧭 Shifting Trade Winds</button>
         </div>
         <div class="toggle-row" style="margin-top:8px;">
-          <button id="btn-toggle-auto-weather" class="active" style="width:100%;" title="Automatically cycle random weather events (Long pleasant weather, brief snow/ice/rain/dust storms)">
+          <button id="btn-toggle-auto-weather" class="active" style="width:100%;" title="Automatically cycle random weather events (Long pleasant weather, brief thunderstorms, snow/ice, rain, and dust storms)">
             🎲 Dynamic Random Weather Cycle: ON
           </button>
         </div>
@@ -6637,6 +6638,530 @@
       }
     }
 
+    // ============================================================================
+    // 11D. 3D BILLOWING STORM CLOUDS, BRANCHED LIGHTNING STRIKES & EXPLOSIVE BLASTS
+    // ============================================================================
+    const stormCloudsGroup = new THREE.Group();
+    scene.add(stormCloudsGroup);
+
+    const CLOUD_CLUSTER_COUNT = 18;
+    const stormClusters = [];
+    let currentCloudCover = 0.22;
+    let lightningCooldown = 2.0;
+
+    function createCloudClusterGeometry() {
+      const parts = [];
+      const lobeSpecs = [
+        [0, 0, 0, 14.5, 5.8, 12.5],
+        [-9.5, -0.8, 2.2, 10.5, 4.6, 9.5],
+        [10.2, -0.6, -1.8, 11.0, 4.8, 9.8],
+        [-4.2, 2.6, -3.5, 9.8, 5.2, 8.8],
+        [4.8, 2.9, 3.2, 10.2, 5.4, 9.2],
+        [0.5, 4.4, -0.4, 8.5, 4.8, 8.0],
+        [-14.0, -1.6, -2.5, 7.8, 3.6, 7.2],
+        [14.5, -1.5, 2.8, 8.0, 3.7, 7.4]
+      ];
+      for (const [lx, ly, lz, sx, sy, sz] of lobeSpecs) {
+        const g = new THREE.DodecahedronGeometry(1.0, 1);
+        g.scale(sx, sy, sz);
+        g.translate(lx, ly, lz);
+        parts.push(g);
+      }
+      return safeMergeGeometries(parts, true);
+    }
+
+    const sharedCloudGeo = createCloudClusterGeometry();
+    for (let c = 0; c < CLOUD_CLUSTER_COUNT; c++) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x364152,
+        roughness: 0.92,
+        metalness: 0.02,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+        emissive: new THREE.Color(0x000000),
+        emissiveIntensity: 0.0
+      });
+      const mesh = new THREE.Mesh(sharedCloudGeo, mat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = false;
+      const gx = (c % 5) - 2;
+      const gz = Math.floor(c / 5) - 1.5;
+      const bx = gx * 44 + (Math.random() - 0.5) * 24;
+      const bz = gz * 50 + (Math.random() - 0.5) * 24;
+      const by = 48.0 + (c % 4) * 3.8 + Math.random() * 2.5;
+      mesh.position.set(bx, by, bz);
+      mesh.rotation.y = Math.random() * Math.PI * 2;
+      const baseScale = 0.85 + Math.random() * 0.55;
+      mesh.scale.setScalar(baseScale);
+      stormCloudsGroup.add(mesh);
+      stormClusters.push({
+        mesh,
+        mat,
+        baseY: by,
+        baseScale,
+        speedMult: 0.75 + Math.random() * 0.5,
+        phase: Math.random() * Math.PI * 2,
+        flashIntensity: 0.0
+      });
+    }
+
+    // 3D Lightning Bolts, Plasma Shockwaves & Explosive Debris Chunks
+    const lightningGroup = new THREE.Group();
+    scene.add(lightningGroup);
+    const activeLightningBolts = [];
+
+    const lightningFlashLight = new THREE.PointLight(0xbbeeff, 0.0, 320.0, 1.05);
+    scene.add(lightningFlashLight);
+
+    const explosionDebrisGroup = new THREE.Group();
+    scene.add(explosionDebrisGroup);
+    const activeDebrisShards = [];
+    const shardGeo = new THREE.DodecahedronGeometry(0.24, 0);
+
+    const boltCoreMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 1.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const boltHaloMat = new THREE.MeshBasicMaterial({
+      color: 0x60a5fa,
+      transparent: true,
+      opacity: 0.65,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const unitCylGeo = new THREE.CylinderGeometry(1, 1, 1, 6, 1, true);
+
+    function createBoltSegmentMesh(p0, p1, radius, mat) {
+      const dir = new THREE.Vector3().subVectors(p1, p0);
+      const len = dir.length();
+      const mesh = new THREE.Mesh(unitCylGeo, mat);
+      mesh.position.copy(p0).addScaledVector(dir, 0.5);
+      mesh.scale.set(radius, len, radius);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+      return mesh;
+    }
+
+    function buildJaggedLightningBoltMesh(startPt, endPt) {
+      const boltRoot = new THREE.Group();
+      const coreMat = boltCoreMat.clone();
+      const haloMat = boltHaloMat.clone();
+
+      // Generate jagged main trunk vertices from cloud to ground target
+      const steps = 14;
+      const pts = [];
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const p = new THREE.Vector3().lerpVectors(startPt, endPt, t);
+        if (s > 0 && s < steps) {
+          const spread = Math.sin(t * Math.PI) * 5.2;
+          p.x += (Math.random() - 0.5) * spread;
+          p.z += (Math.random() - 0.5) * spread;
+          p.y += (Math.random() - 0.5) * 1.4;
+        }
+        pts.push(p);
+      }
+
+      for (let s = 0; s < steps; s++) {
+        boltRoot.add(createBoltSegmentMesh(pts[s], pts[s + 1], 0.22, coreMat));
+        boltRoot.add(createBoltSegmentMesh(pts[s], pts[s + 1], 0.68, haloMat));
+
+        // Add 3-4 forked side branches off the main lightning channel
+        if (s >= 2 && s <= steps - 3 && Math.random() < 0.42) {
+          let bPrev = pts[s].clone();
+          const bSteps = 4 + Math.floor(Math.random() * 3);
+          const branchDir = new THREE.Vector3(
+            (Math.random() - 0.5) * 14.0,
+            -6.0 - Math.random() * 8.0,
+            (Math.random() - 0.5) * 14.0
+          );
+          for (let b = 1; b <= bSteps; b++) {
+            const bNext = bPrev.clone().addScaledVector(branchDir, 1.0 / bSteps);
+            bNext.x += (Math.random() - 0.5) * 2.2;
+            bNext.z += (Math.random() - 0.5) * 2.2;
+            const rScale = 1.0 - (b / (bSteps + 1)) * 0.65;
+            boltRoot.add(createBoltSegmentMesh(bPrev, bNext, 0.12 * rScale, coreMat));
+            boltRoot.add(createBoltSegmentMesh(bPrev, bNext, 0.36 * rScale, haloMat));
+            bPrev = bNext;
+          }
+        }
+      }
+
+      // Ground impact plasma flash sphere & shockwave ring
+      const flashDome = new THREE.Mesh(
+        new THREE.SphereGeometry(2.4, 12, 10),
+        coreMat
+      );
+      flashDome.position.copy(endPt);
+      boltRoot.add(flashDome);
+
+      const shockRingGeo = new THREE.RingGeometry(0.75, 1.0, 28);
+      shockRingGeo.rotateX(-Math.PI / 2);
+      const shockRing = new THREE.Mesh(shockRingGeo, haloMat);
+      shockRing.position.set(endPt.x, endPt.y + 0.25, endPt.z);
+      boltRoot.add(shockRing);
+
+      return { boltRoot, coreMat, haloMat, flashDome, shockRing };
+    }
+
+    function spawnExplosionShards(wx, wy, wz, count, colorPalette) {
+      for (let k = 0; k < count; k++) {
+        const hex = colorPalette[k % colorPalette.length];
+        const mat = new THREE.MeshStandardMaterial({
+          color: hex,
+          emissive: hex,
+          emissiveIntensity: 0.45,
+          roughness: 0.6
+        });
+        const mesh = new THREE.Mesh(shardGeo, mat);
+        const sc = 0.65 + Math.random() * 1.15;
+        mesh.scale.set(sc, sc * (0.5 + Math.random() * 0.9), sc);
+        mesh.position.set(
+          wx + (Math.random() - 0.5) * 1.2,
+          wy + 0.3 + Math.random() * 0.8,
+          wz + (Math.random() - 0.5) * 1.2
+        );
+        const speedH = 4.5 + Math.random() * 11.5;
+        const ang = Math.random() * Math.PI * 2;
+        explosionDebrisGroup.add(mesh);
+        activeDebrisShards.push({
+          mesh,
+          mat,
+          vx: Math.cos(ang) * speedH,
+          vy: 8.5 + Math.random() * 12.5,
+          vz: Math.sin(ang) * speedH,
+          rx: (Math.random() - 0.5) * 14.0,
+          ry: (Math.random() - 0.5) * 14.0,
+          rz: (Math.random() - 0.5) * 14.0,
+          age: 0.0,
+          maxAge: 1.05 + Math.random() * 0.55
+        });
+      }
+    }
+
+    function triggerLightningStrike() {
+      const halfW = WORLD_SIZE * 0.44;
+      let tx = (Math.random() - 0.5) * WORLD_SIZE * 0.82;
+      let tz = (Math.random() - 0.5) * WORLD_SIZE * 0.82;
+
+      // Smart targeting: ~74% chance to target a living animal or plant/tree so lightning visibly blows up plants & animals!
+      const roll = Math.random();
+      let foundTarget = false;
+
+      if (roll < 0.38 && faunaAgents.length > 0) {
+        // Pick a random living animal (ground animals & low birds)
+        const candidates = faunaAgents.filter((a) => a.state === 'alive' && a.type !== 'fish');
+        if (candidates.length > 0) {
+          const victim = candidates[Math.floor(Math.random() * candidates.length)];
+          tx = clamp(victim.x + (Math.random() - 0.5) * 1.2, -halfW, halfW);
+          tz = clamp(victim.z + (Math.random() - 0.5) * 1.2, -halfW, halfW);
+          foundTarget = true;
+        }
+      }
+
+      if (!foundTarget && roll < 0.76) {
+        // Pick a random living plant/cactus/tree on the terrain
+        for (let attempt = 0; attempt < 35; attempt++) {
+          const rx = 6 + Math.floor(Math.random() * (GRID - 12));
+          const ry = 6 + Math.floor(Math.random() * (GRID - 12));
+          const ci = idx(rx, ry);
+          if (veg[ci] >= 0.35) {
+            tx = ((rx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+            tz = ((ry / (GRID - 1)) - 0.5) * WORLD_SIZE;
+            foundTarget = true;
+            break;
+          }
+        }
+      }
+
+      const { groundY, waterDepth } = sampleHeightsAtWorld(tx, tz);
+      const ty = groundY + waterDepth;
+
+      // Find the closest overhead storm cloud cluster to originate the lightning bolt
+      let bestCloud = stormClusters[0];
+      let bestDist = 99999;
+      for (const cl of stormClusters) {
+        if (!cl.mesh.visible) continue;
+        const d = Math.hypot(cl.mesh.position.x - tx, cl.mesh.position.z - tz);
+        if (d < bestDist) {
+          bestDist = d;
+          bestCloud = cl;
+        }
+      }
+      bestCloud.flashIntensity = 1.0;
+
+      const startPt = new THREE.Vector3(
+        bestCloud.mesh.position.x + (Math.random() - 0.5) * 8.0,
+        bestCloud.mesh.position.y - 2.5,
+        bestCloud.mesh.position.z + (Math.random() - 0.5) * 8.0
+      );
+      const endPt = new THREE.Vector3(tx, ty, tz);
+
+      const boltObj = buildJaggedLightningBoltMesh(startPt, endPt);
+      lightningGroup.add(boltObj.boltRoot);
+      activeLightningBolts.push({
+        ...boltObj,
+        age: 0.0,
+        duration: 0.34,
+        strikePos: endPt
+      });
+
+      lightningFlashLight.position.set(tx, ty + 18.0, tz);
+      lightningFlashLight.intensity = 28.0;
+
+      // --- EXPLOSIVE BLAST AT STRIKE POINT (BLOWS UP ANIMALS, PLANTS & SAND!) ---
+      spawnFireFlameAtWorld(tx, ty + 0.25, tz, 2.4, 26);
+      spawnSteamPuffAtWorld(tx, ty + 0.35, tz, 18);
+      spawnExplosionShards(tx, ty, tz, 16, [0xff6a00, 0xfde047, 0x3b2f2f, 0x1c1917]);
+
+      // 1. Blow up or ignite Animals within the lightning strike radius
+      for (let i = faunaAgents.length - 1; i >= 0; i--) {
+        const a = faunaAgents[i];
+        if (a.state !== 'alive') continue;
+        const distA = Math.hypot(a.x - tx, a.z - tz);
+        if (distA < 6.2) {
+          // Direct lightning blast! Blow up animal into flying bone/ember shards & a blasted 3D Bone Skeleton!
+          spawnExplosionShards(a.x, a.y + 0.4, a.z, 12, [0xf5f5eb, 0xff5500, 0xfacc15]);
+          spawnFireFlameAtWorld(a.x, a.y + 0.3, a.z, 1.5, 14);
+          if (a.type === 'fish') {
+            faunaAgents.splice(i, 1);
+            continue;
+          }
+          disposeApexRig(a);
+          a.state = 'skeleton';
+          a.skeletonTimer = 0;
+          a.isBurning = false;
+          // Knock the skeleton outward slightly from the blast wave
+          const pushAng = Math.atan2(a.x - tx, a.z - tz);
+          a.x = clamp(a.x + Math.sin(pushAng) * 1.8, -halfW, halfW);
+          a.z = clamp(a.z + Math.cos(pushAng) * 1.8, -halfW, halfW);
+        } else if (distA < 10.5 && a.type !== 'fish') {
+          // Outer shockwave thermal ring: ignite the animal in fire for 1 second!
+          a.isBurning = true;
+          a.burnTimer = 0.01;
+          spawnFireFlameAtWorld(a.x, a.y + 0.3, a.z, 1.2, 6);
+        }
+      }
+
+      // 2. Blow up or ignite Plants & carve a scorched fulgurite blast crater on the terrain grid
+      const cx = Math.round(((tx / WORLD_SIZE) + 0.5) * (GRID - 1));
+      const cy = Math.round(((tz / WORLD_SIZE) + 0.5) * (GRID - 1));
+      const blastCells = Math.ceil(8.0 / CELL_SIZE);
+      let terrainChanged = false;
+      let floraChanged = false;
+
+      for (let dy = -blastCells; dy <= blastCells; dy++) {
+        for (let dx = -blastCells; dx <= blastCells; dx++) {
+          const x = cx + dx;
+          const y = cy + dy;
+          if (x < 1 || x >= GRID - 1 || y < 1 || y >= GRID - 1) continue;
+          const distM = Math.hypot(dx, dy) * CELL_SIZE;
+          if (distM > 8.0) continue;
+
+          const ci = idx(x, y);
+          const wxCell = ((x / (GRID - 1)) - 0.5) * WORLD_SIZE;
+          const wzCell = ((y / (GRID - 1)) - 0.5) * WORLD_SIZE;
+          const wyCell = bedrock[ci] + sand[ci];
+
+          if (distM < 3.8) {
+            // Direct blast core: blow up plants immediately into flying green/wood/ember chunks!
+            if (veg[ci] >= 0.12) {
+              spawnExplosionShards(wxCell, wyCell + 0.5, wzCell, 6, [0x15803d, 0x5c3e26, 0xff5500, 0xfacc15]);
+              spawnFireFlameAtCell(ci, 5);
+              veg[ci] = 0.0;
+              plantBurnTimer[ci] = 0.0;
+              floraChanged = true;
+            }
+            // Carve a small lightning blast crater in the sand & scorch the center into fulgurite basalt rock
+            const craterT = 1.0 - distM / 3.8;
+            if (distM < 1.8) {
+              sand[ci] = Math.max(0.0, sand[ci] - craterT * 0.55);
+              obstacleType[ci] = 3; // Scorched fulgurite/volcanic rock at strike center
+            } else {
+              // Eject sand onto the crater rim
+              sand[ci] = Math.min(MAX_TERRAIN_HEIGHT - bedrock[ci], sand[ci] + craterT * 0.25);
+            }
+            snowCover[ci] = 0.0;
+            iceCover[ci] = 0.0;
+            terrainChanged = true;
+          } else if (veg[ci] >= 0.12) {
+            // Outer thermal ring (3.8m - 8.0m): ignite surviving plants in fire so they burn for 1 second!
+            ignitePlantAtCell(ci);
+            floraChanged = true;
+          }
+        }
+      }
+
+      if (terrainChanged) {
+        syncTerrainAndWaterMeshes();
+      }
+      if (floraChanged) {
+        rebuildFloraInstances();
+      }
+    }
+
+    function updateThunderstormAndClouds(dt) {
+      const mode = params.weatherMode;
+      const nightFactor = skyUniforms.uNightFactor.value || 0.0;
+      const time = uniforms.uTime.value;
+
+      // 1. Target cloud cover & cloud color palette based on active weather regime
+      let targetCover = 0.22;
+      let targetR = 0.90, targetG = 0.93, targetB = 0.96;
+
+      if (mode === 'thunderstorm') {
+        targetCover = 1.0;
+        targetR = 0.16; targetG = 0.20; targetB = 0.27;
+      } else if (mode === 'monsoon') {
+        targetCover = 0.88;
+        targetR = 0.25; targetG = 0.31; targetB = 0.39;
+      } else if (mode === 'snow') {
+        targetCover = 0.82;
+        targetR = 0.68; targetG = 0.76; targetB = 0.84;
+      } else if (mode === 'haboob') {
+        targetCover = 0.70;
+        targetR = 0.64; targetG = 0.42; targetB = 0.24;
+      } else if (mode === 'calm') {
+        targetCover = 0.0;
+      } else {
+        // 'oasis' or 'star' fair-weather cumulus
+        targetCover = 0.22;
+        targetR = 0.92; targetG = 0.94; targetB = 0.97;
+      }
+
+      // Dim cloud albedo slightly at night so they don't glow unnaturally unless lit by internal lightning
+      const nightDim = 1.0 - nightFactor * 0.62;
+      targetR *= nightDim;
+      targetG *= nightDim;
+      targetB *= nightDim;
+
+      currentCloudCover += (targetCover - currentCloudCover) * Math.min(1.0, dt * 1.4);
+
+      const rad = THREE.MathUtils.degToRad(params.windDirDeg);
+      const wx = Math.cos(rad);
+      const wz = Math.sin(rad);
+      const cloudBound = WORLD_SIZE * 0.62;
+
+      for (let i = 0; i < CLOUD_CLUSTER_COUNT; i++) {
+        const cl = stormClusters[i];
+        // In fair weather (low cloud cover), only show every 3rd cloud as a small puffy cumulus
+        const clusterThreshold = (i % 3 === 0) ? 0.04 : 0.35;
+        if (currentCloudCover < clusterThreshold) {
+          cl.mesh.visible = false;
+          continue;
+        }
+        cl.mesh.visible = true;
+
+        // Drift clouds along the wind vector
+        const driftSpeed = (3.5 + params.windSpeed * 0.45) * cl.speedMult;
+        cl.mesh.position.x += wx * driftSpeed * dt;
+        cl.mesh.position.z += wz * driftSpeed * dt;
+        cl.mesh.position.y = cl.baseY + Math.sin(time * 0.8 + cl.phase) * 0.9;
+
+        if (cl.mesh.position.x > cloudBound) cl.mesh.position.x -= cloudBound * 2;
+        if (cl.mesh.position.x < -cloudBound) cl.mesh.position.x += cloudBound * 2;
+        if (cl.mesh.position.z > cloudBound) cl.mesh.position.z -= cloudBound * 2;
+        if (cl.mesh.position.z < -cloudBound) cl.mesh.position.z += cloudBound * 2;
+
+        const scaleFactor = cl.baseScale * (0.45 + currentCloudCover * 0.85);
+        cl.mesh.scale.set(scaleFactor, scaleFactor * (0.7 + currentCloudCover * 0.45), scaleFactor);
+
+        cl.mat.color.setRGB(targetR, targetG, targetB);
+        cl.mat.opacity = clamp(0.35 + currentCloudCover * 0.56, 0.0, 0.92);
+
+        // Internal electric cloud lightning flash decay
+        if (cl.flashIntensity > 0.001) {
+          cl.flashIntensity = Math.max(0.0, cl.flashIntensity - dt * 3.8);
+          cl.mat.emissive.setHex(0x7dd3fc);
+          cl.mat.emissiveIntensity = cl.flashIntensity * 3.2;
+        } else if (mode === 'thunderstorm') {
+          // Subtle rumbling sheet-lightning pulse inside thunderheads
+          const rumble = Math.max(0.0, Math.sin(time * 5.5 + cl.phase * 3.0) - 0.82);
+          cl.mat.emissive.setHex(0x38bdf8);
+          cl.mat.emissiveIntensity = rumble * 1.4;
+        } else {
+          cl.mat.emissiveIntensity = 0.0;
+        }
+      }
+
+      // 2. Schedule & Trigger Lightning Strikes during Thunderstorms (and occasionally during Monsoons)
+      if (mode === 'thunderstorm' || (mode === 'monsoon' && currentCloudCover > 0.65)) {
+        lightningCooldown -= dt;
+        if (lightningCooldown <= 0.0) {
+          triggerLightningStrike();
+          // Frequent strikes every 1.1 - 2.3s in Thunderstorm, occasional every 4.0 - 6.8s in Monsoon
+          lightningCooldown = (mode === 'thunderstorm')
+            ? (1.1 + Math.random() * 1.25)
+            : (4.0 + Math.random() * 2.8);
+        }
+      }
+
+      // 3. Animate active 3D Branched Lightning Bolts & Strobe Flash Light
+      if (activeLightningBolts.length > 0) {
+        let maxFlash = 0.0;
+        for (let i = activeLightningBolts.length - 1; i >= 0; i--) {
+          const b = activeLightningBolts[i];
+          b.age += dt;
+          if (b.age >= b.duration) {
+            lightningGroup.remove(b.boltRoot);
+            b.coreMat.dispose();
+            b.haloMat.dispose();
+            activeLightningBolts.splice(i, 1);
+            continue;
+          }
+          const normAge = b.age / b.duration;
+          // Double-pulse lightning restrike flicker
+          const pulse = (normAge < 0.28 || (normAge > 0.42 && normAge < 0.68))
+            ? 1.0
+            : Math.max(0.15, 1.0 - normAge * 1.2);
+          b.coreMat.opacity = pulse * (1.0 - normAge * 0.45);
+          b.haloMat.opacity = pulse * 0.72 * (1.0 - normAge * 0.65);
+
+          // Expand impact shockwave ring & plasma dome
+          const ringScale = 1.0 + normAge * 9.5;
+          b.shockRing.scale.setScalar(ringScale);
+          b.flashDome.scale.setScalar(Math.max(0.1, 1.35 * (1.0 - normAge)));
+
+          maxFlash = Math.max(maxFlash, pulse * (1.0 - normAge * 0.5));
+        }
+        lightningFlashLight.intensity = maxFlash * (24.0 + nightFactor * 18.0);
+      } else {
+        lightningFlashLight.intensity = 0.0;
+      }
+
+      // 4. Animate 3D Flying Explosion Debris Chunks (from blown-up plants, animals & craters)
+      for (let i = activeDebrisShards.length - 1; i >= 0; i--) {
+        const s = activeDebrisShards[i];
+        s.age += dt;
+        if (s.age >= s.maxAge) {
+          explosionDebrisGroup.remove(s.mesh);
+          s.mat.dispose();
+          activeDebrisShards.splice(i, 1);
+          continue;
+        }
+        s.vy -= 26.0 * dt; // Gravity
+        s.mesh.position.x += s.vx * dt;
+        s.mesh.position.y += s.vy * dt;
+        s.mesh.position.z += s.vz * dt;
+        s.mesh.rotation.x += s.rx * dt;
+        s.mesh.rotation.y += s.ry * dt;
+        s.mesh.rotation.z += s.rz * dt;
+
+        const floorY = sampleSurfaceHeightAtWorld(s.mesh.position.x, s.mesh.position.z);
+        if (s.mesh.position.y < floorY + 0.12) {
+          s.mesh.position.y = floorY + 0.12;
+          s.vy = Math.abs(s.vy) * 0.35;
+          s.vx *= 0.6;
+          s.vz *= 0.6;
+        }
+        const shrink = 1.0 - Math.pow(s.age / s.maxAge, 2.0);
+        s.mesh.scale.multiplyScalar(Math.pow(shrink, 0.08));
+      }
+    }
+
     // Bilinear height interpolation for smooth FPV walking, surface ice solidity, molten lava & underwater detection
     function sampleHeightsAtWorld(wx, wz) {
       const fx = clamp(((wx / WORLD_SIZE) + 0.5) * (GRID - 1), 0, GRID - 1.001);
@@ -6750,8 +7275,9 @@
     function updateParticles(dt) {
       updateLavaEmbers(dt);
       updateFireAndSteamEffects(dt);
-      // Automatically show falling snowflakes, monsoon rain, or haboob dust storms during severe weather, OR whenever user toggles Particles ON
-      const isBadStormActive = (params.snowRate > 0.05) || (params.rainRate > 0.35) || (params.weatherMode === 'haboob');
+      updateThunderstormAndClouds(dt);
+      // Automatically show falling snowflakes, monsoon rain, thunderstorm rain, or haboob dust storms during severe weather, OR whenever user toggles Particles ON
+      const isBadStormActive = (params.snowRate > 0.05) || (params.rainRate > 0.35) || (params.weatherMode === 'haboob') || (params.weatherMode === 'thunderstorm');
       particleSystem.visible = (params.showParticles || isBadStormActive) && (params.windSpeed > 1 || params.rainRate > 0.05 || params.snowRate > 0.05);
       if (!particleSystem.visible) return;
 
@@ -8167,16 +8693,17 @@
     });
 
     const WEATHER_LABELS = {
-      oasis:   '🌤️ Clear Oasis',
-      calm:    '☀️ Golden Calm',
-      star:    '🧭 Trade Winds',
-      snow:    '❄️ Snow & Ice',
-      monsoon: '🌧️ Monsoon Rain',
-      haboob:  '🌪️ Haboob Storm'
+      oasis:        '🌤️ Clear Oasis',
+      calm:         '☀️ Golden Calm',
+      star:         '🧭 Trade Winds',
+      thunderstorm: '⛈️ Thunderstorm',
+      snow:         '❄️ Snow & Ice',
+      monsoon:      '🌧️ Monsoon Rain',
+      haboob:       '🌪️ Haboob Storm'
     };
 
     const GOOD_WEATHERS = ['oasis', 'calm', 'star'];
-    const BAD_WEATHERS = ['snow', 'monsoon', 'haboob'];
+    const BAD_WEATHERS = ['thunderstorm', 'snow', 'monsoon', 'haboob'];
     let lastBadWeather = '';
 
     function applyWeatherPreset(mode) {
@@ -8197,6 +8724,14 @@
         params.sandSupply = 0.25;
         params.skyColorHex = 0xe2b37e;
         params.skyFogDensity = 0.0016;
+      } else if (mode === 'thunderstorm') {
+        params.windSpeed = 20.5;
+        params.rainRate = 0.68;
+        params.snowRate = 0.0;
+        params.evapRate = 0.05;
+        params.sandSupply = 0.24;
+        params.skyColorHex = 0x3b4859;
+        params.skyFogDensity = 0.0038;
       } else if (mode === 'monsoon') {
         params.windSpeed = 16.5;
         params.rainRate = 0.85;
@@ -8229,6 +8764,10 @@
         params.sandSupply = 0.36;
         params.skyColorHex = 0xd8a36c;
         params.skyFogDensity = 0.0022;
+      }
+
+      if (mode === 'thunderstorm') {
+        lightningCooldown = 0.45;
       }
 
       // Highlight matching weather button in sidebar
@@ -8271,11 +8810,13 @@
             applyWeatherPreset(nextGood);
             params.weatherTimer = 34.0 + Math.random() * 18.0;
           } else {
-            // Currently in Good Weather -> 78% chance to trigger a brief random Bad Weather event (11 - 16 seconds),
-            // with extra priority for Snow & Ice if we haven't had snow recently!
-            if (Math.random() < 0.78) {
+            // Currently in Good Weather -> 80% chance to trigger a brief random Bad Weather event (11 - 16 seconds),
+            // rotating fairly across Thunderstorm, Snow & Ice, Monsoon, and Haboob!
+            if (Math.random() < 0.80) {
               let nextBad;
-              if (lastBadWeather !== 'snow' && Math.random() < 0.52) {
+              if (lastBadWeather !== 'thunderstorm' && Math.random() < 0.38) {
+                nextBad = 'thunderstorm';
+              } else if (lastBadWeather !== 'snow' && Math.random() < 0.45) {
                 nextBad = 'snow';
               } else {
                 const choices = BAD_WEATHERS.filter((w) => w !== lastBadWeather);
