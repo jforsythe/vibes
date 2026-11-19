@@ -7833,9 +7833,9 @@
     let fireworkSparkHead = 0;
 
     // Two dynamic high-intensity aerial point lights driven by active multi-second explosion flares
-    const fireworkFlashLight = new THREE.PointLight(0xffffff, 0.0, 260.0, 1.1);
+    const fireworkFlashLight = new THREE.PointLight(0xffffff, 0.0, 320.0, 1.05);
     scene.add(fireworkFlashLight);
-    const fireworkFlashLight2 = new THREE.PointLight(0xffffff, 0.0, 260.0, 1.1);
+    const fireworkFlashLight2 = new THREE.PointLight(0xffffff, 0.0, 320.0, 1.05);
     scene.add(fireworkFlashLight2);
 
     // 3D Aerial Explosion Flares (Large bright multi-layered core + halo + starburst rays lasting 2.8 - 3.8 seconds)
@@ -8053,10 +8053,10 @@
           x: jx,
           y: sy,
           z: jz,
-          vx: (Math.random() - 0.5) * 4.8,
-          vy: 29.0 + Math.random() * 11.5,
-          vz: (Math.random() - 0.5) * 4.8,
-          fuse: 0.88 + Math.random() * 0.36,
+          vx: (Math.random() - 0.5) * 5.2,
+          vy: 42.0 + Math.random() * 14.5,
+          vz: (Math.random() - 0.5) * 5.2,
+          fuse: 1.06 + Math.random() * 0.40,
           palette,
           pattern
         });
@@ -8278,7 +8278,7 @@
         r.x += (r.vx + windX * 0.5) * dt;
         r.y += r.vy * dt;
         r.z += (r.vz + windZ * 0.5) * dt;
-        r.vy -= 14.5 * dt;
+        r.vy -= 11.5 * dt;
 
         // Golden ascending comet tail sparks
         for (let t = 0; t < 2; t++) {
