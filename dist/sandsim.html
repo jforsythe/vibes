@@ -758,6 +758,38 @@
       border-left: 1px solid rgba(255,255,255,0.1);
     }
 
+    /* Sculpt "Items" Section inside Bottom Dock & Sidebar */
+    .dock-section-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 7px;
+      border-radius: 10px;
+      background: rgba(232, 168, 76, 0.08);
+      border: 1px solid rgba(255, 197, 109, 0.28);
+    }
+
+    .dock-section-label {
+      font-size: 9.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--accent-bright);
+      padding: 0 3px;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    button.item-tool-btn {
+      border-color: rgba(251, 191, 36, 0.35);
+      background: rgba(251, 191, 36, 0.10);
+    }
+
+    button.item-tool-btn:hover {
+      background: rgba(251, 191, 36, 0.24);
+      border-color: var(--accent-bright);
+    }
+
     /* Bottom-Right Developer Mode Stat Bar (Nearby Animal Distances & Audio Range) */
     .dev-stats-bar {
       position: absolute;
@@ -1349,7 +1381,13 @@
     <button class="tool-btn" data-tool="dig" title="Excavate sand & carve basins for water to pool">⛏️ Dig Basin</button>
     <button class="tool-btn" data-tool="rock" title="Place wind-blocking & water-damming boulders">🪨 Add Boulder</button>
     <button class="tool-btn" data-tool="wall" title="Draw dam / drift walls">🧱 Dam / Wall</button>
-    <button class="tool-btn" data-tool="erase" title="Clear obstacles & flora in brush radius">🧹 Erase</button>
+    <div class="dock-section-group" title="Placeable 3D World Items (Can be destroyed by Erase brush, Bow & Arrow, Lightning, Volcano, or Lava)">
+      <span class="dock-section-label">📦 Items</span>
+      <button class="tool-btn item-tool-btn" data-tool="item-tap" title="Place an Artesian Water Tap that sticks in the ground and spurts water at a small random rate until destroyed">🚰 Water Tap</button>
+      <button class="tool-btn item-tool-btn" data-tool="item-feeder" title="Place an Animal Feeder trough that attracts nearby deer/oryx, rabbits, camels & fennec foxes until destroyed">🌾 Animal Feeder</button>
+      <button class="tool-btn item-tool-btn" data-tool="item-lantern" title="Place a Lantern hanging from a wooden stick that automatically illuminates the surrounding area at night until destroyed">🏮 Night Lantern</button>
+    </div>
+    <button class="tool-btn" data-tool="erase" title="Clear obstacles, flora & placed items in brush radius">🧹 Erase</button>
     <button id="btn-dock-reset-water-plants" class="danger" title="Remove all water, plants, and aquatic/jungle animals from the current map">🔄 Reset Water & Life</button>
     <span class="dock-hint">
       <kbd>L-Drag</kbd> Sculpt · <kbd>R-Drag</kbd> Orbit · <kbd>V</kbd> Walk Mode
@@ -1377,6 +1415,7 @@
       <button class="panel-icon-btn" data-section="sec-terrain" title="1. Terrain & Watersheds">🏞️</button>
       <button class="panel-icon-btn" data-section="sec-weather" title="2. Weather & Climate Regimes">🌤️</button>
       <button class="panel-icon-btn" data-section="sec-biome" title="3. Biome Flora & Wildlife">🌴</button>
+      <button class="panel-icon-btn" data-section="sec-items" title="Placeable World Items (Water Tap, Animal Feeder, Night Lantern)">📦</button>
       <button class="panel-icon-btn" data-section="sec-wind" title="4. Wind, Rain & Evaporation">💨</button>
       <button class="panel-icon-btn" data-section="sec-sim" title="5. Simulation & Overlays">🎛️</button>
       <button class="panel-icon-btn" id="btn-icon-dev-mode" title="Toggle Developer Mode Stat Bar (Nearby Animal Distances)">🛠️</button>
@@ -1524,6 +1563,23 @@
             <span class="guild-dot" style="background:#e2e8f0; border:1px solid #94a3b8;"></span>
             <span>🦉 Night Owl (Night)</span>
           </div>
+        </div>
+      </div>
+
+      <!-- Placeable Sculpt Items Section -->
+      <div class="section-card" id="sec-items">
+        <div class="section-header">
+          <span>📦 Sculpt Items (Destructible)</span>
+          <span class="fidelity-badge" id="val-items-count">0 Active</span>
+        </div>
+        <div class="btn-grid">
+          <button class="tool-btn item-tool-btn" data-tool="item-tap" title="Sticks in the ground and spurts water like an artesian well at a small random rate until destroyed">🚰 Water Tap</button>
+          <button class="tool-btn item-tool-btn" data-tool="item-feeder" title="Attracts nearby deer/oryx, rabbits, camels & fennec foxes to gather and feed; can be destroyed">🌾 Animal Feeder</button>
+          <button class="tool-btn item-tool-btn" data-tool="item-lantern" style="grid-column: span 2;" title="Hangs from a wooden post and automatically illuminates the surrounding area at night; can be destroyed">🏮 Hanging Night Lantern</button>
+        </div>
+        <div class="fidelity-details" style="margin-top:6px;">
+          <span>Click terrain to place</span>
+          <span>Destroy: 🧹 Erase, 🏹 Arrow, ⚡, 🔥</span>
         </div>
       </div>
 
@@ -3467,12 +3523,22 @@
           }
         }
       }
+      if (typeof placedWorldItems !== 'undefined') {
+        while (placedWorldItems.length > 0) {
+          destroyPlacedItemAtIndex(placedWorldItems.length - 1, false);
+        }
+      }
       computeWindShadowAndFlow();
       syncTerrainAndWaterMeshes();
       rebuildFloraInstances();
     }
 
     function buildTerrain(preset) {
+      if (typeof placedWorldItems !== 'undefined') {
+        while (placedWorldItems.length > 0) {
+          destroyPlacedItemAtIndex(placedWorldItems.length - 1, false);
+        }
+      }
       bedrock.fill(0);
       sand.fill(0);
       water.fill(0);
@@ -7171,17 +7237,40 @@
           }
 
         } else if (a.type === 'rabbit') {
-          // Daytime Desert Cottontail / Jackrabbit: quick agile bounding hops with brief foraging pauses
+          // Daytime Desert Cottontail / Jackrabbit: quick agile bounding hops with brief foraging pauses (attracted to Animal Feeders!)
+          let bestFeeder = null;
+          let bestFeederDist = 52.0;
+          if (typeof placedWorldItems !== 'undefined') {
+            for (let f = 0; f < placedWorldItems.length; f++) {
+              const it = placedWorldItems[f];
+              if (it.type === 'item-feeder') {
+                const fd = Math.hypot(it.x - a.x, it.z - a.z);
+                if (fd < bestFeederDist) {
+                  bestFeederDist = fd;
+                  bestFeeder = it;
+                }
+              }
+            }
+          }
+
           if (isLavaHazardAhead || isInHazardousWetArea || probeEffWater > fleeThreshold) {
             steerToHighDryGround(15.5);
           } else if (obstacleType[pIdx] === 2 || (probeH.groundY - groundY) > 1.8) {
             a.heading += 2.0 * coldSpeedMult * dt;
+          } else if (bestFeeder) {
+            if (bestFeederDist > 3.2) {
+              steerToward(Math.atan2(bestFeeder.x - a.x, bestFeeder.z - a.z), 4.2 * coldSpeedMult);
+            } else {
+              // Gather around the feeder trough to nibble hay/grain
+              steerToward(Math.atan2(bestFeeder.x - a.x, bestFeeder.z - a.z), 2.5 * coldSpeedMult);
+            }
           } else {
             a.heading += a.turnRate * dt * 1.3 * coldSpeedMult;
           }
 
           const boundCycle = (time * 2.1 + a.phase) % 2.0;
-          const isForagingPause = (!isLavaHazardAhead && !isInHazardousWetArea && boundCycle > 1.45);
+          const isAtFeeder = (bestFeeder && bestFeederDist <= 3.2 && boundCycle > 0.65);
+          const isForagingPause = (!isLavaHazardAhead && !isInHazardousWetArea && (boundCycle > 1.45 || isAtFeeder));
           if (isForagingPause) {
             a.hopPitch = 0.08;
             a.y = walkSurfaceY;
@@ -7195,18 +7284,45 @@
           }
 
         } else if (a.type === 'camel' || a.type === 'oryx' || a.type === 'fennec') {
+          // Check for nearby placed Animal Feeders ('item-feeder') — attracts deer/oryx, camels & fennec foxes!
+          let bestFeeder = null;
+          let bestFeederDist = 58.0;
+          if (typeof placedWorldItems !== 'undefined') {
+            for (let f = 0; f < placedWorldItems.length; f++) {
+              const it = placedWorldItems[f];
+              if (it.type === 'item-feeder') {
+                const fd = Math.hypot(it.x - a.x, it.z - a.z);
+                if (fd < bestFeederDist) {
+                  bestFeederDist = fd;
+                  bestFeeder = it;
+                }
+              }
+            }
+          }
+
+          let feederSpeedMult = 1.0;
           if (isLavaHazardAhead || isInHazardousWetArea || probeEffWater > fleeThreshold) {
             // Immediately sprint & steer toward the nearest dry higher ground to avoid lava or escape drowning!
             steerToHighDryGround(14.5);
           } else if (obstacleType[pIdx] === 2 || (probeH.groundY - groundY) > 1.8) {
             a.heading += 1.8 * coldSpeedMult * dt;
+          } else if (bestFeeder) {
+            const targetAngle = Math.atan2(bestFeeder.x - a.x, bestFeeder.z - a.z);
+            if (bestFeederDist > 3.6) {
+              steerToward(targetAngle, 3.8 * coldSpeedMult);
+              feederSpeedMult = 1.12;
+            } else {
+              // Gathered around the feeder trough: face the feeder and pause to eat!
+              steerToward(targetAngle, 3.0 * coldSpeedMult);
+              feederSpeedMult = (Math.sin(time * 1.4 + a.phase) > -0.35) ? 0.0 : 0.30;
+            }
           } else {
             a.heading += a.turnRate * dt * (a.type === 'fennec' ? 1.15 : 0.7) * coldSpeedMult;
           }
-          a.x += Math.sin(a.heading) * a.speed * fleeSpeedMult * coldSpeedMult * dt;
-          a.z += Math.cos(a.heading) * a.speed * fleeSpeedMult * coldSpeedMult * dt;
+          a.x += Math.sin(a.heading) * a.speed * feederSpeedMult * fleeSpeedMult * coldSpeedMult * dt;
+          a.z += Math.cos(a.heading) * a.speed * feederSpeedMult * fleeSpeedMult * coldSpeedMult * dt;
           const strideFreq = (a.type === 'fennec' ? 14.5 : (a.type === 'oryx' ? 11.0 : 5.5)) * coldSpeedMult;
-          const strideAmp = (a.type === 'fennec' ? 0.14 : (a.type === 'oryx' ? 0.18 : 0.07)) * coldSpeedMult;
+          const strideAmp = (a.type === 'fennec' ? 0.14 : (a.type === 'oryx' ? 0.18 : 0.07)) * coldSpeedMult * (feederSpeedMult > 0.05 ? 1.0 : 0.0);
           a.y = walkSurfaceY + Math.abs(Math.sin(time * strideFreq + a.phase)) * strideAmp;
 
         } else if (a.type === 'macaw' || a.type === 'bat') {
@@ -7975,10 +8091,13 @@
         playLightningThunderClap(tx, ty, tz);
       }
 
-      // --- EXPLOSIVE BLAST AT STRIKE POINT (BLOWS UP ANIMALS, PLANTS & SAND!) ---
+      // --- EXPLOSIVE BLAST AT STRIKE POINT (BLOWS UP ANIMALS, PLANTS, PLACED ITEMS & SAND!) ---
       spawnFireFlameAtWorld(tx, ty + 0.25, tz, 2.4, 26);
       spawnSteamPuffAtWorld(tx, ty + 0.35, tz, 18);
       spawnExplosionShards(tx, ty, tz, 16, [0xff6a00, 0xfde047, 0x3b2f2f, 0x1c1917]);
+      if (typeof destroyPlacedItemsNearWorld === 'function') {
+        destroyPlacedItemsNearWorld(tx, tz, 8.5, true);
+      }
 
       // 1. Blow up or ignite Animals within the lightning strike radius
       for (let i = faunaAgents.length - 1; i >= 0; i--) {
@@ -8623,6 +8742,9 @@
 
           spawnFireFlameAtWorld(bx, floorY + 0.25, bz, 1.4, 6);
           spawnExplosionShards(bx, floorY + 0.2, bz, 4, [0xff5500, 0xfacc15, 0x29150c]);
+          if (typeof destroyPlacedItemsNearWorld === 'function') {
+            destroyPlacedItemsNearWorld(bx, bz, 4.5, true);
+          }
 
           brimstoneBombsGroup.remove(b.mesh);
           b.mat.dispose();
@@ -9895,6 +10017,486 @@
       }
     }
 
+    // ============================================================================
+    // 11G. PLACEABLE & DESTRUCTIBLE 3D SCULPT ITEMS
+    //      1. Artesian Water Tap ('item-tap') — Sticks in ground & spurts water at a small random rate
+    //      2. Animal Feeder ('item-feeder') — Attracts deer/oryx, rabbits, camels & fennec foxes
+    //      3. Hanging Night Lantern ('item-lantern') — Hangs from a wooden stick & illuminates at night
+    // ============================================================================
+    const placedItemsGroup = new THREE.Group();
+    scene.add(placedItemsGroup);
+    const placedWorldItems = [];
+    const MAX_PLACED_ITEMS = 36;
+    let lastItemPlaceMs = 0;
+
+    // Shared materials for 3D placeable items
+    const itemIronPipeMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.42, metalness: 0.78 });
+    const itemBrassMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.30, metalness: 0.85 });
+    const itemRedValveMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.45, metalness: 0.35 });
+    const itemWoodDarkMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.85 });
+    const itemWoodLightMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.78 });
+    const itemHayFeedMat = new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.90 });
+    const itemLanternIronMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.48, metalness: 0.75 });
+
+    // 3D Artesian Water Spurt Droplet Particle System (for active Water Taps)
+    const TAP_DROPLET_COUNT = 520;
+    const tapDropletGeo = new THREE.BufferGeometry();
+    const tapDropletPos = new Float32Array(TAP_DROPLET_COUNT * 3);
+    const tapDropletCol = new Float32Array(TAP_DROPLET_COUNT * 3);
+    const tapDropletVel = new Float32Array(TAP_DROPLET_COUNT * 3);
+    const tapDropletLife = new Float32Array(TAP_DROPLET_COUNT);
+    for (let i = 0; i < TAP_DROPLET_COUNT; i++) {
+      tapDropletPos[i * 3 + 1] = -999;
+      tapDropletLife[i] = 2.0;
+    }
+    tapDropletGeo.setAttribute('position', new THREE.BufferAttribute(tapDropletPos, 3));
+    tapDropletGeo.setAttribute('color', new THREE.BufferAttribute(tapDropletCol, 3));
+    const tapDropletMat = new THREE.PointsMaterial({
+      size: 0.85,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.90,
+      depthWrite: false
+    });
+    const tapDropletSystem = new THREE.Points(tapDropletGeo, tapDropletMat);
+    tapDropletSystem.frustumCulled = false;
+    tapDropletSystem.renderOrder = 16;
+    tapDropletSystem.visible = false;
+    scene.add(tapDropletSystem);
+    let tapDropletHead = 0;
+
+    function emitTapWaterDroplet(wx, wy, wz, vx, vy, vz) {
+      const idxP = tapDropletHead;
+      tapDropletHead = (tapDropletHead + 1) % TAP_DROPLET_COUNT;
+      const i3 = idxP * 3;
+      tapDropletPos[i3]     = wx;
+      tapDropletPos[i3 + 1] = wy;
+      tapDropletPos[i3 + 2] = wz;
+      tapDropletVel[i3]     = vx;
+      tapDropletVel[i3 + 1] = vy;
+      tapDropletVel[i3 + 2] = vz;
+      const foam = 0.72 + Math.random() * 0.28;
+      tapDropletCol[i3]     = 0.38 * foam;
+      tapDropletCol[i3 + 1] = 0.86 * foam;
+      tapDropletCol[i3 + 2] = 0.99 * foam;
+      tapDropletLife[idxP]  = 0.01;
+    }
+
+    function createWaterTapMesh() {
+      const root = new THREE.Group();
+      // 1. Vertical standpipe driven deep into the sand
+      const standPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 1.95, 10), itemIronPipeMat);
+      standPipe.position.y = 0.72;
+      standPipe.castShadow = true;
+      root.add(standPipe);
+
+      // 2. Base ground collar flange
+      const baseCollar = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.16, 10), itemIronPipeMat);
+      baseCollar.position.y = 0.06;
+      root.add(baseCollar);
+
+      // 3. Brass elbow joint & artesian wellhead cap
+      const topJoint = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), itemBrassMat);
+      topJoint.position.y = 1.68;
+      root.add(topJoint);
+
+      // 4. Curved brass faucet spout extending forward (+Z) and slightly upward for an artesian spurt
+      const spoutPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.095, 0.52, 8), itemBrassMat);
+      spoutPipe.rotation.x = Math.PI * 0.38;
+      spoutPipe.position.set(0, 1.72, 0.22);
+      spoutPipe.castShadow = true;
+      root.add(spoutPipe);
+
+      const nozzleLip = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.09, 0.10, 8), itemBrassMat);
+      nozzleLip.rotation.x = Math.PI * 0.28;
+      nozzleLip.position.set(0, 1.81, 0.44);
+      root.add(nozzleLip);
+
+      // 5. Red cast-iron handwheel valve on top
+      const valveStem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.22, 6), itemBrassMat);
+      valveStem.position.set(0, 1.86, 0);
+      root.add(valveStem);
+
+      const valveWheel = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.035, 6, 12), itemRedValveMat);
+      valveWheel.rotation.x = Math.PI / 2;
+      valveWheel.position.set(0, 1.96, 0);
+      valveWheel.castShadow = true;
+      root.add(valveWheel);
+
+      const crossBar = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.03, 0.04), itemRedValveMat);
+      crossBar.position.set(0, 1.96, 0);
+      root.add(crossBar);
+
+      root.userData.valveWheel = valveWheel;
+      return root;
+    }
+
+    function createAnimalFeederMesh() {
+      const root = new THREE.Group();
+      // 1. Sturdy wooden trough box raised on 4 timber legs
+      const legPositions = [
+        [-0.85, 0.45, -0.42], [0.85, 0.45, -0.42],
+        [-0.85, 0.45,  0.42], [0.85, 0.45,  0.42]
+      ];
+      for (const [lx, ly, lz] of legPositions) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.15, 0.14), itemWoodDarkMat);
+        leg.position.set(lx, ly, lz);
+        leg.castShadow = true;
+        root.add(leg);
+      }
+
+      // 2. Feeding trough basin
+      const troughBase = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.34, 1.05), itemWoodLightMat);
+      troughBase.position.y = 0.86;
+      troughBase.castShadow = true;
+      troughBase.receiveShadow = true;
+      root.add(troughBase);
+
+      // 3. Golden hay, grain & forage mound piled inside the trough
+      const hayMound = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 1), itemHayFeedMat);
+      hayMound.scale.set(1.55, 0.52, 0.78);
+      hayMound.position.set(0, 1.06, 0);
+      hayMound.castShadow = true;
+      root.add(hayMound);
+
+      // 4. Two vertical roof support posts & pitched shade roof
+      for (const px of [-0.85, 0.85]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 1.45, 7), itemWoodDarkMat);
+        post.position.set(px, 1.62, 0);
+        post.castShadow = true;
+        root.add(post);
+      }
+
+      const roofSlopeL = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.08, 0.78), itemWoodDarkMat);
+      roofSlopeL.position.set(0, 2.32, -0.30);
+      roofSlopeL.rotation.x = 0.36;
+      roofSlopeL.castShadow = true;
+      root.add(roofSlopeL);
+
+      const roofSlopeR = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.08, 0.78), itemWoodDarkMat);
+      roofSlopeR.position.set(0, 2.32, 0.30);
+      roofSlopeR.rotation.x = -0.36;
+      roofSlopeR.castShadow = true;
+      root.add(roofSlopeR);
+
+      return root;
+    }
+
+    function createHangingLanternMesh() {
+      const root = new THREE.Group();
+      // 1. Angled wooden stick / post driven into the sand
+      const mainPost = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.105, 3.15, 8), itemWoodDarkMat);
+      mainPost.position.set(0, 1.40, 0);
+      mainPost.rotation.z = -0.08;
+      mainPost.castShadow = true;
+      root.add(mainPost);
+
+      // 2. Top horizontal wooden cross-arm + diagonal brace stick
+      const crossArm = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 1.18, 7), itemWoodDarkMat);
+      crossArm.rotation.z = Math.PI / 2 - 0.10;
+      crossArm.position.set(0.55, 2.78, 0);
+      crossArm.castShadow = true;
+      root.add(crossArm);
+
+      const braceStick = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.050, 0.82, 6), itemWoodLightMat);
+      braceStick.rotation.z = -0.78;
+      braceStick.position.set(0.32, 2.48, 0);
+      root.add(braceStick);
+
+      // 3. Pivoting hanging lantern assembly suspended from the end of the stick
+      const lanternPivot = new THREE.Group();
+      lanternPivot.position.set(1.02, 2.82, 0);
+      root.add(lanternPivot);
+
+      // Hanging cord/chain
+      const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.38, 6), itemLanternIronMat);
+      chain.position.y = -0.19;
+      lanternPivot.add(chain);
+
+      // Top & bottom iron lantern caps
+      const topCap = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.18, 6), itemLanternIronMat);
+      topCap.position.y = -0.42;
+      topCap.castShadow = true;
+      lanternPivot.add(topCap);
+
+      const bottomBase = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.14, 0.10, 6), itemLanternIronMat);
+      bottomBase.position.y = -0.82;
+      lanternPivot.add(bottomBase);
+
+      // Glowing glass lantern core (emissive turns on at night!)
+      const glassMat = new THREE.MeshStandardMaterial({
+        color: 0xfef3c7,
+        emissive: new THREE.Color(0xff9d2e),
+        emissiveIntensity: 0.05,
+        roughness: 0.20,
+        transparent: true,
+        opacity: 0.92
+      });
+      const glassBody = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.13, 0.32, 6), glassMat);
+      glassBody.position.y = -0.63;
+      lanternPivot.add(glassBody);
+
+      // Soft additive halo sphere around the lantern glass (visible at night)
+      const haloMat = new THREE.MeshBasicMaterial({
+        color: 0xffaa33,
+        transparent: true,
+        opacity: 0.0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const haloSphere = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), haloMat);
+      haloSphere.position.y = -0.63;
+      haloSphere.renderOrder = 17;
+      lanternPivot.add(haloSphere);
+
+      // Warm night PointLight attached to the hanging lantern
+      const lanternLight = new THREE.PointLight(0xff9e3b, 0.0, 42.0, 1.35);
+      lanternLight.position.set(0, -0.65, 0);
+      lanternPivot.add(lanternLight);
+
+      root.userData.lanternPivot = lanternPivot;
+      root.userData.glassMat = glassMat;
+      root.userData.haloMat = haloMat;
+      root.userData.lanternLight = lanternLight;
+      return root;
+    }
+
+    function updatePlacedItemsCountUI() {
+      const badge = document.getElementById('val-items-count');
+      if (badge) {
+        badge.textContent = `${placedWorldItems.length} Active`;
+      }
+    }
+
+    function destroyPlacedItemAtIndex(idxItem, withExplosion = true) {
+      if (idxItem < 0 || idxItem >= placedWorldItems.length) return;
+      const item = placedWorldItems[idxItem];
+      if (withExplosion) {
+        const palette = item.type === 'item-tap'
+          ? [0x38bdf8, 0x475569, 0xd97706]
+          : (item.type === 'item-feeder'
+            ? [0x854d0e, 0xeab308, 0x5c3a21]
+            : [0xff9e3b, 0x5c3a21, 0xfef08a]);
+        spawnExplosionShards(item.x, item.y + 0.9, item.z, 10, palette);
+        spawnSteamPuffAtWorld(item.x, item.y + 0.8, item.z, 5);
+      }
+      if (item.mesh) {
+        if (item.mesh.userData.glassMat) item.mesh.userData.glassMat.dispose();
+        if (item.mesh.userData.haloMat) item.mesh.userData.haloMat.dispose();
+        placedItemsGroup.remove(item.mesh);
+      }
+      placedWorldItems.splice(idxItem, 1);
+      updatePlacedItemsCountUI();
+    }
+
+    function destroyPlacedItemsNearWorld(wx, wz, radiusM, withExplosion = true) {
+      let removed = false;
+      for (let i = placedWorldItems.length - 1; i >= 0; i--) {
+        const it = placedWorldItems[i];
+        if (Math.hypot(it.x - wx, it.z - wz) <= radiusM) {
+          destroyPlacedItemAtIndex(i, withExplosion);
+          removed = true;
+        }
+      }
+      return removed;
+    }
+
+    function placeWorldItemAtWorld(type, wx, wz) {
+      const nowMs = performance.now();
+      if (nowMs - lastItemPlaceMs < 240) return;
+
+      const halfBound = WORLD_SIZE * 0.46;
+      const px = clamp(wx, -halfBound, halfBound);
+      const pz = clamp(wz, -halfBound, halfBound);
+
+      // Avoid stacking two identical items right on top of each other (within 2.6m)
+      for (let i = 0; i < placedWorldItems.length; i++) {
+        const it = placedWorldItems[i];
+        if (Math.hypot(it.x - px, it.z - pz) < 2.6) {
+          return;
+        }
+      }
+
+      lastItemPlaceMs = nowMs;
+      while (placedWorldItems.length >= MAX_PLACED_ITEMS) {
+        destroyPlacedItemAtIndex(0, false);
+      }
+
+      const { groundY } = sampleHeightsAtWorld(px, pz);
+      const yaw = Math.random() * Math.PI * 2;
+      let mesh = null;
+      if (type === 'item-tap') {
+        mesh = createWaterTapMesh();
+      } else if (type === 'item-feeder') {
+        mesh = createAnimalFeederMesh();
+      } else if (type === 'item-lantern') {
+        mesh = createHangingLanternMesh();
+      }
+      if (!mesh) return;
+
+      mesh.position.set(px, groundY, pz);
+      mesh.rotation.y = yaw;
+      placedItemsGroup.add(mesh);
+
+      placedWorldItems.push({
+        type,
+        x: px,
+        y: groundY,
+        z: pz,
+        yaw,
+        phase: Math.random() * Math.PI * 2,
+        // For Water Tap: random small artesian spurt rate that fluctuates organically over time
+        spurtTimer: 0.0,
+        spurtStrength: 0.55 + Math.random() * 0.90,
+        mesh
+      });
+
+      // Small dust puff as the item is planted in the ground
+      spawnSteamPuffAtWorld(px, groundY + 0.3, pz, 3);
+      updatePlacedItemsCountUI();
+    }
+
+    function updatePlacedItems(dt) {
+      const time = uniforms.uTime.value;
+      const nightFactor = skyUniforms.uNightFactor.value || 0.0;
+      const hr = ((params.timeOfDay % 24) + 24) % 24;
+      const isNightTime = (hr >= 18.2 || hr < 6.0) || (nightFactor > 0.35);
+      const rad = THREE.MathUtils.degToRad(params.windDirDeg);
+      const windX = Math.cos(rad) * params.windSpeed;
+      const windZ = Math.sin(rad) * params.windSpeed;
+
+      let waterAddedByTaps = false;
+
+      for (let i = placedWorldItems.length - 1; i >= 0; i--) {
+        const it = placedWorldItems[i];
+        const { groundY, waterDepth, localLava } = sampleHeightsAtWorld(it.x, it.z);
+
+        // 1. Check if molten lava or an active rising volcano cone has destroyed this item!
+        const hitByLava = (waterDepth > 0.04 && localLava >= 0.30);
+        const hitByVolcano = (typeof volcanoEruptionState !== 'undefined' && volcanoEruptionState.active &&
+          Math.hypot(it.x - volcanoEruptionState.wx, it.z - volcanoEruptionState.wz) < volcanoEruptionState.radiusMeters * 0.85);
+        if (hitByLava || hitByVolcano) {
+          spawnFireFlameAtWorld(it.x, it.y + 0.6, it.z, 1.4, 12);
+          destroyPlacedItemAtIndex(i, true);
+          continue;
+        }
+
+        // Keep item anchored to the current terrain ground height as sand drifts or erodes
+        it.y = groundY;
+        it.mesh.position.y = groundY;
+
+        if (it.type === 'item-tap') {
+          // Artesian Water Tap: Spurts water like an artesian well at a small but random fluctuating rate!
+          it.spurtTimer -= dt;
+          if (it.spurtTimer <= 0.0) {
+            // Randomly vary the artesian pressure every 0.8 - 2.4 seconds (from a gentle trickle to a lively spurt)
+            it.spurtTimer = 0.8 + Math.random() * 1.6;
+            it.spurtStrength = 0.35 + Math.random() * 1.15;
+          }
+
+          const gurglePulse = Math.max(0.15, it.spurtStrength + Math.sin(time * 7.5 + it.phase) * 0.32);
+          if (it.mesh.userData.valveWheel) {
+            it.mesh.userData.valveWheel.rotation.z = Math.sin(time * 3.0 + it.phase) * 0.15;
+          }
+
+          // Spurt direction out of the curved brass faucet nozzle
+          const dirX = Math.sin(it.yaw);
+          const dirZ = Math.cos(it.yaw);
+          const nozzleX = it.x + dirX * 0.46;
+          const nozzleY = groundY + 1.82;
+          const nozzleZ = it.z + dirZ * 0.46;
+
+          // Emit 1-2 arcing 3D water droplets from the spout
+          const dropCount = Math.random() < (0.55 + gurglePulse * 0.35) ? 2 : 1;
+          for (let d = 0; d < dropCount; d++) {
+            const jetSpd = (1.6 + gurglePulse * 2.1) + (Math.random() - 0.5) * 0.7;
+            const upSpd = (1.4 + gurglePulse * 2.2) + (Math.random() - 0.5) * 0.8;
+            emitTapWaterDroplet(
+              nozzleX + (Math.random() - 0.5) * 0.06,
+              nozzleY + (Math.random() - 0.5) * 0.06,
+              nozzleZ + (Math.random() - 0.5) * 0.06,
+              dirX * jetSpd + (Math.random() - 0.5) * 0.65,
+              upSpd,
+              dirZ * jetSpd + (Math.random() - 0.5) * 0.65
+            );
+          }
+
+          // Add a small random amount of water & capillary soil moisture to the grid cell beneath the tap spout
+          const landingX = it.x + dirX * 0.95;
+          const landingZ = it.z + dirZ * 0.95;
+          const gx = clamp(Math.round(((landingX / WORLD_SIZE) + 0.5) * (GRID - 1)), 2, GRID - 3);
+          const gz = clamp(Math.round(((landingZ / WORLD_SIZE) + 0.5) * (GRID - 1)), 2, GRID - 3);
+          const ci = idx(gx, gz);
+          const smallRandomAdd = (0.045 + Math.random() * 0.095) * gurglePulse * dt;
+          const maxWaterDepth = Math.max(0, MAX_TERRAIN_HEIGHT - (bedrock[ci] + sand[ci]));
+          water[ci] = Math.min(maxWaterDepth, water[ci] + smallRandomAdd);
+          lavaFrac[ci] = 0.0;
+          soilMoisture[ci] = Math.min(1.0, soilMoisture[ci] + smallRandomAdd * 2.2);
+          waterAddedByTaps = true;
+
+        } else if (it.type === 'item-lantern') {
+          // Hanging Night Lantern: Swings gently in the wind and illuminates the area at night only!
+          const pivot = it.mesh.userData.lanternPivot;
+          const glassMat = it.mesh.userData.glassMat;
+          const haloMat = it.mesh.userData.haloMat;
+          const light = it.mesh.userData.lanternLight;
+
+          if (pivot) {
+            const windSway = clamp(params.windSpeed / 25.0, 0.05, 1.0);
+            pivot.rotation.z = Math.sin(time * 2.8 + it.phase) * 0.16 * windSway;
+            pivot.rotation.x = Math.cos(time * 2.3 + it.phase) * 0.12 * windSway;
+          }
+
+          if (isNightTime) {
+            const nightGlow = clamp((nightFactor - 0.20) / 0.65, 0.25, 1.0);
+            const flicker = 0.90 + 0.10 * Math.sin(time * 11.5 + it.phase) + 0.05 * Math.cos(time * 19.3 + it.phase);
+            if (light) light.intensity = 6.8 * nightGlow * flicker;
+            if (glassMat) glassMat.emissiveIntensity = 1.85 * nightGlow * flicker;
+            if (haloMat) haloMat.opacity = 0.42 * nightGlow * flicker;
+          } else {
+            // Daytime: lantern light is turned off
+            if (light) light.intensity = 0.0;
+            if (glassMat) glassMat.emissiveIntensity = 0.04;
+            if (haloMat) haloMat.opacity = 0.0;
+          }
+        }
+      }
+
+      if (waterAddedByTaps && frameCount % 3 === 0) {
+        syncTerrainAndWaterMeshes();
+      }
+
+      // Advance 3D Artesian Water Tap Spurt Droplets
+      let activeDrops = 0;
+      for (let i = 0; i < TAP_DROPLET_COUNT; i++) {
+        let life = tapDropletLife[i];
+        if (life >= 1.0) continue;
+        activeDrops++;
+        life += dt * 1.65;
+        tapDropletLife[i] = life;
+        const i3 = i * 3;
+        if (life >= 1.0) {
+          tapDropletPos[i3 + 1] = -999;
+          continue;
+        }
+        tapDropletVel[i3 + 1] -= 14.5 * dt;
+        tapDropletPos[i3]     += (tapDropletVel[i3] + windX * 0.08) * dt;
+        tapDropletPos[i3 + 1] += tapDropletVel[i3 + 1] * dt;
+        tapDropletPos[i3 + 2] += (tapDropletVel[i3 + 2] + windZ * 0.08) * dt;
+
+        const floorY = sampleSurfaceHeightAtWorld(tapDropletPos[i3], tapDropletPos[i3 + 2]);
+        if (tapDropletPos[i3 + 1] <= floorY) {
+          tapDropletLife[i] = 1.0;
+          tapDropletPos[i3 + 1] = -999;
+        }
+      }
+      tapDropletSystem.visible = activeDrops > 0;
+      if (activeDrops > 0) {
+        tapDropletGeo.attributes.position.needsUpdate = true;
+        tapDropletGeo.attributes.color.needsUpdate = true;
+      }
+    }
+
     // Bilinear height interpolation for smooth FPV walking, surface ice solidity, molten lava & underwater detection
     function sampleHeightsAtWorld(wx, wz) {
       const fx = clamp(((wx / WORLD_SIZE) + 0.5) * (GRID - 1), 0, GRID - 1.001);
@@ -10011,6 +10613,7 @@
       updateThunderstormAndClouds(dt);
       updateVolcanoEruption(dt);
       updateFireworks(dt);
+      updatePlacedItems(dt);
       // Automatically show falling snowflakes, monsoon rain, thunderstorm rain, or haboob dust storms during severe weather, OR whenever user toggles Particles ON
       const isBadStormActive = (params.snowRate > 0.05) || (params.rainRate > 0.35) || (params.weatherMode === 'haboob') || (params.weatherMode === 'thunderstorm');
       particleSystem.visible = (params.showParticles || isBadStormActive) && (params.windSpeed > 1 || params.rainRate > 0.05 || params.snowRate > 0.05);
@@ -10422,10 +11025,28 @@
           }
         }
 
-        // 2. Check collision against Terrain surface
+        // 2. Check collision against Placed World Items (Water Taps, Animal Feeders, Hanging Lanterns) — arrows destroy items!
+        let hitPlacedItem = false;
+        if (!hitAnimal && typeof placedWorldItems !== 'undefined') {
+          for (let k = placedWorldItems.length - 1; k >= 0; k--) {
+            const it = placedWorldItems[k];
+            const itemRadius = it.type === 'item-feeder' ? 1.55 : 1.15;
+            const itemHeight = it.type === 'item-lantern' ? 3.2 : 2.3;
+            const dx = pos.x - it.x;
+            const dz = pos.z - it.z;
+            const dy = pos.y - (it.y + itemHeight * 0.45);
+            if ((dx * dx + dz * dz) < (itemRadius * itemRadius) && Math.abs(dy) < itemHeight * 0.65) {
+              destroyPlacedItemAtIndex(k, true);
+              hitPlacedItem = true;
+              break;
+            }
+          }
+        }
+
+        // 3. Check collision against Terrain surface
         const { groundY } = sampleHeightsAtWorld(pos.x, pos.z);
-        if (hitAnimal || pos.y <= groundY + 0.08) {
-          if (!hitAnimal) {
+        if (hitAnimal || hitPlacedItem || pos.y <= groundY + 0.08) {
+          if (!hitAnimal && !hitPlacedItem) {
             pos.y = groundY + 0.05;
           }
           arr.stuck = true;
@@ -10890,6 +11511,13 @@
       if (params.tool === 'fireworks') {
         launchFireworkAtWorld(wx, wz);
         return;
+      }
+      if (params.tool === 'item-tap' || params.tool === 'item-feeder' || params.tool === 'item-lantern') {
+        placeWorldItemAtWorld(params.tool, wx, wz);
+        return;
+      }
+      if (params.tool === 'erase') {
+        destroyPlacedItemsNearWorld(wx, wz, params.brushRadius, true);
       }
 
       const cx = Math.round(((wx / WORLD_SIZE) + 0.5) * (GRID - 1));
@@ -11448,8 +12076,9 @@
           updateVolcanoButtonUI();
           return;
         }
-        document.querySelectorAll('.tool-btn').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
+        document.querySelectorAll('.tool-btn').forEach((b) => {
+          b.classList.toggle('active', b.dataset.tool === btn.dataset.tool);
+        });
         params.tool = btn.dataset.tool;
         const ringColors = {
           water: 0x38bdf8,
@@ -11462,6 +12091,9 @@
           dig: 0xf97316,
           rock: 0xa8a29e,
           wall: 0xe7e5e4,
+          'item-tap': 0x06b6d4,
+          'item-feeder': 0xeab308,
+          'item-lantern': 0xf59e0b,
           erase: 0xef4444
         };
         brushRingMat.color.setHex(ringColors[params.tool] || 0xffc56d);
