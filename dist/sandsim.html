@@ -1887,9 +1887,9 @@
         <div class="control-row">
           <div class="control-label">
             <span>Suspension Stiffness</span>
-            <span class="control-val" id="val-truck-suspension">60% · Balanced</span>
+            <span class="control-val" id="val-truck-suspension">31% · Plush Soft</span>
           </div>
-          <input type="range" id="slider-truck-suspension" min="10" max="100" step="1" value="60" title="Low = soft plush body lean &amp; deep bounce; High = stiff flat rally suspension" />
+          <input type="range" id="slider-truck-suspension" min="10" max="100" step="1" value="31" title="Low = soft plush body lean &amp; deep bounce; High = stiff flat rally suspension" />
         </div>
 
         <div class="control-row">
@@ -1903,17 +1903,17 @@
         <div class="control-row">
           <div class="control-label">
             <span>Tire Tracking (Lateral Grip)</span>
-            <span class="control-val" id="val-truck-tracking">68% · High Grip</span>
+            <span class="control-val" id="val-truck-tracking">100% · Locked-In Rails</span>
           </div>
-          <input type="range" id="slider-truck-tracking" min="10" max="100" step="1" value="68" title="Low = loose sideways sand drifting; High = crisp on-rails tire tracking" />
+          <input type="range" id="slider-truck-tracking" min="10" max="100" step="1" value="100" title="Low = loose sideways sand drifting; High = crisp on-rails tire tracking" />
         </div>
 
         <div class="control-row">
           <div class="control-label">
             <span>Dune Jump / Air Lift</span>
-            <span class="control-val" id="val-truck-jump-lift">50% · Normal</span>
+            <span class="control-val" id="val-truck-jump-lift">69% · Normal</span>
           </div>
-          <input type="range" id="slider-truck-jump-lift" min="0" max="100" step="1" value="50" title="0% = Stay glued to ground; 100% = Big air launches off dune crests" />
+          <input type="range" id="slider-truck-jump-lift" min="0" max="100" step="1" value="69" title="0% = Stay glued to ground; 100% = Big air launches off dune crests" />
         </div>
 
         <div class="zone-label" style="color:#fcd34d; margin-top:4px;">
@@ -1947,9 +1947,9 @@
         <div class="control-row">
           <div class="control-label">
             <span>4th Gear Tune (Overdrive Cruise)</span>
-            <span class="control-val" id="val-truck-gear4">70 Hz</span>
+            <span class="control-val" id="val-truck-gear4">123 Hz</span>
           </div>
-          <input type="range" id="slider-truck-gear4" min="32" max="150" step="1" value="70" />
+          <input type="range" id="slider-truck-gear4" min="32" max="150" step="1" value="123" />
         </div>
 
         <div class="zone-label" style="color:#bae6fd; margin-top:4px;">
@@ -1975,9 +1975,9 @@
         <div class="control-row">
           <div class="control-label">
             <span>Headlight Cone Opacity</span>
-            <span class="control-val" id="val-truck-light-opacity">35%</span>
+            <span class="control-val" id="val-truck-light-opacity">2%</span>
           </div>
-          <input type="range" id="slider-truck-light-opacity" min="0" max="100" step="1" value="35" title="0% = Off (no 3D cone mesh); 100% = Solid beam cone" />
+          <input type="range" id="slider-truck-light-opacity" min="0" max="100" step="1" value="2" title="0% = Off (no 3D cone mesh); 100% = Solid beam cone" />
         </div>
 
         <div class="control-row" style="margin-top:4px;">
@@ -2196,17 +2196,17 @@
       truckSmokeIntensity: 0.60,     // 0.0 (Off) .. 1.0 (Heavy offroad sand & dust rooster-tails)
       truckSkidThreshold: 6.5,       // Cornering/drift threshold before tire squeal triggers (0.5 .. 9.0)
       truckTopSpeed: 24.0,           // Base offroad top speed in m/s (10.0 .. 48.0 m/s, double the 24.0 m/s default)
-      truckSuspension: 0.60,         // 0.10 (Soft plush body roll & bounce) .. 1.00 (Stiff flat rally suspension)
+      truckSuspension: 0.31,         // 0.10 (Soft plush body roll & bounce) .. 1.00 (Stiff flat rally suspension)
       truckCounterweight: 0.85,      // 0.00 (Top-heavy easy rollover) .. 1.00 (Heavy low-CG anti-roll counterweight, never flips at 1.0)
-      truckTireTracking: 0.68,       // 0.10 (Loose sideways drift) .. 1.00 (Locked-in tire tracking & fast slip recovery)
-      truckJumpLift: 0.50,           // 0.00 (Glued to terrain) .. 1.00 (Big dune-crest air launches)
+      truckTireTracking: 1.00,       // 0.10 (Loose sideways drift) .. 1.00 (Locked-in tire tracking & fast slip recovery)
+      truckJumpLift: 0.69,           // 0.00 (Glued to terrain) .. 1.00 (Big dune-crest air launches)
       truckGear1Tune: 98.0,          // Peak engine pitch in 1st Gear (Hz)
       truckGear2Tune: 108.0,         // Peak engine pitch in 2nd Gear (Hz)
       truckGear3Tune: 114.0,         // Peak engine pitch in 3rd Gear (Hz)
-      truckGear4Tune: 70.0,          // Engine cruise pitch in 4th Gear Overdrive (Hz)
+      truckGear4Tune: 123.0,         // Engine cruise pitch in 4th Gear Overdrive (Hz)
       truckLightAngleDeg: 33.0,      // Headlight beam cone angle in degrees (10° .. 65°)
       truckLightDistance: 50.0,      // Headlight throw distance in meters (20m .. 140m)
-      truckLightConeOpacity: 0.35,   // 3D Headlight cone opacity: 0.0 (Off) .. 1.0 (Solid)
+      truckLightConeOpacity: 0.02,   // 3D Headlight cone opacity: 0.0 (Off) .. 1.0 (Solid)
       truckLightColorHex: '#fff1c4', // Headlight color hex
       truckLightRGB: [1.0, 0.945, 0.769],
       fpvEquip: 'sculpt',     // 'sculpt' | 'none' | 'bow' | 'torch'
@@ -11849,7 +11849,7 @@
       const g1Peak = params.truckGear1Tune || 98.0;
       const g2Peak = params.truckGear2Tune || 108.0;
       const g3Peak = params.truckGear3Tune || 114.0;
-      const g4Peak = params.truckGear4Tune || 70.0;
+      const g4Peak = params.truckGear4Tune || 123.0;
       const idleBase = 38.0;
       let baseRpmFreq = idleBase;
       let gearLabel = 'Idle';
@@ -11942,7 +11942,7 @@
         sharedLanternHaloMat.opacity = 0.44 * nightGlow * sharedFlicker;
         sharedLanternGroundPoolMat.opacity = 0.17 * nightGlow * sharedFlicker;
         sharedTruckHeadlightLensMat.emissiveIntensity = 3.8 * nightGlow;
-        sharedTruckHeadlightBeamMat.opacity = clamp(params.truckLightConeOpacity ?? 0.35, 0.0, 1.0) * nightGlow;
+        sharedTruckHeadlightBeamMat.opacity = clamp(params.truckLightConeOpacity ?? 0.02, 0.0, 1.0) * nightGlow;
       } else {
         sharedLanternGlassMat.emissiveIntensity = 0.04;
         sharedLanternHaloMat.opacity = 0.0;
@@ -12264,10 +12264,10 @@
           it.speed = spd;
 
           // 2. Front Wheel Steering, Yaw, Tire Tracking & Spacebar Drift Oversteer Physics
-          const suspStiff = clamp(params.truckSuspension ?? 0.60, 0.10, 1.0);
+          const suspStiff = clamp(params.truckSuspension ?? 0.31, 0.10, 1.0);
           const counterweight = clamp(params.truckCounterweight ?? 0.85, 0.0, 1.0);
-          const tireTracking = clamp(params.truckTireTracking ?? 0.68, 0.10, 1.0);
-          const jumpLift = clamp(params.truckJumpLift ?? 0.50, 0.0, 1.0);
+          const tireTracking = clamp(params.truckTireTracking ?? 1.00, 0.10, 1.0);
+          const jumpLift = clamp(params.truckJumpLift ?? 0.69, 0.0, 1.0);
 
           const targetSteer = steerInput * 0.50;
           it.steerAngle = (it.steerAngle || 0.0) + (targetSteer - (it.steerAngle || 0.0)) * Math.min(1.0, dt * (8.5 + tireTracking * 5.0));
