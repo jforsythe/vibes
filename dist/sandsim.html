@@ -2210,6 +2210,27 @@
       <div class="optics-viewport-wrap">
         <canvas id="human-optics-canvas" width="640" height="480"></canvas>
       </div>
+      <!-- Quick Bird Species & Live Perched Behavior Bar (Shown in Binoculars Birdwatching Mode) -->
+      <div id="optics-birdwatch-controls" style="display:none; width:100%; flex-direction:column; gap:6px; padding:6px 10px; background:rgba(15,23,42,0.72); border:1px solid rgba(74,222,128,0.25); border-radius:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;">
+          <span style="font-size:10.5px; font-weight:700; color:#86efac; text-transform:uppercase; letter-spacing:0.05em;">🔭 Bird Species (All 4 Viewable):</span>
+          <div style="display:flex; gap:5px; flex-wrap:wrap;">
+            <button type="button" class="birdwatch-species-btn" data-species="macaw" style="padding:4px 9px; font-size:11px; font-weight:700;">🦜 Macaw (Tree)</button>
+            <button type="button" class="birdwatch-species-btn" data-species="hawk" style="padding:4px 9px; font-size:11px; font-weight:700;">🦅 Hawk (Cactus)</button>
+            <button type="button" class="birdwatch-species-btn" data-species="owl" style="padding:4px 9px; font-size:11px; font-weight:700;">🦉 Night Owl (Cactus)</button>
+            <button type="button" class="birdwatch-species-btn" data-species="flamingo" style="padding:4px 9px; font-size:11px; font-weight:700;">🦩 Flamingo (Tree)</button>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;">
+          <span style="font-size:10.5px; font-weight:700; color:#bae6fd; text-transform:uppercase; letter-spacing:0.05em;">🎬 Perched Action:</span>
+          <div style="display:flex; gap:5px; flex-wrap:wrap;">
+            <button type="button" class="birdwatch-action-btn active" data-baction="auto" style="padding:3px 8px; font-size:10.5px; font-weight:700;">🔄 Auto Live Cycle</button>
+            <button type="button" class="birdwatch-action-btn" data-baction="LOOK_AROUND" style="padding:3px 8px; font-size:10.5px; font-weight:700;">👀 Sit &amp; Look Around</button>
+            <button type="button" class="birdwatch-action-btn" data-baction="GROOM" style="padding:3px 8px; font-size:10.5px; font-weight:700;">✨ Groom &amp; Preen</button>
+            <button type="button" class="birdwatch-action-btn" data-baction="WING_STRETCH" style="padding:3px 8px; font-size:10.5px; font-weight:700;">🦅 Stretch Out Wings</button>
+          </div>
+        </div>
+      </div>
       <div class="optics-footer">
         <span id="human-optics-footer-note" style="font-size:11px; color:var(--text-dim);">All simulation &amp; gameplay is paused while looking through the optics. Click Exit or press ESC to resume.</span>
         <div style="display:flex; gap:8px;">
@@ -11069,30 +11090,36 @@
       macaw: {
         emoji: '🦜',
         title: '🔭 Scarlet Oasis Macaw (Ara macao)',
-        sub: '8×42 Field Binoculars · Live 3D Canopy Perch & Plumage Study · Wingspan 96 cm',
+        sub: '8×42 Field Binoculars · Perched on 3D Oasis Rainforest Canopy Tree · Wingspan 96 cm',
+        perchLabel: 'Perched on 3D Rainforest Canopy Tree',
         biome: 'jungle'
-      },
-      flamingo: {
-        emoji: '🦩',
-        title: '🔭 Coral Lagoon Flamingo (Phoenicopterus roseus)',
-        sub: '8×42 Field Binoculars · Live 3D Shallow Shoreline Wading Study · Height 135 cm',
-        biome: 'lagoon'
       },
       hawk: {
         emoji: '🦅',
         title: '🔭 Desert Red-Tailed Hawk (Buteo jamaicensis)',
-        sub: '8×42 Field Binoculars · Live 3D High Thermal Soaring Study · Wingspan 128 cm',
+        sub: '8×42 Field Binoculars · Perched on Giant 3D Saguaro Cactus Arm · Wingspan 128 cm',
+        perchLabel: 'Perched on Giant 3D Saguaro Cactus',
         biome: 'desert'
       },
       owl: {
         emoji: '🦉',
         title: '🔭 Saguaro Horned Night Owl (Bubo virginianus)',
-        sub: '8×42 Field Binoculars · Live 3D Cactus Crown Perch Study · Nocturnal Predator',
+        sub: '8×42 Field Binoculars · Perched on Blooming 3D Saguaro Cactus Crown · Nocturnal Raptor',
+        perchLabel: 'Perched on Blooming 3D Saguaro Cactus Crown',
         biome: 'cactus'
+      },
+      flamingo: {
+        emoji: '🦩',
+        title: '🔭 Coral Lagoon Flamingo (Phoenicopterus roseus)',
+        sub: '8×42 Field Binoculars · Perched on Mossy 3D Oasis Mangrove Tree Limb · Height 135 cm',
+        perchLabel: 'Perched on 3D Oasis Mangrove Tree Limb',
+        biome: 'lagoon'
       }
     };
 
     let telescopeTargetCycleIdx = 0;
+    let birdwatchSpeciesCycleIdx = 0;
+    let birdwatchForcedActionMode = 'auto'; // 'auto', 'LOOK_AROUND', 'GROOM', or 'WING_STRETCH'
 
     // Night-Only Telescope Stargazing Routine (35–55 seconds so the player has plenty of time to click the 🔭 bubble!)
     function startVoxelHumanTelescopeRoutine() {
@@ -11106,20 +11133,20 @@
       voxelHuman.bubbleTimer = voxelHuman.routineDuration;
     }
 
-    // Birdwatching with Binoculars Routine (32–48 seconds so the player has plenty of time to click the 🦜/🦅/🦩/🦉 bubble!)
+    // Birdwatching with Binoculars Routine (34–48 seconds so the player has plenty of time to click the 🦜/🦅/🦉/🦩 bubble!)
     function startVoxelHumanBirdwatchingRoutine() {
-      const hr = ((params.timeOfDay % 24) + 24) % 24;
-      const isNight = (hr >= 19.0 || hr < 5.5) || ((skyUniforms.uNightFactor.value || 0) > 0.55);
+      const allBirdKeys = ['macaw', 'hawk', 'owl', 'flamingo'];
+      // Cycle fairly across all 4 bird species in the game so every bird type is viewable!
+      const preferredSpecies = allBirdKeys[birdwatchSpeciesCycleIdx % allBirdKeys.length];
+      birdwatchSpeciesCycleIdx++;
 
-      // Look for an actual living bird on the map (macaw, flamingo, hawk, or owl) to aim the binoculars toward!
-      const birdTypes = isNight ? ['owl', 'flamingo'] : ['macaw', 'flamingo', 'hawk'];
       let chosenBirdAgent = null;
       let bestDist = 1e9;
       if (typeof faunaAgents !== 'undefined') {
+        // First look for a living bird matching the next species in the cycle
         for (let i = 0; i < faunaAgents.length; i++) {
           const a = faunaAgents[i];
-          if (a.state !== 'alive') continue;
-          if (a.type === 'macaw' || a.type === 'flamingo' || a.type === 'hawk' || a.type === 'owl') {
+          if (a.state === 'alive' && a.type === preferredSpecies) {
             const d = Math.hypot(a.x - voxelHuman.x, a.z - voxelHuman.z);
             if (d < bestDist) {
               bestDist = d;
@@ -11136,7 +11163,7 @@
         voxelHuman.targetHeading = voxelHuman.heading;
       } else {
         voxelHuman.birdwatchTargetAgent = null;
-        voxelHuman.birdwatchSpecies = birdTypes[Math.floor(Math.random() * birdTypes.length)];
+        voxelHuman.birdwatchSpecies = preferredSpecies;
       }
 
       const birdMeta = BIRDWATCH_SPECIES_CATALOG[voxelHuman.birdwatchSpecies] || BIRDWATCH_SPECIES_CATALOG.macaw;
@@ -11913,125 +11940,946 @@
     opticsRimLight.position.set(-8, -4, -6);
     opticsScene.add(opticsRimLight);
 
-    // 6. 3D Binoculars Birdwatching Diorama Stage (Real 3D Articulated Bird Models with Flapping Wings, Head Turns & Habitat Props!)
+    // 6. 3D Binoculars Birdwatching Diorama Stage
+    //    - Every bird in the game (Macaw, Hawk, Night Owl, Flamingo) is perched on a detailed 3D Tree or 3D Saguaro Cactus!
+    //    - High-fidelity articulated 3D bird rigs with dual-jointed multi-feather wings, swiveling heads, nibbling beaks & fanning tails.
+    //    - Live 3-State Perched Behavior Engine:
+    //        1. LOOK_AROUND ("Sitting & Looking Around")
+    //        2. GROOM ("Grooming & Preening Plumage")
+    //        3. WING_STRETCH ("Stretching Out Its Wings")
     const binocularsRootGroup = new THREE.Group();
     binocularsRootGroup.visible = false;
     opticsScene.add(binocularsRootGroup);
 
+    // Helper: Build a high-detail 3D Ribbed Saguaro Cactus Perch with Side Arms, Spine Ridges, Crown Blossoms & Desert Backdrop
+    function create3DSaguaroCactusPerchStage(isNightScene, perchOnArm = false) {
+      const envGroup = new THREE.Group();
+      const cactusBaseMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.72 });
+      const cactusRibMat  = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.68 });
+      const cactusDarkMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.82 });
+      const petalMat      = new THREE.MeshStandardMaterial({ color: 0xfef9c3, roughness: 0.42 });
+      const stamenMat     = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.38 });
+
+      // Helper to build a fluted/ribbed saguaro column with rounded dome cap
+      function buildRibbedSaguaroColumn(radius, height, numRibs = 12) {
+        const colGroup = new THREE.Group();
+        const core = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.94, radius * 1.02, height, 16), cactusBaseMat);
+        colGroup.add(core);
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(radius * 0.94, 16, 12), cactusBaseMat);
+        cap.position.y = height * 0.5;
+        colGroup.add(cap);
+
+        for (let r = 0; r < numRibs; r++) {
+          const ang = (r / numRibs) * Math.PI * 2;
+          const rib = new THREE.Mesh(
+            new THREE.CylinderGeometry(radius * 0.14, radius * 0.15, height + radius * 0.6, 6),
+            r % 2 === 0 ? cactusRibMat : cactusDarkMat
+          );
+          rib.position.set(Math.cos(ang) * radius * 0.88, 0.05, Math.sin(ang) * radius * 0.88);
+          colGroup.add(rib);
+        }
+        return colGroup;
+      }
+
+      // Main Giant Saguaro Trunk Column (top crown positioned right at y = -0.82 under the perched bird's talons!)
+      const mainTrunk = buildRibbedSaguaroColumn(0.88, 5.2, 14);
+      mainTrunk.position.set(perchOnArm ? -1.45 : 0.0, perchOnArm ? -2.85 : -3.42, perchOnArm ? -0.35 : 0.0);
+      envGroup.add(mainTrunk);
+
+      // Upward-Curving Saguaro Side Arm #1 (if perchOnArm is true, its crown sits directly at y = -0.82 under the hawk!)
+      const arm1Group = new THREE.Group();
+      const arm1Vert = buildRibbedSaguaroColumn(0.68, 2.9, 10);
+      arm1Vert.position.set(0, 0, 0);
+      arm1Group.add(arm1Vert);
+      const arm1Joint = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.62, 1.45, 12), cactusBaseMat);
+      arm1Joint.rotation.z = Math.PI * 0.44;
+      arm1Joint.position.set(-0.62, -1.25, 0);
+      arm1Group.add(arm1Joint);
+      if (perchOnArm) {
+        arm1Group.position.set(0.0, -2.28, 0.0);
+      } else {
+        arm1Group.position.set(1.62, -2.65, -0.35);
+      }
+      envGroup.add(arm1Group);
+
+      // Upward-Curving Saguaro Side Arm #2 on the opposite side for classic Sonoran Saguaro silhouette
+      const arm2Group = new THREE.Group();
+      const arm2Vert = buildRibbedSaguaroColumn(0.56, 2.5, 10);
+      arm2Group.add(arm2Vert);
+      const arm2Joint = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.54, 1.35, 12), cactusBaseMat);
+      arm2Joint.rotation.z = -Math.PI * 0.44;
+      arm2Joint.position.set(0.58, -1.05, 0);
+      arm2Group.add(arm2Joint);
+      arm2Group.position.set(perchOnArm ? -2.75 : -1.58, -2.95, -0.45);
+      envGroup.add(arm2Group);
+
+      // Ring of Saguaro Crown Blossoms around the cactus apex
+      const bloomAnchors = perchOnArm
+        ? [[-0.42, -0.86, 0.32], [0.44, -0.88, 0.25], [-1.45, -0.25, -0.35], [-1.22, -0.28, -0.15]]
+        : [[-0.58, -0.86, 0.36], [0.56, -0.88, 0.32], [0.48, -0.85, -0.42], [-0.52, -0.87, -0.38], [1.62, -1.20, -0.25]];
+      for (const [bx, by, bz] of bloomAnchors) {
+        const bGroup = new THREE.Group();
+        bGroup.position.set(bx, by, bz);
+        const cup = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.14, 7), petalMat);
+        cup.rotation.x = Math.PI;
+        bGroup.add(cup);
+        const core = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), stamenMat);
+        core.position.y = 0.04;
+        bGroup.add(core);
+        envGroup.add(bGroup);
+      }
+
+      // Distant Desert Dune Ridges & Background Saguaro Silhouette for depth parallax
+      const duneMat = new THREE.MeshStandardMaterial({
+        color: isNightScene ? 0x1e1b2e : 0xd97706,
+        roughness: 0.92
+      });
+      const bgDune1 = new THREE.Mesh(new THREE.SphereGeometry(14.0, 24, 14), duneMat);
+      bgDune1.scale.set(1.8, 0.32, 0.6);
+      bgDune1.position.set(-4.5, -5.8, -14.0);
+      envGroup.add(bgDune1);
+
+      const bgDune2 = new THREE.Mesh(new THREE.SphereGeometry(12.0, 24, 14), duneMat);
+      bgDune2.scale.set(1.7, 0.28, 0.6);
+      bgDune2.position.set(5.5, -6.1, -16.5);
+      envGroup.add(bgDune2);
+
+      return envGroup;
+    }
+
+    // Helper: Build a high-detail 3D Oasis Canopy Tree & Mossy Branch Perch with Lush Tropical Foliage & Blossoms
+    function create3DOasisTreePerchStage(isMangroveLimb = false) {
+      const envGroup = new THREE.Group();
+      const barkMat     = new THREE.MeshStandardMaterial({ color: 0x5c3a1d, roughness: 0.88 });
+      const darkBarkMat = new THREE.MeshStandardMaterial({ color: 0x3f2712, roughness: 0.92 });
+      const mossMat     = new THREE.MeshStandardMaterial({ color: 0x4d7c0f, roughness: 0.78 });
+      const leafMat1    = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.62 });
+      const leafMat2    = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.58 });
+      const leafMat3    = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.55 });
+      const flowerMat   = new THREE.MeshStandardMaterial({ color: 0xf43f5e, roughness: 0.45 });
+
+      // Main Vertical/Leaning Rainforest Tree Trunk on one side of the frame
+      const trunkX = isMangroveLimb ? 2.45 : -2.35;
+      const mainTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.88, 8.5, 12), darkBarkMat);
+      mainTrunk.position.set(trunkX, -0.5, -0.85);
+      mainTrunk.rotation.z = isMangroveLimb ? 0.14 : -0.12;
+      envGroup.add(mainTrunk);
+
+      // Main Gnarled Horizontal Perch Branch extending from the tree trunk right under the bird's talons (top surface at y = -0.78)
+      const branchLen = 7.4;
+      const perchBranch = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.30, branchLen, 12), barkMat);
+      perchBranch.rotation.z = Math.PI * 0.5 + (isMangroveLimb ? -0.05 : 0.06);
+      perchBranch.position.set(0.0, -1.00, 0.0);
+      envGroup.add(perchBranch);
+
+      // Mossy bark patches along the top of the tree branch
+      for (const mx of [-1.4, -0.5, 0.45, 1.35]) {
+        const moss = new THREE.Mesh(new THREE.SphereGeometry(0.23, 10, 8), mossMat);
+        moss.scale.set(1.8, 0.42, 0.92);
+        moss.position.set(mx, -0.82 + (isMangroveLimb ? mx * 0.05 : -mx * 0.06), 0.04);
+        envGroup.add(moss);
+      }
+
+      // Secondary Forking Tree Bough & Twigs
+      const subBranch = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.18, 3.2, 10), barkMat);
+      subBranch.rotation.set(0.18, 0.0, isMangroveLimb ? 0.82 : -0.78);
+      subBranch.position.set(isMangroveLimb ? -1.45 : 1.55, -0.25, -0.35);
+      envGroup.add(subBranch);
+
+      // Lush 3D Tree Canopy Foliage Clusters & Tropical Fronds framing the perched bird
+      const foliageClusters = [
+        [-2.4, 1.85, -1.2, 1.35, leafMat1],
+        [-1.7, 2.25, -0.9, 1.10, leafMat2],
+        [ 2.3, 1.75, -1.1, 1.25, leafMat1],
+        [ 1.8, 0.45, -0.7, 0.85, leafMat3],
+        [-2.1, -0.35, -0.6, 0.90, leafMat2],
+        [ 2.5, -0.55, -0.5, 0.95, leafMat2]
+      ];
+      for (const [fx, fy, fz, fRad, fMat] of foliageClusters) {
+        const leafSphere = new THREE.Mesh(new THREE.DodecahedronGeometry(fRad, 1), fMat);
+        leafSphere.scale.set(1.25, 0.78, 0.95);
+        leafSphere.position.set(fx, fy, fz);
+        envGroup.add(leafSphere);
+      }
+
+      // 3D Tropical Frond Leaves sprouting from the perch branch
+      const frondOffsets = [
+        [-1.65, -0.72, 0.15, 0.4, 0.5],
+        [-1.42, -0.68, -0.18, -0.3, 0.7],
+        [ 1.52, -0.65, 0.12, 0.35, -0.6],
+        [ 1.75, -0.58, -0.20, -0.25, -0.45]
+      ];
+      for (const [lx, ly, lz, rx, rz] of frondOffsets) {
+        const leafGeo = new THREE.ConeGeometry(0.24, 0.85, 5);
+        leafGeo.scale(1.0, 1.0, 0.25);
+        const leaf = new THREE.Mesh(leafGeo, leafMat3);
+        leaf.position.set(lx, ly, lz);
+        leaf.rotation.set(rx, 0.2, rz);
+        envGroup.add(leaf);
+      }
+
+      // Tropical tree blossoms on the branch
+      for (const [bx, by, bz] of [[-1.50, -0.68, 0.22], [1.48, -0.66, 0.20]]) {
+        const bloom = new THREE.Mesh(new THREE.DodecahedronGeometry(0.13, 0), flowerMat);
+        bloom.position.set(bx, by, bz);
+        envGroup.add(bloom);
+      }
+
+      return envGroup;
+    }
+
+    // Helper: Build a Dual-Jointed Articulated 3D Feathered Wing (Shoulder Pivot -> Inner Wing + Wrist Pivot -> Outer Primary Feathers)
+    function createArticulated3DBirdWing(side, innerSpan, outerSpan, chord, shoulderMat, covertMat, primaryMat) {
+      const shoulderPivot = new THREE.Group();
+
+      // Inner Wing Section (Shoulder Coverts & Secondary Feathers)
+      const innerGroup = new THREE.Group();
+      shoulderPivot.add(innerGroup);
+
+      const shoulderGeo = new THREE.SphereGeometry(chord * 0.46, 10, 8);
+      shoulderGeo.scale(1.35, 0.38, 1.05);
+      shoulderGeo.translate(side * innerSpan * 0.32, 0.02, 0.02);
+      innerGroup.add(new THREE.Mesh(shoulderGeo, shoulderMat));
+
+      // 4 overlapping secondary feather blades on the inner wing
+      for (let i = 0; i < 4; i++) {
+        const t = i / 3;
+        const fGeo = new THREE.BoxGeometry(innerSpan * 0.32, 0.035, chord * (0.82 + t * 0.18));
+        fGeo.translate(side * (innerSpan * (0.22 + t * 0.65)), -i * 0.008, -chord * 0.22);
+        const fMesh = new THREE.Mesh(fGeo, i < 2 ? shoulderMat : covertMat);
+        fMesh.rotation.y = side * (-0.06 * i);
+        innerGroup.add(fMesh);
+      }
+
+      // Wrist / Outer Wing Pivot (Primary Flight Feathers that fan open when stretching wings!)
+      const wristPivot = new THREE.Group();
+      wristPivot.position.set(side * innerSpan * 0.88, 0, 0.02);
+      shoulderPivot.add(wristPivot);
+
+      const numPrimaries = 5;
+      const primaryFeathers = [];
+      for (let p = 0; p < numPrimaries; p++) {
+        const pt = p / (numPrimaries - 1);
+        const pLen = outerSpan * (1.02 - pt * 0.28);
+        const pGroup = new THREE.Group();
+        pGroup.position.set(side * (pt * outerSpan * 0.16), -p * 0.006, -pt * chord * 0.14);
+
+        const bladeGeo = new THREE.ConeGeometry(chord * 0.19, pLen, 5);
+        bladeGeo.rotateZ(side * (-Math.PI * 0.5));
+        bladeGeo.scale(1.0, 0.22, 0.65);
+        bladeGeo.translate(side * (pLen * 0.48), 0, -chord * 0.08);
+        const bladeMesh = new THREE.Mesh(bladeGeo, p === 0 ? covertMat : primaryMat);
+        pGroup.add(bladeMesh);
+
+        wristPivot.add(pGroup);
+        primaryFeathers.push(pGroup);
+      }
+
+      return {
+        shoulderPivot,
+        wristPivot,
+        primaryFeathers
+      };
+    }
+
+    // Helper: Build Perched Bird Legs & Curved Talons gripping the tree branch or cactus crown at y = 0
+    function createPerchedBirdTalons(legColorHex, talonColorHex, legHeight = 0.28, legSpread = 0.13) {
+      const legsGroup = new THREE.Group();
+      const legMat = new THREE.MeshStandardMaterial({ color: legColorHex, roughness: 0.55 });
+      const talonMat = new THREE.MeshStandardMaterial({ color: talonColorHex, roughness: 0.45 });
+
+      for (const side of [-1, 1]) {
+        const xOff = side * legSpread;
+        const shank = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.026, legHeight, 8), legMat);
+        shank.position.set(xOff, legHeight * 0.5, 0.02);
+        shank.rotation.x = -0.10;
+        legsGroup.add(shank);
+
+        // 3 forward toes + 1 rear hallux claw gripping around the branch/cactus crown
+        for (const toeAng of [-0.32, 0.0, 0.32]) {
+          const toe = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.13, 6), talonMat);
+          toe.rotation.x = Math.PI * 0.62;
+          toe.rotation.z = toeAng;
+          toe.position.set(xOff + Math.sin(toeAng) * 0.03, 0.02, 0.08);
+          legsGroup.add(toe);
+        }
+        const rearToe = new THREE.Mesh(new THREE.ConeGeometry(0.020, 0.10, 6), talonMat);
+        rearToe.rotation.x = -Math.PI * 0.58;
+        rearToe.position.set(xOff, 0.02, -0.05);
+        legsGroup.add(rearToe);
+      }
+      return legsGroup;
+    }
+
     const birdDioramas3D = {};
     {
-      // (A) 3D Scarlet Macaw Diorama
+      // ========================================================================
+      // (A) SCARLET OASIS MACAW (Ara macao) — Perched on a 3D Rainforest Canopy Tree Branch
+      // ========================================================================
       const macawStage = new THREE.Group();
-      const macawPivot = new THREE.Group();
-      macawPivot.scale.setScalar(2.65);
-      macawPivot.rotation.y = 0.58;
-      macawStage.add(macawPivot);
+      macawStage.add(create3DOasisTreePerchStage(false));
 
-      const mBodyMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.48 });
-      const mWingMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.50 });
-      const mTipMat  = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.50 });
-      const mBeakMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.35 });
+      const macawRoot = new THREE.Group();
+      macawRoot.position.set(0.0, -0.78, 0.08);
+      macawRoot.scale.setScalar(2.15);
+      macawRoot.rotation.y = 0.28;
+      macawStage.add(macawRoot);
 
-      const mBody = new THREE.Mesh(createMacawBodyGeometry(), mBodyMat);
-      macawPivot.add(mBody);
-      const mHead = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), mBodyMat);
-      mHead.position.set(0, 0.08, 0.36);
-      macawPivot.add(mHead);
-      const mBeak = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.22, 8), mBeakMat);
-      mBeak.rotation.x = Math.PI * 0.62;
-      mBeak.position.set(0, 0.04, 0.52);
-      macawPivot.add(mBeak);
+      const mRedMat    = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.46 });
+      const mGoldMat   = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.48 });
+      const mBlueMat   = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.48 });
+      const mWhiteMat  = new THREE.MeshStandardMaterial({ color: 0xfef2f2, roughness: 0.52 });
+      const mIvoryMat  = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.32 });
+      const mDarkMat   = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.42 });
 
-      const mWingL = new THREE.Mesh(createBirdWingGeometry(0.78, 0.32, 1), mWingMat);
-      const mWingR = new THREE.Mesh(createBirdWingGeometry(0.78, 0.32, -1), mWingMat);
-      const mTipL = new THREE.Mesh(createBirdWingGeometry(0.42, 0.24, 1), mTipMat);
-      mTipL.position.x = 0.42;
-      mWingL.add(mTipL);
-      const mTipR = new THREE.Mesh(createBirdWingGeometry(0.42, 0.24, -1), mTipMat);
-      mTipR.position.x = -0.42;
-      mWingR.add(mTipR);
-      macawPivot.add(mWingL, mWingR);
+      macawRoot.add(createPerchedBirdTalons(0x334155, 0x0f172a, 0.25, 0.12));
 
-      // 3D Tropical Jungle Branch & Palm Fronds
-      const branchMesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.14, 0.18, 6.5, 10),
-        new THREE.MeshStandardMaterial({ color: 0x5c3a1d, roughness: 0.85 })
-      );
-      branchMesh.rotation.z = Math.PI * 0.47;
-      branchMesh.position.set(0, -1.35, -0.3);
-      macawStage.add(branchMesh);
+      const mBodyPivot = new THREE.Group();
+      mBodyPivot.position.set(0, 0.26, 0);
+      macawRoot.add(mBodyPivot);
 
-      macawStage.userData = { pivot: macawPivot, wingL: mWingL, wingR: mWingR, head: mHead };
+      // Sculpted Scarlet Torso & Breast
+      const mTorsoGeo = new THREE.SphereGeometry(0.24, 14, 12);
+      mTorsoGeo.scale(0.88, 1.38, 0.92);
+      mTorsoGeo.rotateX(0.28);
+      mTorsoGeo.translate(0, 0.18, 0.02);
+      mBodyPivot.add(new THREE.Mesh(mTorsoGeo, mRedMat));
+
+      // Blue Lower Back / Rump
+      const mRumpGeo = new THREE.SphereGeometry(0.17, 10, 8);
+      mRumpGeo.scale(0.85, 0.95, 1.1);
+      mRumpGeo.translate(0, 0.02, -0.14);
+      mBodyPivot.add(new THREE.Mesh(mRumpGeo, mBlueMat));
+
+      // Articulated Multi-Feather Macaw Tail (Fans out during Wing Stretch!)
+      const mTailPivot = new THREE.Group();
+      mTailPivot.position.set(0, -0.02, -0.20);
+      mBodyPivot.add(mTailPivot);
+      for (let tf = -1; tf <= 1; tf++) {
+        const tLen = tf === 0 ? 0.95 : 0.78;
+        const tGeo = new THREE.ConeGeometry(0.065, tLen, 6);
+        tGeo.rotateX(-Math.PI * 0.82);
+        tGeo.scale(1.0, 0.28, 1.0);
+        tGeo.translate(tf * 0.055, -tLen * 0.42, -tLen * 0.24);
+        const tMesh = new THREE.Mesh(tGeo, tf === 0 ? mRedMat : mBlueMat);
+        tMesh.rotation.z = tf * 0.08;
+        mTailPivot.add(tMesh);
+      }
+
+      // Articulated Macaw Neck & Head with Bare White Cheek Patch, Gleaming Eyes & Nibbling Beak
+      const mHeadPivot = new THREE.Group();
+      mHeadPivot.position.set(0, 0.46, 0.10);
+      mBodyPivot.add(mHeadPivot);
+
+      const mSkull = new THREE.Mesh(new THREE.SphereGeometry(0.165, 14, 12), mRedMat);
+      mSkull.scale.set(0.92, 1.05, 1.08);
+      mSkull.position.set(0, 0.08, 0.04);
+      mHeadPivot.add(mSkull);
+
+      for (const side of [-1, 1]) {
+        const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), mWhiteMat);
+        cheek.scale.set(0.45, 0.88, 1.05);
+        cheek.position.set(side * 0.125, 0.08, 0.09);
+        mHeadPivot.add(cheek);
+
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 8), mDarkMat);
+        eye.position.set(side * 0.145, 0.10, 0.11);
+        mHeadPivot.add(eye);
+      }
+
+      // Hooked Ivory Upper Mandible
+      const mUpperBeakGeo = new THREE.ConeGeometry(0.078, 0.22, 8);
+      mUpperBeakGeo.rotateX(Math.PI * 0.68);
+      mUpperBeakGeo.translate(0, 0.06, 0.24);
+      mHeadPivot.add(new THREE.Mesh(mUpperBeakGeo, mIvoryMat));
+
+      // Articulated Black Lower Mandible (opens/nibbles during preening!)
+      const mBeakLowerPivot = new THREE.Group();
+      mBeakLowerPivot.position.set(0, 0.02, 0.14);
+      mHeadPivot.add(mBeakLowerPivot);
+      const mLowerBeakGeo = new THREE.ConeGeometry(0.055, 0.13, 7);
+      mLowerBeakGeo.rotateX(Math.PI * 0.56);
+      mLowerBeakGeo.translate(0, -0.01, 0.06);
+      mBeakLowerPivot.add(new THREE.Mesh(mLowerBeakGeo, mDarkMat));
+
+      // Dual-Jointed Articulated Tricolor Wings (Scarlet Shoulder + Gold Coverts + Royal Blue Primaries)
+      const mWingL = createArticulated3DBirdWing(1, 0.42, 0.54, 0.28, mRedMat, mGoldMat, mBlueMat);
+      mWingL.shoulderPivot.position.set(0.19, 0.34, 0.04);
+      mBodyPivot.add(mWingL.shoulderPivot);
+
+      const mWingR = createArticulated3DBirdWing(-1, 0.42, 0.54, 0.28, mRedMat, mGoldMat, mBlueMat);
+      mWingR.shoulderPivot.position.set(-0.19, 0.34, 0.04);
+      mBodyPivot.add(mWingR.shoulderPivot);
+
+      macawStage.userData = {
+        species: 'macaw',
+        rootPivot: macawRoot,
+        bodyPivot: mBodyPivot,
+        headPivot: mHeadPivot,
+        beakLowerPivot: mBeakLowerPivot,
+        tailPivot: mTailPivot,
+        wingL: mWingL,
+        wingR: mWingR,
+        baseRotY: 0.28,
+        baseBodyY: 0.26
+      };
       birdDioramas3D.macaw = macawStage;
       binocularsRootGroup.add(macawStage);
 
-      // (B) 3D Coral Flamingo Diorama
-      const flamStage = new THREE.Group();
-      const flamPivot = new THREE.Group();
-      flamPivot.scale.setScalar(1.95);
-      flamPivot.position.y = -1.65;
-      flamPivot.rotation.y = 0.65;
-      flamStage.add(flamPivot);
-      const fMesh = new THREE.Mesh(
-        createFlamingoGeometry(),
-        new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.52 })
-      );
-      flamPivot.add(fMesh);
-      const waterDisc = new THREE.Mesh(
-        new THREE.CylinderGeometry(4.2, 4.2, 0.12, 32),
-        new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.18, metalness: 0.25 })
-      );
-      waterDisc.position.y = -1.55;
-      flamStage.add(waterDisc);
-      flamStage.userData = { pivot: flamPivot, waterDisc };
-      birdDioramas3D.flamingo = flamStage;
-      binocularsRootGroup.add(flamStage);
-
-      // (C) 3D Desert Red-Tailed Hawk Diorama
+      // ========================================================================
+      // (B) DESERT RED-TAILED HAWK (Buteo jamaicensis) — Perched on a Giant 3D Saguaro Cactus Arm
+      // ========================================================================
       const hawkStage = new THREE.Group();
-      const hawkPivot = new THREE.Group();
-      hawkPivot.scale.setScalar(2.35);
-      hawkPivot.rotation.set(0.22, 0.48, -0.18);
-      hawkStage.add(hawkPivot);
-      const hMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.58 });
-      const hWingMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.62 });
-      const hBody = new THREE.Mesh(createHawkBodyGeometry(), hMat);
-      const hWingL = new THREE.Mesh(createBirdWingGeometry(1.15, 0.38, 1), hWingMat);
-      const hWingR = new THREE.Mesh(createBirdWingGeometry(1.15, 0.38, -1), hWingMat);
-      hawkPivot.add(hBody, hWingL, hWingR);
-      hawkStage.userData = { pivot: hawkPivot, wingL: hWingL, wingR: hWingR };
+      hawkStage.add(create3DSaguaroCactusPerchStage(false, true));
+
+      const hawkRoot = new THREE.Group();
+      hawkRoot.position.set(0.0, -0.78, 0.06);
+      hawkRoot.scale.setScalar(2.15);
+      hawkRoot.rotation.y = -0.24;
+      hawkStage.add(hawkRoot);
+
+      const hUmberMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.56 });
+      const hTawnyMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.58 });
+      const hCreamMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.62 });
+      const hRustMat  = new THREE.MeshStandardMaterial({ color: 0xc2410c, roughness: 0.52 });
+      const hSlateMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.42 });
+      const hGoldMat  = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.38 });
+
+      hawkRoot.add(createPerchedBirdTalons(0xf59e0b, 0x0f172a, 0.28, 0.14));
+
+      const hBodyPivot = new THREE.Group();
+      hBodyPivot.position.set(0, 0.28, 0);
+      hawkRoot.add(hBodyPivot);
+
+      // Broad Raptor Torso (Umber Back + Cream Breast with Streaked Belly Band)
+      const hBackGeo = new THREE.SphereGeometry(0.25, 14, 12);
+      hBackGeo.scale(0.95, 1.35, 0.92);
+      hBackGeo.rotateX(0.25);
+      hBackGeo.translate(0, 0.18, 0.0);
+      hBodyPivot.add(new THREE.Mesh(hBackGeo, hUmberMat));
+
+      const hBreastGeo = new THREE.SphereGeometry(0.22, 12, 10);
+      hBreastGeo.scale(0.84, 1.18, 0.75);
+      hBreastGeo.rotateX(0.22);
+      hBreastGeo.translate(0, 0.19, 0.09);
+      hBodyPivot.add(new THREE.Mesh(hBreastGeo, hCreamMat));
+
+      // Belly band streaks on the hawk's chest
+      for (let sb = -2; sb <= 2; sb++) {
+        const streak = new THREE.Mesh(new THREE.SphereGeometry(0.032, 6, 5), hUmberMat);
+        streak.scale.set(0.7, 1.6, 0.5);
+        streak.position.set(sb * 0.055, 0.16 + Math.abs(sb) * 0.01, 0.24);
+        hBodyPivot.add(streak);
+      }
+
+      // Iconic Brick-Red Fan Tail (Buteo jamaicensis)
+      const hTailPivot = new THREE.Group();
+      hTailPivot.position.set(0, -0.02, -0.18);
+      hBodyPivot.add(hTailPivot);
+      for (let tf = -2; tf <= 2; tf++) {
+        const tGeo = new THREE.BoxGeometry(0.085, 0.025, 0.56);
+        tGeo.translate(tf * 0.042, -0.22, -0.16);
+        const tMesh = new THREE.Mesh(tGeo, hRustMat);
+        tMesh.rotation.x = -0.88;
+        tMesh.rotation.z = tf * 0.09;
+        hTailPivot.add(tMesh);
+      }
+
+      // Fierce Raptor Head with Supraorbital Brow Ridge, Golden Eyes & Hooked Beak
+      const hHeadPivot = new THREE.Group();
+      hHeadPivot.position.set(0, 0.48, 0.08);
+      hBodyPivot.add(hHeadPivot);
+
+      const hSkull = new THREE.Mesh(new THREE.SphereGeometry(0.165, 14, 12), hUmberMat);
+      hSkull.scale.set(0.96, 0.98, 1.12);
+      hSkull.position.set(0, 0.07, 0.04);
+      hHeadPivot.add(hSkull);
+
+      for (const side of [-1, 1]) {
+        const brow = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.025, 0.11), hUmberMat);
+        brow.position.set(side * 0.125, 0.125, 0.10);
+        brow.rotation.z = side * -0.18;
+        hHeadPivot.add(brow);
+
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.030, 8, 8), hGoldMat);
+        eye.position.set(side * 0.132, 0.095, 0.11);
+        hHeadPivot.add(eye);
+      }
+
+      // Yellow Cere & Hooked Slate-Black Raptor Beak
+      const hCere = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), hGoldMat);
+      hCere.position.set(0, 0.07, 0.19);
+      hHeadPivot.add(hCere);
+
+      const hHookBeakGeo = new THREE.ConeGeometry(0.058, 0.18, 8);
+      hHookBeakGeo.rotateX(Math.PI * 0.68);
+      hHookBeakGeo.translate(0, 0.04, 0.26);
+      hHeadPivot.add(new THREE.Mesh(hHookBeakGeo, hSlateMat));
+
+      const hBeakLowerPivot = new THREE.Group();
+      hBeakLowerPivot.position.set(0, 0.02, 0.17);
+      hHeadPivot.add(hBeakLowerPivot);
+      const hLowerGeo = new THREE.ConeGeometry(0.042, 0.12, 6);
+      hLowerGeo.rotateX(Math.PI * 0.54);
+      hLowerGeo.translate(0, -0.01, 0.05);
+      hBeakLowerPivot.add(new THREE.Mesh(hLowerGeo, hSlateMat));
+
+      // Broad Dual-Jointed Articulated Raptor Wings
+      const hWingL = createArticulated3DBirdWing(1, 0.48, 0.62, 0.32, hUmberMat, hTawnyMat, hSlateMat);
+      hWingL.shoulderPivot.position.set(0.21, 0.36, 0.03);
+      hBodyPivot.add(hWingL.shoulderPivot);
+
+      const hWingR = createArticulated3DBirdWing(-1, 0.48, 0.62, 0.32, hUmberMat, hTawnyMat, hSlateMat);
+      hWingR.shoulderPivot.position.set(-0.21, 0.36, 0.03);
+      hBodyPivot.add(hWingR.shoulderPivot);
+
+      hawkStage.userData = {
+        species: 'hawk',
+        rootPivot: hawkRoot,
+        bodyPivot: hBodyPivot,
+        headPivot: hHeadPivot,
+        beakLowerPivot: hBeakLowerPivot,
+        tailPivot: hTailPivot,
+        wingL: hWingL,
+        wingR: hWingR,
+        baseRotY: -0.24,
+        baseBodyY: 0.28
+      };
       birdDioramas3D.hawk = hawkStage;
       binocularsRootGroup.add(hawkStage);
 
-      // (D) 3D Horned Night Owl Perched on a 3D Saguaro Cactus Crown
+      // ========================================================================
+      // (C) SAGUARO HORNED NIGHT OWL (Bubo virginianus) — Perched on a Blooming 3D Saguaro Cactus Crown
+      // ========================================================================
       const owlStage = new THREE.Group();
-      const owlPivot = new THREE.Group();
-      owlPivot.scale.setScalar(2.65);
-      owlPivot.position.y = 0.25;
-      owlPivot.rotation.y = 0.25;
-      owlStage.add(owlPivot);
+      owlStage.add(create3DSaguaroCactusPerchStage(true, false));
 
-      const oMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.68 });
-      const oBody = new THREE.Mesh(createOwlBodyGeometry(), oMat);
-      const oWingL = new THREE.Mesh(createBirdWingGeometry(0.65, 0.30, 1), oMat);
-      const oWingR = new THREE.Mesh(createBirdWingGeometry(0.65, 0.30, -1), oMat);
-      oWingL.rotation.z = -0.82;
-      oWingR.rotation.z = 0.82;
-      const oEyes = new THREE.Mesh(
-        createOwlGlowingEyesGeometry(),
-        new THREE.MeshBasicMaterial({ color: 0xef4444 })
-      );
-      owlPivot.add(oBody, oWingL, oWingR, oEyes);
+      const owlRoot = new THREE.Group();
+      owlRoot.position.set(0.0, -0.78, 0.06);
+      owlRoot.scale.setScalar(2.22);
+      owlRoot.rotation.y = 0.16;
+      owlStage.add(owlRoot);
 
-      const cactusCrown = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.95, 1.05, 3.2, 14),
-        new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.78 })
-      );
-      cactusCrown.position.y = -1.95;
-      owlStage.add(cactusCrown);
-      owlStage.userData = { pivot: owlPivot, wingL: oWingL, wingR: oWingR, eyes: oEyes };
+      const oBarkMat  = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.68 });
+      const oAshMat   = new THREE.MeshStandardMaterial({ color: 0xa8a29e, roughness: 0.66 });
+      const oDiscMat  = new THREE.MeshStandardMaterial({ color: 0xd6d3d1, roughness: 0.62 });
+      const oDarkMat  = new THREE.MeshStandardMaterial({ color: 0x292524, roughness: 0.55 });
+      const oEyeMat   = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+      const oPupilMat = new THREE.MeshBasicMaterial({ color: 0x090d16 });
+
+      owlRoot.add(createPerchedBirdTalons(0xd6d3d1, 0x1c1917, 0.22, 0.14));
+
+      const oBodyPivot = new THREE.Group();
+      oBodyPivot.position.set(0, 0.22, 0);
+      owlRoot.add(oBodyPivot);
+
+      // Plump Feathered Owl Torso with Barred Chest Plumage
+      const oTorsoGeo = new THREE.SphereGeometry(0.27, 14, 12);
+      oTorsoGeo.scale(1.02, 1.28, 0.96);
+      oTorsoGeo.translate(0, 0.18, 0.0);
+      oBodyPivot.add(new THREE.Mesh(oTorsoGeo, oBarkMat));
+
+      const oChestGeo = new THREE.SphereGeometry(0.24, 12, 10);
+      oChestGeo.scale(0.92, 1.14, 0.82);
+      oChestGeo.translate(0, 0.18, 0.08);
+      oBodyPivot.add(new THREE.Mesh(oChestGeo, oAshMat));
+
+      // Horizontal dark barring across the owl's breast
+      for (let row = 0; row < 4; row++) {
+        for (let col = -1; col <= 1; col++) {
+          const bar = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.018, 0.03), oDarkMat);
+          bar.position.set(col * 0.085, 0.08 + row * 0.065, 0.25 - Math.abs(col) * 0.02);
+          oBodyPivot.add(bar);
+        }
+      }
+
+      // Articulated Owl Tail
+      const oTailPivot = new THREE.Group();
+      oTailPivot.position.set(0, 0.0, -0.18);
+      oBodyPivot.add(oTailPivot);
+      for (let tf = -1; tf <= 1; tf++) {
+        const tGeo = new THREE.BoxGeometry(0.095, 0.028, 0.42);
+        tGeo.translate(tf * 0.05, -0.15, -0.12);
+        const tMesh = new THREE.Mesh(tGeo, oBarkMat);
+        tMesh.rotation.x = -0.85;
+        tMesh.rotation.z = tf * 0.08;
+        oTailPivot.add(tMesh);
+      }
+
+      // Articulated Swiveling Owl Head with Facial Discs, Horned Ear Tufts & Large Luminous Amber Eyes
+      const oHeadPivot = new THREE.Group();
+      oHeadPivot.position.set(0, 0.44, 0.04);
+      oBodyPivot.add(oHeadPivot);
+
+      const oSkull = new THREE.Mesh(new THREE.SphereGeometry(0.20, 14, 12), oBarkMat);
+      oSkull.scale.set(1.12, 0.96, 0.98);
+      oSkull.position.set(0, 0.08, 0.02);
+      oHeadPivot.add(oSkull);
+
+      for (const side of [-1, 1]) {
+        // Facial radar disc
+        const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.03, 12), oDiscMat);
+        disc.rotation.x = Math.PI * 0.5;
+        disc.rotation.z = side * 0.12;
+        disc.position.set(side * 0.095, 0.085, 0.165);
+        oHeadPivot.add(disc);
+
+        // Luminous Golden-Amber Nocturnal Eye + Dark Pupil
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.052, 10, 10), oEyeMat);
+        eye.position.set(side * 0.095, 0.088, 0.185);
+        oHeadPivot.add(eye);
+
+        const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 8), oPupilMat);
+        pupil.position.set(side * 0.095, 0.088, 0.218);
+        oHeadPivot.add(pupil);
+
+        // Prominent Horned Ear Tuft ("Plumicorns")
+        const tuftGeo = new THREE.ConeGeometry(0.052, 0.19, 6);
+        const tuft = new THREE.Mesh(tuftGeo, oDarkMat);
+        tuft.position.set(side * 0.16, 0.23, 0.04);
+        tuft.rotation.z = side * -0.42;
+        tuft.rotation.x = -0.15;
+        oHeadPivot.add(tuft);
+      }
+
+      // White Throat Patch & Hooked Beak
+      const throatPatch = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), oDiscMat);
+      throatPatch.scale.set(1.2, 0.55, 0.65);
+      throatPatch.position.set(0, -0.02, 0.16);
+      oHeadPivot.add(throatPatch);
+
+      const oBeakGeo = new THREE.ConeGeometry(0.045, 0.13, 7);
+      oBeakGeo.rotateX(Math.PI * 0.65);
+      oBeakGeo.translate(0, 0.045, 0.22);
+      oHeadPivot.add(new THREE.Mesh(oBeakGeo, oDarkMat));
+
+      const oBeakLowerPivot = new THREE.Group();
+      oBeakLowerPivot.position.set(0, 0.02, 0.15);
+      oHeadPivot.add(oBeakLowerPivot);
+      const oLowerGeo = new THREE.ConeGeometry(0.032, 0.09, 6);
+      oLowerGeo.rotateX(Math.PI * 0.55);
+      oLowerGeo.translate(0, -0.01, 0.04);
+      oBeakLowerPivot.add(new THREE.Mesh(oLowerGeo, oDarkMat));
+
+      // Rounded Silent-Flight Articulated Owl Wings
+      const oWingL = createArticulated3DBirdWing(1, 0.44, 0.54, 0.34, oBarkMat, oAshMat, oDarkMat);
+      oWingL.shoulderPivot.position.set(0.23, 0.32, 0.02);
+      oBodyPivot.add(oWingL.shoulderPivot);
+
+      const oWingR = createArticulated3DBirdWing(-1, 0.44, 0.54, 0.34, oBarkMat, oAshMat, oDarkMat);
+      oWingR.shoulderPivot.position.set(-0.23, 0.32, 0.02);
+      oBodyPivot.add(oWingR.shoulderPivot);
+
+      owlStage.userData = {
+        species: 'owl',
+        rootPivot: owlRoot,
+        bodyPivot: oBodyPivot,
+        headPivot: oHeadPivot,
+        beakLowerPivot: oBeakLowerPivot,
+        tailPivot: oTailPivot,
+        wingL: oWingL,
+        wingR: oWingR,
+        baseRotY: 0.16,
+        baseBodyY: 0.22
+      };
       birdDioramas3D.owl = owlStage;
       binocularsRootGroup.add(owlStage);
+
+      // ========================================================================
+      // (D) CORAL LAGOON FLAMINGO (Phoenicopterus roseus) — Perched on a 3D Oasis Mangrove Tree Limb
+      // ========================================================================
+      const flamStage = new THREE.Group();
+      flamStage.add(create3DOasisTreePerchStage(true));
+
+      const flamRoot = new THREE.Group();
+      flamRoot.position.set(0.0, -0.78, 0.06);
+      flamRoot.scale.setScalar(1.92);
+      flamRoot.rotation.y = 0.38;
+      flamStage.add(flamRoot);
+
+      const fRoseMat    = new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.48 });
+      const fCoralMat   = new THREE.MeshStandardMaterial({ color: 0xfb7185, roughness: 0.46 });
+      const fPalePink   = new THREE.MeshStandardMaterial({ color: 0xfce7f3, roughness: 0.45 });
+      const fCrimsonMat = new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.48 });
+      const fBlackMat   = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.42 });
+      const fEyeMat     = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+
+      // Long Slender Pink Stilt Legs with Knobbed Knees gripping the Mossy Mangrove Tree Limb
+      const fLegsGroup = createPerchedBirdTalons(0xf472b6, 0xbe185d, 0.72, 0.10);
+      for (const side of [-1, 1]) {
+        const knee = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 8), fCoralMat);
+        knee.position.set(side * 0.10, 0.38, 0.01);
+        fLegsGroup.add(knee);
+      }
+      flamRoot.add(fLegsGroup);
+
+      const fBodyPivot = new THREE.Group();
+      fBodyPivot.position.set(0, 0.72, 0);
+      flamRoot.add(fBodyPivot);
+
+      // Sculpted Oval Flamingo Body
+      const fTorsoGeo = new THREE.SphereGeometry(0.24, 14, 12);
+      fTorsoGeo.scale(0.88, 0.96, 1.38);
+      fTorsoGeo.rotateX(0.12);
+      fTorsoGeo.translate(0, 0.12, -0.02);
+      fBodyPivot.add(new THREE.Mesh(fTorsoGeo, fRoseMat));
+
+      // Drooping Coral Tail Plumes
+      const fTailPivot = new THREE.Group();
+      fTailPivot.position.set(0, 0.06, -0.28);
+      fBodyPivot.add(fTailPivot);
+      for (let tf = -1; tf <= 1; tf++) {
+        const tGeo = new THREE.ConeGeometry(0.065, 0.32, 6);
+        tGeo.rotateX(-Math.PI * 0.72);
+        tGeo.translate(tf * 0.045, -0.08, -0.10);
+        const tMesh = new THREE.Mesh(tGeo, fCoralMat);
+        tMesh.rotation.z = tf * 0.10;
+        fTailPivot.add(tMesh);
+      }
+
+      // Graceful S-Curved Articulated Neck & Head with Signature Down-Curved Two-Tone Bill
+      const fHeadPivot = new THREE.Group();
+      fHeadPivot.position.set(0, 0.22, 0.24);
+      fBodyPivot.add(fHeadPivot);
+
+      // Lower & Upper S-Curve Neck Segments inside fHeadPivot so rotating fHeadPivot curves the whole neck naturally!
+      const neckSeg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.068, 0.36, 10), fRoseMat);
+      neckSeg1.position.set(0, 0.16, 0.06);
+      neckSeg1.rotation.x = 0.25;
+      fHeadPivot.add(neckSeg1);
+
+      const neckSeg2 = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.052, 0.38, 10), fRoseMat);
+      neckSeg2.position.set(0, 0.46, 0.06);
+      neckSeg2.rotation.x = -0.18;
+      fHeadPivot.add(neckSeg2);
+
+      const fSkull = new THREE.Mesh(new THREE.SphereGeometry(0.105, 12, 10), fRoseMat);
+      fSkull.scale.set(0.88, 0.95, 1.15);
+      fSkull.position.set(0, 0.66, 0.06);
+      fHeadPivot.add(fSkull);
+
+      for (const side of [-1, 1]) {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 8), fEyeMat);
+        eye.position.set(side * 0.082, 0.68, 0.12);
+        fHeadPivot.add(eye);
+      }
+
+      // Pale Pink Base Bill + Jet-Black Downward-Hooked Tip
+      const billBase = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.048, 0.14, 8), fPalePink);
+      billBase.rotation.x = Math.PI * 0.58;
+      billBase.position.set(0, 0.64, 0.19);
+      fHeadPivot.add(billBase);
+
+      const billTip = new THREE.Mesh(new THREE.ConeGeometry(0.042, 0.16, 8), fBlackMat);
+      billTip.rotation.x = Math.PI * 0.84;
+      billTip.position.set(0, 0.56, 0.26);
+      fHeadPivot.add(billTip);
+
+      const fBeakLowerPivot = new THREE.Group();
+      fBeakLowerPivot.position.set(0, 0.61, 0.17);
+      fHeadPivot.add(fBeakLowerPivot);
+      const fLowerBill = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.14, 6), fBlackMat);
+      fLowerBill.rotation.x = Math.PI * 0.78;
+      fLowerBill.position.set(0, -0.04, 0.07);
+      fBeakLowerPivot.add(fLowerBill);
+
+      // Articulated Flamingo Wings (Crimson-Coral Coverts + Authentic Jet-Black Primary Flight Feathers!)
+      const fWingL = createArticulated3DBirdWing(1, 0.42, 0.52, 0.28, fCrimsonMat, fRoseMat, fBlackMat);
+      fWingL.shoulderPivot.position.set(0.18, 0.18, 0.02);
+      fBodyPivot.add(fWingL.shoulderPivot);
+
+      const fWingR = createArticulated3DBirdWing(-1, 0.42, 0.52, 0.28, fCrimsonMat, fRoseMat, fBlackMat);
+      fWingR.shoulderPivot.position.set(-0.18, 0.18, 0.02);
+      fBodyPivot.add(fWingR.shoulderPivot);
+
+      flamStage.userData = {
+        species: 'flamingo',
+        rootPivot: flamRoot,
+        bodyPivot: fBodyPivot,
+        headPivot: fHeadPivot,
+        beakLowerPivot: fBeakLowerPivot,
+        tailPivot: fTailPivot,
+        wingL: fWingL,
+        wingR: fWingR,
+        baseRotY: 0.38,
+        baseBodyY: 0.72
+      };
+      birdDioramas3D.flamingo = flamStage;
+      binocularsRootGroup.add(flamStage);
+    }
+
+    // Animate a Perched 3D Bird Model through its 3 Lifelike Perched Behaviors:
+    //   1. LOOK_AROUND ("👀 Sitting & Looking Around")
+    //   2. GROOM ("✨ Grooming & Preening Plumage")
+    //   3. WING_STRETCH ("🦅 Stretching Out Its Wings")
+    function animatePerched3DBirdBehavior(ud, tSec) {
+      // Determine current behavior state & normalized phase u in [0..1]
+      const cycleDur = 4.2; // 4.2 seconds per behavior in auto-cycle mode
+      let behavior = birdwatchForcedActionMode;
+      let u = (tSec % cycleDur) / cycleDur;
+      let cycleCount = Math.floor(tSec / cycleDur);
+
+      if (!behavior || behavior === 'auto') {
+        const states = ['LOOK_AROUND', 'GROOM', 'WING_STRETCH'];
+        behavior = states[cycleCount % states.length];
+      }
+
+      const breathe = Math.sin(tSec * 2.8) * 0.014;
+      const wingL = ud.wingL;
+      const wingR = ud.wingR;
+
+      // Default folded wing pose (neatly tucked against the perched bird's sides)
+      let lShoulderX = 0.22, lShoulderY = -0.25, lShoulderZ = -1.24, lWristZ = -0.45, lFan = 0.0;
+      let rShoulderX = 0.22, rShoulderY =  0.25, rShoulderZ =  1.24, rWristZ =  0.45, rFan = 0.0;
+
+      let bodyY = ud.baseBodyY + breathe;
+      let bodyPitch = 0.0;
+      let bodyRoll = 0.0;
+      let bodyYaw = 0.0;
+      let headPitch = 0.0;
+      let headYaw = 0.0;
+      let headRoll = 0.0;
+      let beakOpen = 0.0;
+      let tailPitch = Math.sin(tSec * 2.2) * 0.05;
+      let tailFan = 1.0;
+
+      if (behavior === 'LOOK_AROUND') {
+        // SITTING & LOOKING AROUND:
+        // Crisp, attentive avian head turns & inquisitive head tilts while perched calmly on the tree branch or cactus crown
+        const lookStep = tSec * 1.45;
+        const saccadeYaw = Math.tanh(Math.sin(lookStep) * 2.6) * 0.62 + Math.sin(lookStep * 0.5) * 0.22;
+        const saccadePitch = Math.tanh(Math.cos(lookStep * 0.85) * 2.2) * 0.20 - 0.04;
+        const headTilt = Math.tanh(Math.sin(lookStep * 1.3 + 1.1) * 2.4) * 0.18;
+
+        headYaw = ud.species === 'owl' ? saccadeYaw * 1.35 : saccadeYaw;
+        headPitch = saccadePitch;
+        headRoll = headTilt;
+        bodyYaw = headYaw * 0.14;
+        tailPitch = Math.sin(tSec * 2.4) * 0.07;
+        beakOpen = Math.max(0, Math.sin(tSec * 4.5) - 0.75) * 0.25;
+      } else if (behavior === 'GROOM') {
+        // GROOMING & PREENING PLUMAGE:
+        // Bird turns its head back into its wing/shoulder feathers (lifting that wing slightly to preen underneath),
+        // nibbles along the plumage, dips to preen its chest, and finishes with a quick feather-ruffle shake!
+        const groomRightSide = (cycleCount % 2 === 1);
+        const sideSign = groomRightSide ? -1 : 1;
+
+        if (u < 0.58) {
+          // Phase 1: Preening under lifted wing / shoulder feathers
+          const env = Math.sin(Math.min(1.0, u / 0.14) * Math.PI * 0.5) * Math.sin(Math.min(1.0, (0.58 - u) / 0.12) * Math.PI * 0.5);
+          const nibble = Math.sin(tSec * 22.0);
+          const stroke = Math.sin(tSec * 5.8);
+
+          headYaw = sideSign * (1.05 + stroke * 0.18) * env;
+          headPitch = (0.48 + nibble * 0.09) * env;
+          headRoll = sideSign * (0.28 + stroke * 0.10) * env;
+          bodyPitch = 0.12 * env;
+          bodyRoll = -sideSign * 0.08 * env;
+          beakOpen = (0.18 + Math.abs(nibble) * 0.24) * env;
+
+          if (!groomRightSide) {
+            // Lift & partially fan Left Wing while beak preens the feathers
+            lShoulderZ = -1.24 + 0.78 * env + nibble * 0.04 * env;
+            lShoulderY = -0.25 + 0.32 * env;
+            lWristZ = -0.45 + 0.35 * env;
+            lFan = 0.45 * env;
+          } else {
+            // Lift & partially fan Right Wing while beak preens the feathers
+            rShoulderZ = 1.24 - 0.78 * env - nibble * 0.04 * env;
+            rShoulderY = 0.25 - 0.32 * env;
+            rWristZ = 0.45 - 0.35 * env;
+            rFan = 0.45 * env;
+          }
+        } else if (u < 0.82) {
+          // Phase 2: Dipping head forward to preen & smooth breast feathers
+          const subU = (u - 0.58) / 0.24;
+          const env = Math.sin(subU * Math.PI);
+          const nibble = Math.sin(tSec * 24.0);
+          headPitch = (0.68 + nibble * 0.10) * env;
+          headYaw = Math.sin(subU * Math.PI * 2.0) * 0.25 * env;
+          bodyPitch = 0.16 * env;
+          beakOpen = (0.15 + Math.abs(nibble) * 0.22) * env;
+        } else {
+          // Phase 3: Fluffy full-body feather-ruffle shake!
+          const subU = (u - 0.82) / 0.18;
+          const env = Math.sin(subU * Math.PI);
+          const shake = Math.sin(tSec * 42.0) * env;
+          bodyRoll = shake * 0.16;
+          headRoll = -shake * 0.22;
+          lShoulderZ = -1.24 + Math.abs(shake) * 0.32;
+          rShoulderZ =  1.24 - Math.abs(shake) * 0.32;
+          tailFan = 1.0 + env * 0.25;
+        }
+      } else if (behavior === 'WING_STRETCH') {
+        // STRETCHING OUT ITS WINGS:
+        // Unfolds both articulated 3D wings wide to full wingspan, arches them high, fans its tail feathers, holds the stretch, and folds back!
+        let stretchEnv = 0.0;
+        if (u < 0.24) {
+          const k = u / 0.24;
+          stretchEnv = k * k * (3.0 - 2.0 * k);
+        } else if (u < 0.74) {
+          stretchEnv = 1.0;
+        } else {
+          const k = (1.0 - u) / 0.26;
+          stretchEnv = k * k * (3.0 - 2.0 * k);
+        }
+
+        const holdRipple = (u >= 0.24 && u < 0.74) ? Math.sin(tSec * 7.5) * 0.06 : 0.0;
+
+        // Lean chest slightly forward & lift head proudly during the full wing stretch
+        bodyPitch = 0.20 * stretchEnv;
+        bodyY = ud.baseBodyY + 0.05 * stretchEnv + breathe;
+        headPitch = -0.24 * stretchEnv;
+        headYaw = Math.sin(tSec * 1.8) * 0.14 * stretchEnv;
+        beakOpen = 0.22 * stretchEnv;
+        tailFan = 1.0 + 0.55 * stretchEnv;
+        tailPitch = -0.22 * stretchEnv;
+
+        // Unfold Left & Right Shoulders + Wrists + Primary Flight Feathers to full majestic 3D wingspan!
+        lShoulderX = 0.22 * (1.0 - stretchEnv) - 0.12 * stretchEnv;
+        lShoulderY = -0.25 * (1.0 - stretchEnv) + 0.14 * stretchEnv;
+        lShoulderZ = -1.24 * (1.0 - stretchEnv) + (0.18 + holdRipple) * stretchEnv;
+        lWristZ    = -0.45 * (1.0 - stretchEnv) + (0.14 + holdRipple * 0.8) * stretchEnv;
+        lFan       = stretchEnv;
+
+        rShoulderX = 0.22 * (1.0 - stretchEnv) - 0.12 * stretchEnv;
+        rShoulderY =  0.25 * (1.0 - stretchEnv) - 0.14 * stretchEnv;
+        rShoulderZ =  1.24 * (1.0 - stretchEnv) - (0.18 + holdRipple) * stretchEnv;
+        rWristZ    =  0.45 * (1.0 - stretchEnv) - (0.14 + holdRipple * 0.8) * stretchEnv;
+        rFan       = stretchEnv;
+      }
+
+      // Apply transforms to the 3D articulated bird rig
+      ud.rootPivot.rotation.y = ud.baseRotY + Math.sin(tSec * 0.45) * 0.12 + bodyYaw;
+      ud.bodyPivot.position.y = bodyY;
+      ud.bodyPivot.rotation.set(bodyPitch, 0, bodyRoll);
+      ud.headPivot.rotation.set(headPitch, headYaw, headRoll);
+      if (ud.beakLowerPivot) {
+        ud.beakLowerPivot.rotation.x = beakOpen;
+      }
+      if (ud.tailPivot) {
+        ud.tailPivot.rotation.x = tailPitch;
+        ud.tailPivot.scale.set(tailFan, 1.0, 1.0);
+      }
+
+      // Apply Left & Right Dual-Jointed Wing Articulation + Primary Flight Feather Fanning
+      wingL.shoulderPivot.rotation.set(lShoulderX, lShoulderY, lShoulderZ);
+      wingL.wristPivot.rotation.set(0, 0, lWristZ);
+      for (let i = 0; i < wingL.primaryFeathers.length; i++) {
+        const pf = wingL.primaryFeathers[i];
+        pf.rotation.y = -i * 0.12 * lFan;
+        pf.rotation.z = i * 0.07 * lFan;
+      }
+
+      wingR.shoulderPivot.rotation.set(rShoulderX, rShoulderY, rShoulderZ);
+      wingR.wristPivot.rotation.set(0, 0, rWristZ);
+      for (let i = 0; i < wingR.primaryFeathers.length; i++) {
+        const pf = wingR.primaryFeathers[i];
+        pf.rotation.y = i * 0.12 * rFan;
+        pf.rotation.z = -i * 0.07 * rFan;
+      }
+
+      return behavior;
     }
 
     function renderLive3DOpticsFrame(dtOptics) {
@@ -12088,44 +12936,35 @@
 
         const spKey = voxelHuman.birdwatchSpecies || 'macaw';
         const bgColors = {
-          macaw:    0x075985,
-          flamingo: 0x0284c7,
+          macaw:    0x0c4a6e,
           hawk:     0x38bdf8,
-          owl:      0x090d1e
+          owl:      0x0b1026,
+          flamingo: 0x0369a1
         };
-        opticsScene.background.setHex(bgColors[spKey] || 0x075985);
+        opticsScene.background.setHex(bgColors[spKey] || 0x0c4a6e);
 
         for (const key of Object.keys(birdDioramas3D)) {
           birdDioramas3D[key].visible = (key === spKey);
         }
 
-        // Gentle handheld binocular breathing sway
-        opticsCamera.position.x = Math.sin(opticsElapsedSec * 0.85) * 0.18;
-        opticsCamera.position.y = 0.15 + Math.cos(opticsElapsedSec * 0.72) * 0.12;
-        opticsCamera.position.z = 8.4;
-        opticsCamera.lookAt(0, -0.15, 0);
+        // Gentle handheld binocular breathing sway focused on the perched bird on its tree or cactus
+        opticsCamera.position.x = Math.sin(opticsElapsedSec * 0.75) * 0.14;
+        opticsCamera.position.y = 0.22 + Math.cos(opticsElapsedSec * 0.64) * 0.09;
+        opticsCamera.position.z = 7.5;
+        opticsCamera.lookAt(0, 0.12, 0);
 
         const stage = birdDioramas3D[spKey];
         if (stage && stage.userData) {
-          const ud = stage.userData;
-          if (spKey === 'macaw') {
-            ud.pivot.rotation.y = 0.55 + Math.sin(opticsElapsedSec * 0.8) * 0.28;
-            ud.pivot.position.y = Math.sin(opticsElapsedSec * 2.2) * 0.08;
-            const flap = Math.sin(opticsElapsedSec * 4.5) * 0.35;
-            ud.wingL.rotation.z = flap;
-            ud.wingR.rotation.z = -flap;
-          } else if (spKey === 'flamingo') {
-            ud.pivot.rotation.y = 0.62 + Math.sin(opticsElapsedSec * 0.65) * 0.35;
-            ud.pivot.rotation.x = Math.sin(opticsElapsedSec * 1.4) * 0.08;
-          } else if (spKey === 'hawk') {
-            ud.pivot.rotation.y = 0.45 + Math.sin(opticsElapsedSec * 0.7) * 0.42;
-            ud.pivot.rotation.z = -0.15 + Math.cos(opticsElapsedSec * 0.9) * 0.14;
-            const flap = Math.sin(opticsElapsedSec * 6.5) * 0.45;
-            ud.wingL.rotation.z = flap;
-            ud.wingR.rotation.z = -flap;
-          } else if (spKey === 'owl') {
-            // Owl swivels its head/body & pulses its glowing nocturnal eyes
-            ud.pivot.rotation.y = 0.22 + Math.sin(opticsElapsedSec * 0.9) * 0.48;
+          const activeBehavior = animatePerched3DBirdBehavior(stage.userData, opticsElapsedSec);
+          const bMeta = BIRDWATCH_SPECIES_CATALOG[spKey] || BIRDWATCH_SPECIES_CATALOG.macaw;
+          const behaviorLabels = {
+            LOOK_AROUND:  '👀 Sitting & Looking Around',
+            GROOM:        '✨ Grooming & Preening Plumage',
+            WING_STRETCH: '🦅 Stretching Out Its Wings'
+          };
+          const nextSub = `8×42 Field Binoculars · ${bMeta.perchLabel} · Live Action: ${behaviorLabels[activeBehavior] || behaviorLabels.LOOK_AROUND}`;
+          if (humanOpticsSubEl && humanOpticsSubEl.textContent !== nextSub) {
+            humanOpticsSubEl.textContent = nextSub;
           }
         }
       }
@@ -12198,7 +13037,6 @@
       } else {
         // Dual-lens overlapping binocular figure-8 mask
         const rLens = h * 0.43;
-        const offCanvas = painterSnapshotCanvas;
         // Draw dark mask outside the two overlapping binocular circles
         ctx.fillStyle = '#040604';
         ctx.beginPath();
@@ -12234,6 +13072,20 @@
       ctx.restore();
     }
 
+    function syncBirdwatchOpticsControlsUI() {
+      const bwControlsEl = document.getElementById('optics-birdwatch-controls');
+      if (bwControlsEl) {
+        bwControlsEl.style.display = (activeOpticsMode === 'binoculars') ? 'flex' : 'none';
+      }
+      const curSp = voxelHuman.birdwatchSpecies || 'macaw';
+      document.querySelectorAll('.birdwatch-species-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.species === curSp);
+      });
+      document.querySelectorAll('.birdwatch-action-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.baction === birdwatchForcedActionMode);
+      });
+    }
+
     function openVoxelHumanOpticsModal(mode) {
       if (!humanOpticsModalEl) return;
       activeOpticsMode = mode;
@@ -12248,6 +13100,7 @@
       }
 
       humanOpticsModalEl.classList.toggle('binoculars-mode', mode === 'binoculars');
+      syncBirdwatchOpticsControlsUI();
       if (mode === 'telescope') {
         const idxT = voxelHuman.telescopeSpaceTargetIdx || 0;
         const spec = TELESCOPE_SPACE_CATALOG[idxT % TELESCOPE_SPACE_CATALOG.length];
@@ -12771,6 +13624,29 @@
         }
       });
     }
+    document.querySelectorAll('.birdwatch-species-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const sp = btn.dataset.species;
+        if (sp && BIRDWATCH_SPECIES_CATALOG[sp]) {
+          voxelHuman.birdwatchSpecies = sp;
+          if (voxelHuman.routine === 'BIRDWATCHING') {
+            voxelHuman.bubbleEmoji = BIRDWATCH_SPECIES_CATALOG[sp].emoji;
+          }
+          openVoxelHumanOpticsModal('binoculars');
+        }
+      });
+    });
+    document.querySelectorAll('.birdwatch-action-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const act = btn.dataset.baction || 'auto';
+        birdwatchForcedActionMode = act;
+        // Reset elapsed phase slightly so a newly selected action begins smoothly from the start of its cycle
+        opticsElapsedSec = 0.05;
+        syncBirdwatchOpticsControlsUI();
+      });
+    });
     if (humanOpticsModalEl) {
       humanOpticsModalEl.addEventListener('click', (e) => {
         if (e.target === humanOpticsModalEl) {
