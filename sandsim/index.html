@@ -4507,6 +4507,25 @@
       const cellArea = CELL_SIZE * CELL_SIZE;
       const nightFactor = skyUniforms.uNightFactor.value || 0.0;
       const timeNow = uniforms.uTime.value || 0.0;
+      const hrNow = ((params.timeOfDay % 24) + 24) % 24;
+      const isNightTimeNow = (hrNow >= 18.2 || hrNow < 6.0) || (nightFactor > 0.35);
+
+      // Gather active night lanterns once per sync so they illuminate the terrain vertex colors with zero WebGL PointLight shader recompilation!
+      const activeNightLanterns = [];
+      if (isNightTimeNow && typeof placedWorldItems !== 'undefined') {
+        const lanternNightGlow = clamp((nightFactor - 0.15) / 0.65, 0.28, 1.0);
+        for (let k = 0; k < placedWorldItems.length; k++) {
+          const it = placedWorldItems[k];
+          if (it.type === 'item-lantern') {
+            const flk = 0.92 + 0.08 * Math.sin(timeNow * 11.5 + it.phase);
+            activeNightLanterns.push({
+              lx: it.x + Math.cos(it.yaw) * 1.02,
+              lz: it.z - Math.sin(it.yaw) * 1.02,
+              strength: lanternNightGlow * flk
+            });
+          }
+        }
+      }
 
       for (let i = 0; i < MAX_CELLS; i++) {
         if (bedrock[i] < MIN_TERRAIN_HEIGHT) bedrock[i] = MIN_TERRAIN_HEIGHT;
@@ -4687,6 +4706,29 @@
           tr = tr * (1 - snowBlend) + 0.95 * snowBlend;
           tg = tg * (1 - snowBlend) + 0.97 * snowBlend;
           tb = tb * (1 - snowBlend) + 1.00 * snowBlend;
+        }
+
+        // Warm Golden Night Lantern Illumination on Terrain (Zero PointLight shader-recompile cost!)
+        if (activeNightLanterns.length > 0) {
+          const cellWx = tPos[i3];
+          const cellWz = tPos[i3 + 2];
+          let lanternBoost = 0.0;
+          for (let k = 0; k < activeNightLanterns.length; k++) {
+            const lan = activeNightLanterns[k];
+            const dx = cellWx - lan.lx;
+            const dz = cellWz - lan.lz;
+            const d2 = dx * dx + dz * dz;
+            if (d2 < 324.0) { // 18m illumination radius
+              const falloff = 1.0 - Math.sqrt(d2) / 18.0;
+              lanternBoost += falloff * falloff * lan.strength;
+            }
+          }
+          if (lanternBoost > 0.001) {
+            const lb = Math.min(1.25, lanternBoost);
+            tr = Math.min(1.0, tr + lb * 0.62);
+            tg = Math.min(1.0, tg + lb * 0.40);
+            tb = Math.min(1.0, tb + lb * 0.14);
+          }
         }
 
         tCol[i3]     = tr;
@@ -10080,7 +10122,7 @@
     const MAX_PLACED_ITEMS = 36;
     let lastItemPlaceMs = 0;
 
-    // Shared materials for 3D placeable items
+    // Shared materials & pre-built reusable geometries for 3D placeable items (zero per-click geometry/material allocation or shader recompilation!)
     const itemIronPipeMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.42, metalness: 0.78 });
     const itemBrassMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.30, metalness: 0.85 });
     const itemRedValveMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.45, metalness: 0.35 });
@@ -10088,6 +10130,70 @@
     const itemWoodLightMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.78 });
     const itemHayFeedMat = new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.90 });
     const itemLanternIronMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.48, metalness: 0.75 });
+    const sharedLanternGlassMat = new THREE.MeshStandardMaterial({
+      color: 0xfef3c7,
+      emissive: new THREE.Color(0xff9d2e),
+      emissiveIntensity: 0.05,
+      roughness: 0.20,
+      transparent: true,
+      opacity: 0.92
+    });
+    const sharedLanternHaloMat = new THREE.MeshBasicMaterial({
+      color: 0xffaa33,
+      transparent: true,
+      opacity: 0.40,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const sharedLanternGroundPoolMat = new THREE.MeshBasicMaterial({
+      color: 0xff9e3b,
+      transparent: true,
+      opacity: 0.16,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    const sharedMothMat = new THREE.MeshBasicMaterial({
+      color: 0xfef08a,
+      transparent: true,
+      opacity: 0.92
+    });
+
+    // Pre-allocated shared geometries for Water Tap, Animal Feeder & Lantern
+    const sharedTapGeos = {
+      standPipe: new THREE.CylinderGeometry(0.11, 0.13, 1.95, 10),
+      baseCollar: new THREE.CylinderGeometry(0.24, 0.28, 0.16, 10),
+      topJoint: new THREE.SphereGeometry(0.15, 10, 8),
+      spoutPipe: new THREE.CylinderGeometry(0.085, 0.095, 0.52, 8),
+      nozzleLip: new THREE.CylinderGeometry(0.11, 0.09, 0.10, 8),
+      valveStem: new THREE.CylinderGeometry(0.035, 0.035, 0.22, 6),
+      valveWheel: new THREE.TorusGeometry(0.17, 0.035, 6, 12),
+      crossBar: new THREE.BoxGeometry(0.32, 0.03, 0.04)
+    };
+    const sharedFeederGeos = {
+      leg: new THREE.BoxGeometry(0.14, 1.15, 0.14),
+      troughBase: new THREE.BoxGeometry(1.95, 0.34, 1.05),
+      hayMound: new THREE.DodecahedronGeometry(0.55, 1),
+      post: new THREE.CylinderGeometry(0.065, 0.075, 1.45, 7),
+      roofSlope: new THREE.BoxGeometry(2.25, 0.08, 0.78)
+    };
+    const sharedLanternGeos = {
+      mainPost: new THREE.CylinderGeometry(0.075, 0.105, 3.15, 8),
+      crossArm: new THREE.CylinderGeometry(0.055, 0.065, 1.18, 7),
+      braceStick: new THREE.CylinderGeometry(0.042, 0.050, 0.82, 6),
+      chain: new THREE.CylinderGeometry(0.016, 0.016, 0.38, 6),
+      topCap: new THREE.ConeGeometry(0.24, 0.18, 6),
+      bottomBase: new THREE.CylinderGeometry(0.18, 0.14, 0.10, 6),
+      glassBody: new THREE.CylinderGeometry(0.15, 0.13, 0.32, 6),
+      haloSphere: new THREE.SphereGeometry(0.45, 10, 8),
+      outerHaloSphere: new THREE.SphereGeometry(1.15, 12, 10),
+      groundGlowDisc: (() => {
+        const g = new THREE.CircleGeometry(7.5, 24);
+        g.rotateX(-Math.PI / 2);
+        return g;
+      })(),
+      mothWing: new THREE.BoxGeometry(0.11, 0.015, 0.075)
+    };
 
     // 3D Artesian Water Spurt Droplet Particle System (for active Water Taps)
     const TAP_DROPLET_COUNT = 520;
@@ -10136,45 +10242,45 @@
     function createWaterTapMesh() {
       const root = new THREE.Group();
       // 1. Vertical standpipe driven deep into the sand
-      const standPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 1.95, 10), itemIronPipeMat);
+      const standPipe = new THREE.Mesh(sharedTapGeos.standPipe, itemIronPipeMat);
       standPipe.position.y = 0.72;
       standPipe.castShadow = true;
       root.add(standPipe);
 
       // 2. Base ground collar flange
-      const baseCollar = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.16, 10), itemIronPipeMat);
+      const baseCollar = new THREE.Mesh(sharedTapGeos.baseCollar, itemIronPipeMat);
       baseCollar.position.y = 0.06;
       root.add(baseCollar);
 
       // 3. Brass elbow joint & artesian wellhead cap
-      const topJoint = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), itemBrassMat);
+      const topJoint = new THREE.Mesh(sharedTapGeos.topJoint, itemBrassMat);
       topJoint.position.y = 1.68;
       root.add(topJoint);
 
       // 4. Curved brass faucet spout extending forward (+Z) and slightly upward for an artesian spurt
-      const spoutPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.095, 0.52, 8), itemBrassMat);
+      const spoutPipe = new THREE.Mesh(sharedTapGeos.spoutPipe, itemBrassMat);
       spoutPipe.rotation.x = Math.PI * 0.38;
       spoutPipe.position.set(0, 1.72, 0.22);
       spoutPipe.castShadow = true;
       root.add(spoutPipe);
 
-      const nozzleLip = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.09, 0.10, 8), itemBrassMat);
+      const nozzleLip = new THREE.Mesh(sharedTapGeos.nozzleLip, itemBrassMat);
       nozzleLip.rotation.x = Math.PI * 0.28;
       nozzleLip.position.set(0, 1.81, 0.44);
       root.add(nozzleLip);
 
       // 5. Red cast-iron handwheel valve on top
-      const valveStem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.22, 6), itemBrassMat);
+      const valveStem = new THREE.Mesh(sharedTapGeos.valveStem, itemBrassMat);
       valveStem.position.set(0, 1.86, 0);
       root.add(valveStem);
 
-      const valveWheel = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.035, 6, 12), itemRedValveMat);
+      const valveWheel = new THREE.Mesh(sharedTapGeos.valveWheel, itemRedValveMat);
       valveWheel.rotation.x = Math.PI / 2;
       valveWheel.position.set(0, 1.96, 0);
       valveWheel.castShadow = true;
       root.add(valveWheel);
 
-      const crossBar = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.03, 0.04), itemRedValveMat);
+      const crossBar = new THREE.Mesh(sharedTapGeos.crossBar, itemRedValveMat);
       crossBar.position.set(0, 1.96, 0);
       root.add(crossBar);
 
@@ -10190,21 +10296,21 @@
         [-0.85, 0.45,  0.42], [0.85, 0.45,  0.42]
       ];
       for (const [lx, ly, lz] of legPositions) {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.15, 0.14), itemWoodDarkMat);
+        const leg = new THREE.Mesh(sharedFeederGeos.leg, itemWoodDarkMat);
         leg.position.set(lx, ly, lz);
         leg.castShadow = true;
         root.add(leg);
       }
 
       // 2. Feeding trough basin
-      const troughBase = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.34, 1.05), itemWoodLightMat);
+      const troughBase = new THREE.Mesh(sharedFeederGeos.troughBase, itemWoodLightMat);
       troughBase.position.y = 0.86;
       troughBase.castShadow = true;
       troughBase.receiveShadow = true;
       root.add(troughBase);
 
       // 3. Golden hay, grain & forage mound piled inside the trough (shrinks as animals eat the food!)
-      const hayMound = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 1), itemHayFeedMat);
+      const hayMound = new THREE.Mesh(sharedFeederGeos.hayMound, itemHayFeedMat);
       hayMound.scale.set(1.55, 0.52, 0.78);
       hayMound.position.set(0, 1.06, 0);
       hayMound.castShadow = true;
@@ -10213,19 +10319,19 @@
 
       // 4. Two vertical roof support posts & pitched shade roof
       for (const px of [-0.85, 0.85]) {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 1.45, 7), itemWoodDarkMat);
+        const post = new THREE.Mesh(sharedFeederGeos.post, itemWoodDarkMat);
         post.position.set(px, 1.62, 0);
         post.castShadow = true;
         root.add(post);
       }
 
-      const roofSlopeL = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.08, 0.78), itemWoodDarkMat);
+      const roofSlopeL = new THREE.Mesh(sharedFeederGeos.roofSlope, itemWoodDarkMat);
       roofSlopeL.position.set(0, 2.32, -0.30);
       roofSlopeL.rotation.x = 0.36;
       roofSlopeL.castShadow = true;
       root.add(roofSlopeL);
 
-      const roofSlopeR = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.08, 0.78), itemWoodDarkMat);
+      const roofSlopeR = new THREE.Mesh(sharedFeederGeos.roofSlope, itemWoodDarkMat);
       roofSlopeR.position.set(0, 2.32, 0.30);
       roofSlopeR.rotation.x = -0.36;
       roofSlopeR.castShadow = true;
@@ -10237,20 +10343,20 @@
     function createHangingLanternMesh() {
       const root = new THREE.Group();
       // 1. Angled wooden stick / post driven into the sand
-      const mainPost = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.105, 3.15, 8), itemWoodDarkMat);
+      const mainPost = new THREE.Mesh(sharedLanternGeos.mainPost, itemWoodDarkMat);
       mainPost.position.set(0, 1.40, 0);
       mainPost.rotation.z = -0.08;
       mainPost.castShadow = true;
       root.add(mainPost);
 
       // 2. Top horizontal wooden cross-arm + diagonal brace stick
-      const crossArm = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 1.18, 7), itemWoodDarkMat);
+      const crossArm = new THREE.Mesh(sharedLanternGeos.crossArm, itemWoodDarkMat);
       crossArm.rotation.z = Math.PI / 2 - 0.10;
       crossArm.position.set(0.55, 2.78, 0);
       crossArm.castShadow = true;
       root.add(crossArm);
 
-      const braceStick = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.050, 0.82, 6), itemWoodLightMat);
+      const braceStick = new THREE.Mesh(sharedLanternGeos.braceStick, itemWoodLightMat);
       braceStick.rotation.z = -0.78;
       braceStick.position.set(0.32, 2.48, 0);
       root.add(braceStick);
@@ -10261,50 +10367,37 @@
       root.add(lanternPivot);
 
       // Hanging cord/chain
-      const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.38, 6), itemLanternIronMat);
+      const chain = new THREE.Mesh(sharedLanternGeos.chain, itemLanternIronMat);
       chain.position.y = -0.19;
       lanternPivot.add(chain);
 
       // Top & bottom iron lantern caps
-      const topCap = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.18, 6), itemLanternIronMat);
+      const topCap = new THREE.Mesh(sharedLanternGeos.topCap, itemLanternIronMat);
       topCap.position.y = -0.42;
       topCap.castShadow = true;
       lanternPivot.add(topCap);
 
-      const bottomBase = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.14, 0.10, 6), itemLanternIronMat);
+      const bottomBase = new THREE.Mesh(sharedLanternGeos.bottomBase, itemLanternIronMat);
       bottomBase.position.y = -0.82;
       lanternPivot.add(bottomBase);
 
-      // Glowing glass lantern core (emissive turns on at night!)
-      const glassMat = new THREE.MeshStandardMaterial({
-        color: 0xfef3c7,
-        emissive: new THREE.Color(0xff9d2e),
-        emissiveIntensity: 0.05,
-        roughness: 0.20,
-        transparent: true,
-        opacity: 0.92
-      });
-      const glassBody = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.13, 0.32, 6), glassMat);
+      // Glowing glass lantern core (uses pre-compiled shared material — zero shader recompilation when placing!)
+      const glassBody = new THREE.Mesh(sharedLanternGeos.glassBody, sharedLanternGlassMat);
       glassBody.position.y = -0.63;
       lanternPivot.add(glassBody);
 
-      // Soft additive halo sphere around the lantern glass (visible at night)
-      const haloMat = new THREE.MeshBasicMaterial({
-        color: 0xffaa33,
-        transparent: true,
-        opacity: 0.0,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-      });
-      const haloSphere = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), haloMat);
+      // Soft additive halo spheres around the lantern glass (visible at night)
+      const haloSphere = new THREE.Mesh(sharedLanternGeos.haloSphere, sharedLanternHaloMat);
       haloSphere.position.y = -0.63;
       haloSphere.renderOrder = 17;
+      haloSphere.visible = false;
       lanternPivot.add(haloSphere);
 
-      // Warm night PointLight attached to the hanging lantern
-      const lanternLight = new THREE.PointLight(0xff9e3b, 0.0, 42.0, 1.35);
-      lanternLight.position.set(0, -0.65, 0);
-      lanternPivot.add(lanternLight);
+      const outerHaloSphere = new THREE.Mesh(sharedLanternGeos.outerHaloSphere, sharedLanternGroundPoolMat);
+      outerHaloSphere.position.y = -0.63;
+      outerHaloSphere.renderOrder = 17;
+      outerHaloSphere.visible = false;
+      lanternPivot.add(outerHaloSphere);
 
       // 4. Small cluster of 5 Nocturnal Moths that eventually gather and flutter around the lit lantern at night (attracting swooping bats!)
       const mothsGroup = new THREE.Group();
@@ -10312,18 +10405,12 @@
       mothsGroup.visible = false;
       lanternPivot.add(mothsGroup);
 
-      const mothWingGeo = new THREE.BoxGeometry(0.11, 0.015, 0.075);
-      const mothMat = new THREE.MeshBasicMaterial({
-        color: 0xfef08a,
-        transparent: true,
-        opacity: 0.92
-      });
       const mothAgents = [];
       for (let m = 0; m < 5; m++) {
         const mothRoot = new THREE.Group();
-        const wingL = new THREE.Mesh(mothWingGeo, mothMat);
+        const wingL = new THREE.Mesh(sharedLanternGeos.mothWing, sharedMothMat);
         wingL.position.x = -0.045;
-        const wingR = new THREE.Mesh(mothWingGeo, mothMat);
+        const wingR = new THREE.Mesh(sharedLanternGeos.mothWing, sharedMothMat);
         wingR.position.x = 0.045;
         mothRoot.add(wingL, wingR);
         mothsGroup.add(mothRoot);
@@ -10339,9 +10426,8 @@
       }
 
       root.userData.lanternPivot = lanternPivot;
-      root.userData.glassMat = glassMat;
-      root.userData.haloMat = haloMat;
-      root.userData.lanternLight = lanternLight;
+      root.userData.haloSphere = haloSphere;
+      root.userData.outerHaloSphere = outerHaloSphere;
       root.userData.mothsGroup = mothsGroup;
       root.userData.mothAgents = mothAgents;
       return root;
@@ -10357,6 +10443,7 @@
     function destroyPlacedItemAtIndex(idxItem, withExplosion = true) {
       if (idxItem < 0 || idxItem >= placedWorldItems.length) return;
       const item = placedWorldItems[idxItem];
+      const wasLantern = item.type === 'item-lantern';
       if (withExplosion) {
         const palette = item.type === 'item-tap'
           ? [0x38bdf8, 0x475569, 0xd97706]
@@ -10367,12 +10454,13 @@
         spawnSteamPuffAtWorld(item.x, item.y + 0.8, item.z, 5);
       }
       if (item.mesh) {
-        if (item.mesh.userData.glassMat) item.mesh.userData.glassMat.dispose();
-        if (item.mesh.userData.haloMat) item.mesh.userData.haloMat.dispose();
         placedItemsGroup.remove(item.mesh);
       }
       placedWorldItems.splice(idxItem, 1);
       updatePlacedItemsCountUI();
+      if (wasLantern) {
+        syncTerrainAndWaterMeshes();
+      }
     }
 
     function destroyPlacedItemsNearWorld(wx, wz, radiusM, withExplosion = true) {
@@ -10445,6 +10533,9 @@
       // Small dust puff as the item is planted in the ground
       spawnSteamPuffAtWorld(px, groundY + 0.3, pz, 3);
       updatePlacedItemsCountUI();
+      if (type === 'item-lantern') {
+        syncTerrainAndWaterMeshes();
+      }
     }
 
     function updatePlacedItems(dt) {
@@ -10456,7 +10547,21 @@
       const windX = Math.cos(rad) * params.windSpeed;
       const windZ = Math.sin(rad) * params.windSpeed;
 
+      // Update shared lantern glass & halo materials once per frame (zero per-lantern material or PointLight overhead!)
+      if (isNightTime) {
+        const nightGlow = clamp((nightFactor - 0.20) / 0.65, 0.25, 1.0);
+        const sharedFlicker = 0.92 + 0.08 * Math.sin(time * 11.0);
+        sharedLanternGlassMat.emissiveIntensity = 1.85 * nightGlow * sharedFlicker;
+        sharedLanternHaloMat.opacity = 0.44 * nightGlow * sharedFlicker;
+        sharedLanternGroundPoolMat.opacity = 0.17 * nightGlow * sharedFlicker;
+      } else {
+        sharedLanternGlassMat.emissiveIntensity = 0.04;
+        sharedLanternHaloMat.opacity = 0.0;
+        sharedLanternGroundPoolMat.opacity = 0.0;
+      }
+
       let waterAddedByTaps = false;
+      let hasActiveLanterns = false;
 
       for (let i = placedWorldItems.length - 1; i >= 0; i--) {
         const it = placedWorldItems[i];
@@ -10563,11 +10668,11 @@
           }
 
         } else if (it.type === 'item-lantern') {
+          hasActiveLanterns = true;
           // Lantern: Swings gently in the wind, illuminates the area at night only, and eventually attracts fluttering moths & swooping bats!
           const pivot = it.mesh.userData.lanternPivot;
-          const glassMat = it.mesh.userData.glassMat;
-          const haloMat = it.mesh.userData.haloMat;
-          const light = it.mesh.userData.lanternLight;
+          const haloSphere = it.mesh.userData.haloSphere;
+          const outerHaloSphere = it.mesh.userData.outerHaloSphere;
           const mothsGroup = it.mesh.userData.mothsGroup;
           const mothAgents = it.mesh.userData.mothAgents;
 
@@ -10580,11 +10685,15 @@
           const isWeatherTooHarshForMoths = (params.rainRate > 0.25) || (params.snowRate > 0.05) || (params.windSpeed > 22.0);
 
           if (isNightTime) {
-            const nightGlow = clamp((nightFactor - 0.20) / 0.65, 0.25, 1.0);
-            const flicker = 0.90 + 0.10 * Math.sin(time * 11.5 + it.phase) + 0.05 * Math.cos(time * 19.3 + it.phase);
-            if (light) light.intensity = 6.8 * nightGlow * flicker;
-            if (glassMat) glassMat.emissiveIntensity = 1.85 * nightGlow * flicker;
-            if (haloMat) haloMat.opacity = 0.42 * nightGlow * flicker;
+            const pulseScale = 0.94 + 0.08 * Math.sin(time * 11.5 + it.phase);
+            if (haloSphere) {
+              haloSphere.visible = true;
+              haloSphere.scale.setScalar(pulseScale);
+            }
+            if (outerHaloSphere) {
+              outerHaloSphere.visible = true;
+              outerHaloSphere.scale.setScalar(pulseScale);
+            }
 
             // After the lantern has been lit at night for ~5 seconds, a small swarm of moths gathers to orbit the glowing lantern!
             if (!isWeatherTooHarshForMoths) {
@@ -10623,14 +10732,13 @@
             it.nightLitDuration = 0.0;
             it.mothsActive = false;
             if (mothsGroup) mothsGroup.visible = false;
-            if (light) light.intensity = 0.0;
-            if (glassMat) glassMat.emissiveIntensity = 0.04;
-            if (haloMat) haloMat.opacity = 0.0;
+            if (haloSphere) haloSphere.visible = false;
+            if (outerHaloSphere) outerHaloSphere.visible = false;
           }
         }
       }
 
-      if (waterAddedByTaps && frameCount % 3 === 0) {
+      if ((waterAddedByTaps && frameCount % 3 === 0) || (hasActiveLanterns && isNightTime && frameCount % 6 === 0)) {
         syncTerrainAndWaterMeshes();
       }
 
