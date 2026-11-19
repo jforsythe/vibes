@@ -1742,7 +1742,7 @@
     <kbd>Space</kbd>: Jump/Swim ·
     <kbd>1</kbd>–<kbd>4</kbd> or <kbd>Q</kbd>/<kbd>E</kbd>/Wheel: Cycle Gear ·
     <kbd>L-Click</kbd>: Use Tool / Shoot Bow ·
-    <kbd>V</kbd>: Exit
+    <kbd>ESC</kbd> / <kbd>V</kbd>: Exit
   </div>
   <div id="fpv-equip-bar">
     <button class="fpv-slot-btn active" data-equip="sculpt" title="Use active terrain/water/plant sculpt brush (Key: 1)">
@@ -17521,8 +17521,42 @@
       });
     }
 
+    let fpvPointerLockActive = false;
+    document.addEventListener('pointerlockchange', () => {
+      const isLockedNow = (document.pointerLockElement === renderer.domElement);
+      // If pointer lock was released by the browser (e.g. pressing Escape while in FPV Walk Mode), exit FPV Walk Mode cleanly!
+      if (fpvPointerLockActive && !isLockedNow && params.fpvMode) {
+        fpvPointerLockActive = false;
+        toggleFPVMode(false);
+        return;
+      }
+      fpvPointerLockActive = isLockedNow;
+    });
+
     window.addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+        return;
+      }
+      if (e.code === 'Escape') {
+        if (humanPaintingModalEl && humanPaintingModalEl.classList.contains('open')) {
+          closeVoxelHumanPaintingModal();
+          return;
+        }
+        if (params.driveMode) {
+          toggleDriveMode(false);
+          return;
+        }
+        if (params.fpvMode) {
+          toggleFPVMode(false);
+          return;
+        }
+        // In Omniscient Observer mode: Escape always closes any open popout and selects the ✋ hand pan tool!
+        if (typeof closeAllDockPopups === 'function') {
+          closeAllDockPopups();
+        }
+        if (typeof syncActiveToolUI === 'function') {
+          syncActiveToolUI('none');
+        }
         return;
       }
       if (e.code === 'KeyP') {
@@ -17531,10 +17565,6 @@
       }
       if (e.code === 'KeyV') {
         toggleFPVMode();
-        return;
-      }
-      if (e.code === 'Escape' && params.driveMode) {
-        toggleDriveMode(false);
         return;
       }
       if (params.driveMode) {
