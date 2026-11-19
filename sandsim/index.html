@@ -1468,7 +1468,10 @@
     const WORLD_SIZE = 220;
     const CELL_SIZE = WORLD_SIZE / (GRID - 1);
     const MAX_CELLS = GRID * GRID;
-    const MAX_PLANT_BUFFER = MAX_CELLS;
+    const MAX_PLANT_BUFFER = 1600;   // Hard per-species InstancedMesh buffer cap to keep GPU memory low
+    const MAX_TOTAL_PLANTS = 3200;   // Hard global cap on total rendered plants (Jungle + Desert Cacti combined)
+    const MAX_TOTAL_FAUNA = 160;     // Hard global cap on total active wildlife agents to prevent browser lag/crashes
+    const MAX_APEX_PER_SPECIES = 2;  // Hard cap on articulated 3D apex predator rigs per species
     const MIN_TERRAIN_HEIGHT = 0.15;
     const MAX_TERRAIN_HEIGHT = 32.0; // Reasonable maximum elevation for bedrock, dams, boulders & sand dunes
 
@@ -1526,7 +1529,7 @@
       totalLavaVol: 0,
       junglePlantCount: 0,
       desertPlantCount: 0,
-      activePlantCap: 6000,
+      activePlantCap: MAX_TOTAL_PLANTS,
       activeParticleCap: 9000,
       floraSyncInterval: 3,
       fpvMode: false,
@@ -3698,6 +3701,9 @@
     }
 
     function ecologySuccessionStep(stepScale = 1.0) {
+      let currentTotalPlants = params.junglePlantCount + params.desertPlantCount;
+      const canSeedNewPlants = currentTotalPlants < params.activePlantCap;
+
       for (let y = 1; y < GRID - 1; y++) {
         for (let x = 1; x < GRID - 1; x++) {
           const i = idx(x, y);
@@ -3731,9 +3737,12 @@
             if (hasSubstrate && m > 0.28) {
               h = Math.min(1.0, h + 0.08 * stepScale);
               if (v < 0.12) {
-                const seedChance = (nMax > 0.3 ? 0.08 : 0.015) * wp * stepScale;
-                if (fastRand(x, y, simTick) < seedChance) {
-                  v = 0.13 + fastRand(x, y, simTick + 7) * 0.25;
+                if (canSeedNewPlants && currentTotalPlants < params.activePlantCap) {
+                  const seedChance = (nMax > 0.3 ? 0.08 : 0.015) * wp * stepScale;
+                  if (fastRand(x, y, simTick) < seedChance) {
+                    v = 0.13 + fastRand(x, y, simTick + 7) * 0.25;
+                    currentTotalPlants++;
+                  }
                 }
               } else {
                 let maxStage = 1.05 + cellClimaxTrait * 0.65;
@@ -3760,10 +3769,11 @@
             const desertSpacingMask = fastRand(x, y, 53) > 0.54;
             if (hasSubstrate && m > 0.10) {
               h = Math.min(1.0, h + 0.06 * stepScale);
-              if (v < 0.12 && desertSpacingMask) {
+              if (v < 0.12 && desertSpacingMask && canSeedNewPlants && currentTotalPlants < params.activePlantCap) {
                 const seedChance = (nMax > 0.25 ? 0.022 : 0.0035) * m * stepScale;
                 if (fastRand(x, y, simTick) < seedChance) {
                   v = 0.13 + fastRand(x, y, simTick + 13) * 0.22;
+                  currentTotalPlants++;
                 }
               } else if (v >= 0.12) {
                 let maxStage = 1.05 + cellClimaxTrait * 0.55;
@@ -4332,7 +4342,19 @@
       let cBarrel = 0;
       let cSaguaro = 0;
 
-      const keepProb = params.fidelity === 1 ? 0.35 : (params.fidelity === 2 ? 0.60 : (params.fidelity === 3 ? 0.82 : 1.0));
+      // Count total vegetated cells so we can scale keepProb evenly across the entire map if over activePlantCap
+      let totalVegCells = 0;
+      for (let i = 0; i < MAX_CELLS; i++) {
+        if (veg[i] >= 0.12) totalVegCells++;
+      }
+
+      const fidelityCap = params.fidelity === 1 ? 1400 : (params.fidelity === 2 ? 2100 : (params.fidelity === 3 ? 2700 : MAX_TOTAL_PLANTS));
+      params.activePlantCap = fidelityCap;
+      const baseKeepProb = params.fidelity === 1 ? 0.35 : (params.fidelity === 2 ? 0.60 : (params.fidelity === 3 ? 0.82 : 1.0));
+      const keepProb = totalVegCells > 0
+        ? Math.min(baseKeepProb, (fidelityCap * 1.05) / totalVegCells)
+        : baseKeepProb;
+
       // In FPV Walk Mode, make all flora much skinnier and smaller so the player can see clearly through the underbrush!
       const fpvWidthBush = params.fpvMode ? 0.30 : 1.0;
       const fpvHeightBush = params.fpvMode ? 0.36 : 1.0;
@@ -4351,6 +4373,10 @@
           const i = row + x;
           const v = veg[i];
           if (v < 0.12) continue;
+
+          if ((cFern + cJungleBush + cJungleTree + cScrub + cBarrel + cSaguaro) >= fidelityCap) {
+            break;
+          }
 
           if (keepProb < 1.0 && fastRand(x, y, 91) > keepProb) {
             continue;
@@ -4445,6 +4471,7 @@
 
           if (isJungleZone) {
             if (tier === 0) {
+              if (cFern >= MAX_PLANT_BUFFER) continue;
               const sc = (0.55 + clamp((v - 0.12) / 1.03, 0, 1) * 0.75) * slopeScaleFit;
               dummy.scale.set(sc * fpvWidthBush, sc * fpvHeightBush, sc * fpvWidthBush);
               dummy.updateMatrix();
@@ -4453,6 +4480,7 @@
               fernInst.setColorAt(cFern, tempColor);
               cFern++;
             } else if (tier === 1) {
+              if (cJungleBush >= MAX_PLANT_BUFFER) continue;
               const sc = (0.68 + clamp((v - 1.15) / 1.0, 0, 1) * 0.75) * slopeScaleFit;
               dummy.scale.set(sc * fpvWidthBush, sc * fpvHeightBush, sc * fpvWidthBush);
               dummy.updateMatrix();
@@ -4462,6 +4490,7 @@
               cJungleBush++;
             } else {
               if (fastRand(x, y, 101) < 0.45) {
+                if (cJungleTree >= MAX_PLANT_BUFFER) continue;
                 const sc = (0.85 + clamp((v - 2.15) / 1.2, 0, 1) * 0.65) * slopeScaleFit;
                 dummy.scale.set(sc * fpvWidthTree, sc * fpvHeightTree, sc * fpvWidthTree);
                 dummy.updateMatrix();
@@ -4471,6 +4500,7 @@
                 jungleCrownInst.setColorAt(cJungleTree, tempColor);
                 cJungleTree++;
               } else {
+                if (cJungleBush >= MAX_PLANT_BUFFER) continue;
                 const sc = (0.85 + fastRand(x, y, 103) * 0.45) * slopeScaleFit;
                 dummy.scale.set(sc * fpvWidthBush, sc * fpvHeightBush, sc * fpvWidthBush);
                 dummy.updateMatrix();
@@ -4482,6 +4512,7 @@
             }
           } else {
             if (tier === 0) {
+              if (cScrub >= MAX_PLANT_BUFFER) continue;
               const sc = (0.55 + clamp((v - 0.12) / 1.03, 0, 1) * 0.70) * slopeScaleFit;
               dummy.scale.set(sc * fpvWidthBush, sc * fpvHeightBush, sc * fpvWidthBush);
               dummy.updateMatrix();
@@ -4490,6 +4521,7 @@
               desertScrubInst.setColorAt(cScrub, tempColor);
               cScrub++;
             } else if (tier === 1) {
+              if (cBarrel >= MAX_PLANT_BUFFER) continue;
               const sc = (0.65 + clamp((v - 1.15) / 1.0, 0, 1) * 0.72) * slopeScaleFit;
               dummy.scale.set(sc * fpvWidthBush, sc * fpvHeightBush, sc * fpvWidthBush);
               dummy.updateMatrix();
@@ -4498,6 +4530,7 @@
               barrelCactusInst.setColorAt(cBarrel, tempColor);
               cBarrel++;
             } else {
+              if (cSaguaro >= MAX_PLANT_BUFFER) continue;
               const sc = (0.80 + clamp((v - 2.15) / 1.2, 0, 1) * 0.65) * slopeScaleFit;
               dummy.scale.set(sc * fpvWidthTree, sc * fpvHeightTree, sc * fpvWidthTree);
               dummy.updateMatrix();
@@ -4543,7 +4576,7 @@
     // ============================================================================
     // 10B. BIOME WILDLIFE & FAUNA ENGINE (6 SPECIES: DESERT, JUNGLE, AQUATIC, SKY)
     // ============================================================================
-    const MAX_FAUNA_PER_SPECIES = 120;
+    const MAX_FAUNA_PER_SPECIES = 45;
 
     function createFaunaPool(geometry, baseHex, castShadow = true) {
       const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.72 });
@@ -5623,10 +5656,27 @@
 
     // Active animal agent lists
     const faunaAgents = [];
+    let lastFaunaBrushSpawnMs = 0;
 
     function spawnAnimalAgent(type, wx, wz) {
-      const countOfType = faunaAgents.filter((a) => a.type === type).length;
-      if (countOfType >= MAX_FAUNA_PER_SPECIES) return;
+      // Enforce hard global wildlife cap (MAX_TOTAL_FAUNA) to keep browser performance smooth & crash-free
+      if (faunaAgents.length >= MAX_TOTAL_FAUNA) {
+        // Try recycling an old skeleton slot first before refusing the spawn
+        const skelIdx = faunaAgents.findIndex((a) => a.state === 'skeleton');
+        if (skelIdx !== -1) {
+          faunaAgents.splice(skelIdx, 1);
+        } else {
+          return;
+        }
+      }
+
+      const isApex = (type === 'jaguar' || type === 'lion' || type === 'croc');
+      const speciesCap = isApex ? MAX_APEX_PER_SPECIES : MAX_FAUNA_PER_SPECIES;
+      let countOfType = 0;
+      for (let i = 0; i < faunaAgents.length; i++) {
+        if (faunaAgents[i].type === type && faunaAgents[i].state === 'alive') countOfType++;
+      }
+      if (countOfType >= speciesCap) return;
 
       const angle = Math.random() * Math.PI * 2;
       const { groundY, waterDepth } = sampleHeightsAtWorld(wx, wz);
@@ -5696,8 +5746,6 @@
         scale = 1.15;
         colorHex = 0x3f6212;
       }
-
-      const isApex = (type === 'jaguar' || type === 'lion' || type === 'croc');
 
       faunaAgents.push({
         type,
@@ -6901,8 +6949,16 @@
       return { boltRoot, coreMat, haloMat, flashDome, shockRing };
     }
 
+    const MAX_ACTIVE_DEBRIS_SHARDS = 48;
+
     function spawnExplosionShards(wx, wy, wz, count, colorPalette) {
       for (let k = 0; k < count; k++) {
+        // Cap concurrent 3D debris shards to prevent memory/mesh spikes during back-to-back lightning & volcano blasts
+        if (activeDebrisShards.length >= MAX_ACTIVE_DEBRIS_SHARDS) {
+          const oldest = activeDebrisShards.shift();
+          explosionDebrisGroup.remove(oldest.mesh);
+          oldest.mat.dispose();
+        }
         const hex = colorPalette[k % colorPalette.length];
         const mat = new THREE.MeshStandardMaterial({
           color: hex,
@@ -7352,7 +7408,14 @@
       }
     }
 
+    const MAX_ACTIVE_BRIMSTONE_BOMBS = 18;
+
     function launchBrimstoneBomb(craterX, craterY, craterZ) {
+      if (activeBrimstoneBombs.length >= MAX_ACTIVE_BRIMSTONE_BOMBS) {
+        const oldest = activeBrimstoneBombs.shift();
+        brimstoneBombsGroup.remove(oldest.mesh);
+        oldest.mat.dispose();
+      }
       const isBrimstoneGold = Math.random() < 0.45;
       const mat = new THREE.MeshStandardMaterial({
         color: isBrimstoneGold ? 0xfacc15 : 0x29150c,
@@ -8703,6 +8766,11 @@
       const rCells = Math.max(1, Math.round(params.brushRadius / CELL_SIZE));
 
       if (params.tool === 'fauna') {
+        // Throttle brush-drag animal spawning & enforce hard global wildlife cap (MAX_TOTAL_FAUNA)
+        const nowMs = performance.now();
+        if (nowMs - lastFaunaBrushSpawnMs < 95) return;
+        lastFaunaBrushSpawnMs = nowMs;
+
         // Spawn matching biome wildlife (daytime vs. nocturnal species) at brush click/drag position
         const centerIdx = idx(clamp(cx, 0, GRID - 1), clamp(cy, 0, GRID - 1));
         const w = water[centerIdx];
@@ -8730,6 +8798,14 @@
           }
         }
         return;
+      }
+
+      // Count active vegetated cells before brush loop so 'seed' never exceeds activePlantCap
+      let currentVegCells = 0;
+      if (params.tool === 'seed') {
+        for (let i = 0; i < MAX_CELLS; i++) {
+          if (veg[i] >= 0.12) currentVegCells++;
+        }
       }
 
       for (let dy = -rCells; dy <= rCells; dy++) {
@@ -8784,15 +8860,20 @@
             const maxSand = Math.max(0, MAX_TERRAIN_HEIGHT - bedrock[i]);
             sand[i] = Math.min(maxSand, sand[i] + falloff * 0.65);
           } else if (params.tool === 'seed') {
+            // Only seed new empty cells if total plants on the map are below activePlantCap; existing plants can still grow taller
+            const isAlreadyPlant = veg[i] >= 0.12;
+            if (!isAlreadyPlant && currentVegCells >= params.activePlantCap) continue;
             if (sand[i] < 0.25) sand[i] = Math.min(Math.max(0, MAX_TERRAIN_HEIGHT - bedrock[i]), 0.25);
             if (waterProximity[i] >= 0.38) {
               soilMoisture[i] = Math.max(soilMoisture[i], 0.75);
               veg[i] = Math.min(3.3, veg[i] + falloff * 0.65);
               vegHealth[i] = 1.0;
+              if (!isAlreadyPlant && veg[i] >= 0.12) currentVegCells++;
             } else if (hash2(x * 2.3, y * 3.7) > 0.42) {
               soilMoisture[i] = Math.max(soilMoisture[i], 0.30);
               veg[i] = Math.min(3.3, veg[i] + falloff * 0.65);
               vegHealth[i] = 1.0;
+              if (!isAlreadyPlant && veg[i] >= 0.12) currentVegCells++;
             }
           } else if (params.tool === 'dig') {
             if (sand[i] > 0.05) {
@@ -9545,18 +9626,26 @@
     });
 
     document.getElementById('btn-bloom-oasis').addEventListener('click', () => {
+      let currentVegCells = 0;
+      for (let i = 0; i < MAX_CELLS; i++) {
+        if (veg[i] >= 0.12) currentVegCells++;
+      }
       for (let y = 1; y < GRID - 1; y++) {
         for (let x = 1; x < GRID - 1; x++) {
           const i = idx(x, y);
+          const isAlreadyPlant = veg[i] >= 0.12;
+          if (!isAlreadyPlant && currentVegCells >= params.activePlantCap) continue;
           if (sand[i] > 0.08 && water[i] < 0.75 && obstacleType[i] !== 2) {
-            if (waterProximity[i] >= 0.38) {
+            if (waterProximity[i] >= 0.38 && hash2(x * 1.3, y * 1.7) > 0.48) {
               soilMoisture[i] = Math.max(soilMoisture[i], 0.85);
               veg[i] = Math.min(3.3, veg[i] + 1.1 + Math.random() * 1.2);
               vegHealth[i] = 1.0;
-            } else if (hash2(x * 1.9, y * 2.7) > 0.86) {
+              if (!isAlreadyPlant && veg[i] >= 0.12) currentVegCells++;
+            } else if (hash2(x * 1.9, y * 2.7) > 0.88) {
               soilMoisture[i] = Math.max(soilMoisture[i], 0.26);
               veg[i] = Math.min(3.2, 0.7 + hash2(x, y) * 2.4);
               vegHealth[i] = 1.0;
+              if (!isAlreadyPlant && veg[i] >= 0.12) currentVegCells++;
             }
           }
         }
