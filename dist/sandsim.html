@@ -9213,30 +9213,140 @@
     const humanPaintingSubjectsEl = document.getElementById('human-painting-subjects');
     const humanPaintingExpiryEl = document.getElementById('human-painting-expiry-note');
 
+    // Evaluate whether a candidate world position (tx, tz) is a safe, compatible location where the artist will NOT immediately drown or perish
+    function evaluateVoxelHumanSpawnLocation(tx, tz, strictDryLand = true) {
+      const halfBound = WORLD_SIZE * 0.44;
+      if (Math.abs(tx) > halfBound || Math.abs(tz) > halfBound) {
+        return { compatible: false, score: -1e9 };
+      }
+      const h = sampleHeightsAtWorld(tx, tz);
+      const maxAllowedWater = strictDryLand ? 0.035 : 0.32;
+      if (h.waterDepth > maxAllowedWater || h.localLava > 0.06) {
+        return { compatible: false, score: -1e9 };
+      }
+
+      const gx = clamp(Math.floor(((tx / WORLD_SIZE) + 0.5) * (GRID - 1)), 2, GRID - 3);
+      const gz = clamp(Math.floor(((tz / WORLD_SIZE) + 0.5) * (GRID - 1)), 2, GRID - 3);
+      const ci = idx(gx, gz);
+      if (obstacleType[ci] === 2) {
+        return { compatible: false, score: -1e9 };
+      }
+
+      // Reject if any adjacent cell (within a 2-cell ring) has molten lava, boiling steam, or deep water
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const ni = idx(clamp(gx + dx, 1, GRID - 2), clamp(gz + dy, 1, GRID - 2));
+          if ((water[ni] > 0.025 && lavaFrac[ni] >= 0.20) || steamStageTimer[ni] > 0.0) {
+            return { compatible: false, score: -1e9 };
+          }
+          if (strictDryLand && Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && water[ni] > 0.25) {
+            return { compatible: false, score: -1e9 };
+          }
+        }
+      }
+
+      // Reject if inside or near an active volcano eruption zone
+      if (typeof volcanoEruptionState !== 'undefined' && volcanoEruptionState.active) {
+        if (Math.hypot(tx - volcanoEruptionState.wx, tz - volcanoEruptionState.wz) < volcanoEruptionState.radiusMeters * 1.15) {
+          return { compatible: false, score: -1e9 };
+        }
+      }
+
+      // Reject if too close to a living predator (Lion, Crocodile, or Jaguar) or a moving Offroad Truck
+      let minPredatorDist = 999.0;
+      if (typeof faunaAgents !== 'undefined') {
+        for (let i = 0; i < faunaAgents.length; i++) {
+          const a = faunaAgents[i];
+          if (a.state !== 'alive') continue;
+          if (a.type === 'lion' || a.type === 'croc' || a.type === 'jaguar') {
+            const d = Math.hypot(a.x - tx, a.z - tz);
+            if (d < minPredatorDist) minPredatorDist = d;
+          }
+        }
+      }
+      if (strictDryLand && minPredatorDist < 22.0) {
+        return { compatible: false, score: -1e9 };
+      }
+      if (!strictDryLand && minPredatorDist < 12.0) {
+        return { compatible: false, score: -1e9 };
+      }
+
+      if (typeof placedWorldItems !== 'undefined') {
+        for (let i = 0; i < placedWorldItems.length; i++) {
+          const it = placedWorldItems[i];
+          if (it.type === 'item-truck' && Math.hypot(it.x - tx, it.z - tz) < 7.5) {
+            return { compatible: false, score: -1e9 };
+          }
+        }
+      }
+
+      // Prefer dry scenic overlooks near the oasis edge (`waterProximity` around 0.18..0.68) with comfortable predator clearance
+      const wp = waterProximity[ci];
+      const oasisEdgeBonus = (wp >= 0.18 && wp <= 0.68) ? 35.0 : 0.0;
+      const predatorSafetyBonus = Math.min(40.0, minPredatorDist) * 0.45;
+      const score = oasisEdgeBonus + predatorSafetyBonus + h.groundY * 2.2 - h.waterDepth * 60.0 - Math.hypot(tx, tz) * 0.14;
+      return { compatible: true, score };
+    }
+
     function spawnOrRelocateVoxelHuman() {
-      const halfBound = WORLD_SIZE * 0.40;
-      let bestX = 0;
-      let bestZ = 0;
+      const halfBound = WORLD_SIZE * 0.41;
+      let bestX = null;
+      let bestZ = null;
       let bestScore = -1e9;
-      for (let attempt = 0; attempt < 40; attempt++) {
+
+      // Pass 1: 90 random candidate locations across the world (strict dry, hazard-free land)
+      for (let attempt = 0; attempt < 90; attempt++) {
         const tx = (Math.random() - 0.5) * 2.0 * halfBound;
         const tz = (Math.random() - 0.5) * 2.0 * halfBound;
-        const h = sampleHeightsAtWorld(tx, tz);
-        if (h.waterDepth > 0.02 || h.localLava > 0.08) continue;
-        const gx = clamp(Math.floor(((tx / WORLD_SIZE) + 0.5) * (GRID - 1)), 2, GRID - 3);
-        const gz = clamp(Math.floor(((tz / WORLD_SIZE) + 0.5) * (GRID - 1)), 2, GRID - 3);
-        const ci = idx(gx, gz);
-        if (obstacleType[ci] === 2) continue;
-        // Prefer dry scenic overlooks near the oasis edge (`waterProximity` around 0.25..0.60)
-        const wp = waterProximity[ci];
-        const oasisEdgeBonus = (wp >= 0.18 && wp <= 0.68) ? 35.0 : 0.0;
-        const score = oasisEdgeBonus + h.groundY * 2.2 - Math.hypot(tx, tz) * 0.15;
-        if (score > bestScore) {
-          bestScore = score;
+        const ev = evaluateVoxelHumanSpawnLocation(tx, tz, true);
+        if (ev.compatible && ev.score > bestScore) {
+          bestScore = ev.score;
           bestX = tx;
           bestZ = tz;
         }
       }
+
+      // Pass 2: Systematic grid scan across the terrain if random sampling didn't find a strict dry spot
+      if (bestX === null) {
+        for (let gz = 6; gz < GRID - 6; gz += 4) {
+          for (let gx = 6; gx < GRID - 6; gx += 4) {
+            const tx = ((gx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+            const tz = ((gz / (GRID - 1)) - 0.5) * WORLD_SIZE;
+            const ev = evaluateVoxelHumanSpawnLocation(tx, tz, true);
+            if (ev.compatible && ev.score > bestScore) {
+              bestScore = ev.score;
+              bestX = tx;
+              bestZ = tz;
+            }
+          }
+        }
+      }
+
+      // Pass 3: Relaxed shallow-wading scan (still guaranteed not to drown or burn) if almost the entire map is flooded
+      if (bestX === null) {
+        for (let gz = 5; gz < GRID - 5; gz += 3) {
+          for (let gx = 5; gx < GRID - 5; gx += 3) {
+            const tx = ((gx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+            const tz = ((gz / (GRID - 1)) - 0.5) * WORLD_SIZE;
+            const ev = evaluateVoxelHumanSpawnLocation(tx, tz, false);
+            if (ev.compatible && ev.score > bestScore) {
+              bestScore = ev.score;
+              bestX = tx;
+              bestZ = tz;
+            }
+          }
+        }
+      }
+
+      // If the entire world is currently submerged in deep water or molten lava, do NOT place the artist yet — retry shortly!
+      if (bestX === null || bestZ === null) {
+        voxelHuman.active = false;
+        voxelHuman.respawnCooldown = Math.max(voxelHuman.respawnCooldown || 0.0, 2.5);
+        voxelHuman.rig.root.visible = false;
+        if (voxelHumanBubbleEl) voxelHumanBubbleEl.style.display = 'none';
+        return false;
+      }
+
       const { groundY } = sampleHeightsAtWorld(bestX, bestZ);
       voxelHuman.x = bestX;
       voxelHuman.y = groundY;
@@ -9244,6 +9354,10 @@
       voxelHuman.heading = Math.atan2(-bestX, -bestZ);
       voxelHuman.targetHeading = voxelHuman.heading;
       voxelHuman.active = true;
+      voxelHuman.isBurning = false;
+      voxelHuman.burnTimer = 0.0;
+      voxelHuman.drownTimer = 0.0;
+      voxelHuman.beingChasedByLion = null;
       voxelHuman.routine = 'WANDER';
       voxelHuman.routineDuration = 10.0 + Math.random() * 6.0;
       voxelHuman.routineTimer = 0.0;
@@ -9251,6 +9365,7 @@
       voxelHuman.rig.root.visible = true;
       voxelHuman.rig.root.position.set(bestX, groundY, bestZ);
       voxelHuman.rig.root.rotation.y = voxelHuman.heading;
+      return true;
     }
 
     // Score 12 directions around (hx, hz) to aim the easel toward the most scenic landscape vista!
@@ -10477,7 +10592,14 @@
     };
 
     function startVoxelHumanPaintingRoutine(forcedMode = null) {
-      if (!voxelHuman.active) spawnOrRelocateVoxelHuman();
+      if (!voxelHuman.active) {
+        if (!spawnOrRelocateVoxelHuman()) return;
+      }
+      // If the artist's current location is not compatible (e.g., flooded, touching lava, inside a volcano, or adjacent to a predator), pick a new safe location first!
+      const curCheck = evaluateVoxelHumanSpawnLocation(voxelHuman.x, voxelHuman.z, true);
+      if (!curCheck.compatible) {
+        if (!spawnOrRelocateVoxelHuman()) return;
+      }
       const { groundY } = sampleHeightsAtWorld(voxelHuman.x, voxelHuman.z);
       voxelHuman.y = groundY;
       voxelHuman.heading = chooseBestVistaHeading(voxelHuman.x, voxelHuman.z);
@@ -10645,7 +10767,12 @@
     const btnLocateVoxelHuman = document.getElementById('btn-locate-voxel-human');
     if (btnLocateVoxelHuman) {
       btnLocateVoxelHuman.addEventListener('click', () => {
-        if (!voxelHuman.active) spawnOrRelocateVoxelHuman();
+        if (!voxelHuman.active) {
+          if (!spawnOrRelocateVoxelHuman()) {
+            showCartridgeToast(`🌊 No safe dry land available to place the Oasis Artist right now!`, true);
+            return;
+          }
+        }
         if (params.driveMode) toggleDriveMode(false);
         if (params.fpvMode) toggleFPVMode(false);
         const fwdX = Math.sin(voxelHuman.heading);
@@ -10662,7 +10789,10 @@
       btnTriggerHumanPaint.addEventListener('click', () => {
         if (!voxelHuman.active) {
           voxelHuman.respawnCooldown = 0.0;
-          spawnOrRelocateVoxelHuman();
+          if (!spawnOrRelocateVoxelHuman()) {
+            showCartridgeToast(`🌊 No safe dry land available to place the Oasis Artist right now!`, true);
+            return;
+          }
         }
         if (voxelHuman.routine === 'LANDSCAPE_PAINTING') {
           // If already painting, complete the painting immediately so the player can click 🖼️ right away!
@@ -10674,6 +10804,7 @@
           nextForcedPaintModeIdx = (nextForcedPaintModeIdx + 1) % modes.length;
           const pickedMode = modes[nextForcedPaintModeIdx];
           startVoxelHumanPaintingRoutine(pickedMode);
+          if (!voxelHuman.active) return;
           const modeLabels = {
             landscape: 'Plein-Air 3D Landscape (1-3 min)',
             animal:    `Animal Portrait: "${voxelHuman.customPaintTitle}"`,
@@ -10703,7 +10834,12 @@
             return;
           }
         }
-        spawnOrRelocateVoxelHuman();
+        if (!spawnOrRelocateVoxelHuman()) {
+          if (valVoxelHumanStatusEl && frameCount % 6 === 0) {
+            valVoxelHumanStatusEl.textContent = `⏳ Seeking Dry Land...`;
+          }
+          return;
+        }
       }
 
       const time = uniforms.uTime.value || 0.0;
