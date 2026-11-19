@@ -12323,7 +12323,7 @@
 
           const avgWheelGroundY = 0.25 * (hFL + hFR + hRL + hRR);
           const terrainPitch = Math.atan2(((hFL + hFR) * 0.5) - ((hRL + hRR) * 0.5), 2.32);
-          const terrainRoll = Math.atan2(((hFL + hRL) * 0.5) - ((hFR + hRR) * 0.5), 1.68);
+          const terrainRoll = Math.atan2(((hFR + hRR) * 0.5) - ((hFL + hRL) * 0.5), 1.68);
 
           const prevGroundY = it.prevGroundY ?? avgWheelGroundY;
           it.prevGroundY = avgWheelGroundY;
@@ -12477,7 +12477,7 @@
             const bodyFlex = 1.48 - suspStiff * 0.88; // Soft suspension = deep body lean/squat; Stiff = flat cornering
             const targetSuspPitch = (throttleInput > 0.0 ? -0.095 : (throttleInput < 0.0 || isDrifting ? 0.11 : 0.0)) * bodyFlex;
             const cornerG = clamp((it.steerAngle * absSpd) / 11.0 + (it.driftSlipAngle || 0.0) * 0.85, -1.25, 1.25);
-            const targetSuspRoll = -cornerG * 0.21 * bodyFlex * (1.15 - counterweight * 0.35);
+            const targetSuspRoll = cornerG * 0.18 * bodyFlex * (1.15 - counterweight * 0.35);
             const suspResp = 5.8 + suspStiff * 6.5;
             it.suspPitch = (it.suspPitch || 0.0) + (targetSuspPitch - (it.suspPitch || 0.0)) * Math.min(1.0, dt * suspResp);
             it.suspRoll = (it.suspRoll || 0.0) + (targetSuspRoll - (it.suspRoll || 0.0)) * Math.min(1.0, dt * suspResp);
