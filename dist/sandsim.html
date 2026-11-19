@@ -1068,6 +1068,163 @@
       color: #16110b;
     }
 
+    /* Mobile Offroad Vehicle Drive Mode HUD (Hides Menus, Shows Left Thumb Stick, Right E-Brake/Accel/Decel, Top-Right Exit) */
+    #drive-touch-controls {
+      display: none;
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 45;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body.drive-mobile-active #drive-touch-controls {
+      display: block;
+    }
+    body.drive-mobile-active .top-bar,
+    body.drive-mobile-active .bottom-dock,
+    body.drive-mobile-active .control-panel,
+    body.drive-mobile-active #fpv-banner,
+    body.drive-mobile-active #fpv-equip-bar,
+    body.drive-mobile-active #dev-stats-bar {
+      display: none !important;
+    }
+    #btn-drive-touch-exit {
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      pointer-events: auto;
+      touch-action: manipulation;
+      padding: 8px 15px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 700;
+      background: rgba(20, 17, 14, 0.85);
+      border: 1.5px solid rgba(248, 113, 113, 0.72);
+      color: #fecaca;
+      box-shadow: 0 6px 22px rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(10px);
+    }
+    #btn-drive-touch-exit:active {
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      color: #fff;
+    }
+    #drive-joy-zone {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      width: 122px;
+      height: 122px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(24, 21, 17, 0.45) 0%, rgba(14, 12, 10, 0.72) 100%);
+      border: 2px solid rgba(232, 168, 76, 0.55);
+      box-shadow: 0 8px 26px rgba(0, 0, 0, 0.6);
+      pointer-events: auto;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #drive-joy-zone::before {
+      content: '◀   ▶';
+      position: absolute;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 22px;
+      padding-left: 22px;
+      color: rgba(255, 197, 109, 0.35);
+      pointer-events: none;
+    }
+    #drive-joy-knob {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #ffe0a3 0%, #e8a84c 55%, #b4691e 100%);
+      border: 1.5px solid rgba(255, 255, 255, 0.45);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.75);
+      pointer-events: none;
+      transition: transform 0.03s linear;
+    }
+    #drive-touch-pedals {
+      position: absolute;
+      bottom: 22px;
+      right: 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+      pointer-events: auto;
+    }
+    .drive-pedal-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+    }
+    .drive-touch-btn {
+      pointer-events: auto;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      font-weight: 800;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(8px);
+      transition: transform 0.06s ease, background 0.1s ease;
+    }
+    .drive-touch-btn:active,
+    .drive-touch-btn.pressed {
+      transform: scale(0.94);
+    }
+    #btn-drive-touch-ebrake {
+      width: 138px;
+      height: 46px;
+      border-radius: 14px;
+      font-size: 12.5px;
+      background: rgba(30, 20, 14, 0.78);
+      border: 2px solid rgba(251, 191, 36, 0.72);
+      color: #fde047;
+    }
+    #btn-drive-touch-ebrake:active,
+    #btn-drive-touch-ebrake.pressed {
+      background: linear-gradient(135deg, #f59e0b, #b45309);
+      color: #16110b;
+      border-color: #fef08a;
+    }
+    #btn-drive-touch-decel {
+      width: 62px;
+      height: 68px;
+      border-radius: 16px;
+      font-size: 11.5px;
+      background: rgba(28, 16, 16, 0.78);
+      border: 2px solid rgba(248, 113, 113, 0.68);
+      color: #fca5a5;
+    }
+    #btn-drive-touch-decel:active,
+    #btn-drive-touch-decel.pressed {
+      background: linear-gradient(135deg, #ef4444, #991b1b);
+      color: #fff;
+      border-color: #fecaca;
+    }
+    #btn-drive-touch-accel {
+      width: 66px;
+      height: 86px;
+      border-radius: 16px;
+      font-size: 12.5px;
+      background: rgba(14, 28, 22, 0.80);
+      border: 2px solid rgba(52, 211, 153, 0.75);
+      color: #6ee7b7;
+    }
+    #btn-drive-touch-accel:active,
+    #btn-drive-touch-accel.pressed {
+      background: linear-gradient(135deg, #34d399, #059669);
+      color: #042f2e;
+      border-color: #a7f3d0;
+    }
+
     /* Compact Side-Docking Responsive Rules for Mobile & Short Landscape Screens */
     @media screen and (max-height: 560px), screen and (max-width: 980px) {
       /* 1. Top Bar: Hide brand subtitle & secondary stat readouts so top-left stays minimal */
@@ -1336,6 +1493,29 @@
     <div id="fpv-touch-actions">
       <button id="btn-fpv-touch-action" class="fpv-touch-btn" title="Use Sculpt Brush or Draw/Fire Bow">🎯 Use</button>
       <button id="btn-fpv-touch-jump" class="fpv-touch-btn" title="Jump or Swim Up">⬆️ Jump</button>
+    </div>
+  </div>
+
+  <!-- Mobile Vehicle Drive Mode Virtual Thumb Stick, Pedals (E-Brake, Accel, Decel) & Top-Right Exit Button -->
+  <div id="drive-touch-controls">
+    <button id="btn-drive-touch-exit" type="button" title="Exit Drive Mode">✕ Exit Drive</button>
+    <div id="drive-joy-zone" title="Drag thumb stick to steer vehicle">
+      <div id="drive-joy-knob"></div>
+    </div>
+    <div id="drive-touch-pedals">
+      <button id="btn-drive-touch-ebrake" type="button" class="drive-touch-btn" title="Hold to E-Brake & Drift!">
+        <span>💨 E-BRAKE</span>
+      </button>
+      <div class="drive-pedal-row">
+        <button id="btn-drive-touch-decel" type="button" class="drive-touch-btn" title="Hold to Brake / Reverse">
+          <span>🛑</span>
+          <span>DECEL</span>
+        </button>
+        <button id="btn-drive-touch-accel" type="button" class="drive-touch-btn" title="Hold to Accelerate">
+          <span>⚡</span>
+          <span>ACCEL</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -11291,6 +11471,11 @@
 
     const driveState = {
       keys: { forward: false, backward: false, left: false, right: false, drift: false },
+      joyX: 0.0,
+      joyY: 0.0,
+      touchAccel: false,
+      touchDecel: false,
+      touchDrift: false,
       camYaw: 0.0,
       savedOrbitPos: new THREE.Vector3(),
       savedOrbitTarget: new THREE.Vector3()
@@ -11780,11 +11965,18 @@
           let steerInput = 0.0;
           let isDrifting = false;
           if (isBeingDriven) {
-            if (driveState.keys.forward) throttleInput += 1.0;
-            if (driveState.keys.backward) throttleInput -= 1.0;
+            if (driveState.keys.forward || driveState.touchAccel) throttleInput += 1.0;
+            if (driveState.keys.backward || driveState.touchDecel) throttleInput -= 1.0;
             if (driveState.keys.left) steerInput += 1.0;
             if (driveState.keys.right) steerInput -= 1.0;
-            isDrifting = driveState.keys.drift;
+            // Mobile virtual thumb stick steering (left = +1 steer, right = -1 steer) & optional vertical throttle if pedals aren't pressed
+            if (Math.abs(driveState.joyX) > 0.04) {
+              steerInput = clamp(steerInput - driveState.joyX, -1.0, 1.0);
+            }
+            if (throttleInput === 0.0 && Math.abs(driveState.joyY) > 0.16) {
+              throttleInput = clamp(-driveState.joyY, -1.0, 1.0);
+            }
+            isDrifting = driveState.keys.drift || driveState.touchDrift;
           }
 
           // Surface traction & speed boost on Paved Road (2) or Brick Road (3)
@@ -12889,6 +13081,19 @@
     const btnDriveMode = document.getElementById('btn-drive-mode');
     const origFpvBannerHTML = fpvBanner.innerHTML;
 
+    function isMobileDriveViewport() {
+      return ('ontouchstart' in window) ||
+        (navigator.maxTouchPoints > 0) ||
+        window.matchMedia('(pointer: coarse)').matches ||
+        (window.innerWidth <= 980) ||
+        (window.innerHeight <= 560);
+    }
+
+    function syncDriveMobileUI() {
+      document.body.classList.toggle('drive-mobile-active', Boolean(params.driveMode && isMobileDriveViewport()));
+    }
+    window.addEventListener('resize', syncDriveMobileUI);
+
     function toggleDriveMode(forceState) {
       const truck = getLatestPlacedTruck();
       const nextState = forceState !== undefined ? forceState : !params.driveMode;
@@ -12905,6 +13110,14 @@
       driveState.keys.left = false;
       driveState.keys.right = false;
       driveState.keys.drift = false;
+      driveState.joyX = 0.0;
+      driveState.joyY = 0.0;
+      driveState.touchAccel = false;
+      driveState.touchDecel = false;
+      driveState.touchDrift = false;
+      const driveKnobEl = document.getElementById('drive-joy-knob');
+      if (driveKnobEl) driveKnobEl.style.transform = 'translate(0px, 0px)';
+      document.querySelectorAll('.drive-touch-btn.pressed').forEach((b) => b.classList.remove('pressed'));
 
       if (btnDriveMode) {
         btnDriveMode.classList.toggle('active', params.driveMode);
@@ -12932,6 +13145,7 @@
           controls.update();
         }
       }
+      syncDriveMobileUI();
       syncSculptDockVisibility();
     }
 
@@ -13840,6 +14054,86 @@
       };
       btnFpvTouchAction.addEventListener('pointerup', releaseAction);
       btnFpvTouchAction.addEventListener('pointercancel', releaseAction);
+    }
+
+    // --- Mobile Vehicle Drive Mode Virtual Thumb Stick, E-Brake / Accel / Decel Pedals & Top-Right Exit Button ---
+    const driveJoyZone = document.getElementById('drive-joy-zone');
+    const driveJoyKnob = document.getElementById('drive-joy-knob');
+    let driveJoyPointerId = null;
+
+    if (driveJoyZone && driveJoyKnob) {
+      const updateDriveJoystick = (clientX, clientY) => {
+        const rect = driveJoyZone.getBoundingClientRect();
+        const cx = rect.left + rect.width * 0.5;
+        const cy = rect.top + rect.height * 0.5;
+        const maxR = rect.width * 0.38;
+        let dx = clientX - cx;
+        let dy = clientY - cy;
+        const dist = Math.hypot(dx, dy);
+        if (dist > maxR) {
+          dx = (dx / dist) * maxR;
+          dy = (dy / dist) * maxR;
+        }
+        driveJoyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+        driveState.joyX = dx / maxR;
+        driveState.joyY = dy / maxR;
+      };
+
+      driveJoyZone.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        ensureAudioContext();
+        driveJoyPointerId = e.pointerId;
+        driveJoyZone.setPointerCapture(e.pointerId);
+        updateDriveJoystick(e.clientX, e.clientY);
+      });
+      driveJoyZone.addEventListener('pointermove', (e) => {
+        if (e.pointerId !== driveJoyPointerId) return;
+        e.stopPropagation();
+        updateDriveJoystick(e.clientX, e.clientY);
+      });
+      const resetDriveJoystick = (e) => {
+        if (e.pointerId !== driveJoyPointerId) return;
+        driveJoyPointerId = null;
+        driveJoyKnob.style.transform = 'translate(0px, 0px)';
+        driveState.joyX = 0.0;
+        driveState.joyY = 0.0;
+      };
+      driveJoyZone.addEventListener('pointerup', resetDriveJoystick);
+      driveJoyZone.addEventListener('pointercancel', resetDriveJoystick);
+    }
+
+    function bindDriveTouchPedal(btnId, stateProp) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        ensureAudioContext();
+        try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+        driveState[stateProp] = true;
+        btn.classList.add('pressed');
+      });
+      const releasePedal = (e) => {
+        e.stopPropagation();
+        driveState[stateProp] = false;
+        btn.classList.remove('pressed');
+      };
+      btn.addEventListener('pointerup', releasePedal);
+      btn.addEventListener('pointercancel', releasePedal);
+      btn.addEventListener('lostpointercapture', releasePedal);
+    }
+
+    bindDriveTouchPedal('btn-drive-touch-accel', 'touchAccel');
+    bindDriveTouchPedal('btn-drive-touch-decel', 'touchDecel');
+    bindDriveTouchPedal('btn-drive-touch-ebrake', 'touchDrift');
+
+    const btnDriveTouchExit = document.getElementById('btn-drive-touch-exit');
+    if (btnDriveTouchExit) {
+      btnDriveTouchExit.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleDriveMode(false);
+      });
     }
 
     // ============================================================================
