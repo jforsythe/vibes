@@ -2963,17 +2963,13 @@
     moonAmbientLight.position.set(-210, 280, -490);
     scene.add(moonAmbientLight);
 
-    // Dynamic Volcanic Lava PointLights (4 quadrant lights that illuminate surrounding dunes, canyon walls, cacti, trees & wildlife with a warm magma glow!)
-    const lavaNightLight  = new THREE.PointLight(0xff4d00, 0.0, 88.0, 1.18);
+    // Dynamic Volcanic Lava PointLights (2 high-reach lights paired with the 3D terrain lava radiance halo for maximum 60fps GPU performance!)
+    const lavaNightLight  = new THREE.PointLight(0xff4d00, 0.0, 115.0, 1.15);
     scene.add(lavaNightLight);
-    const lavaNightLight2 = new THREE.PointLight(0xff6200, 0.0, 88.0, 1.18);
+    const lavaNightLight2 = new THREE.PointLight(0xff6200, 0.0, 115.0, 1.15);
     scene.add(lavaNightLight2);
-    const lavaNightLight3 = new THREE.PointLight(0xff5500, 0.0, 88.0, 1.18);
-    scene.add(lavaNightLight3);
-    const lavaNightLight4 = new THREE.PointLight(0xff6a00, 0.0, 88.0, 1.18);
-    scene.add(lavaNightLight4);
-    const lavaPointLights = [lavaNightLight, lavaNightLight2, lavaNightLight3, lavaNightLight4];
-    const lavaLightBaseIntensities = [0.0, 0.0, 0.0, 0.0];
+    const lavaPointLights = [lavaNightLight, lavaNightLight2];
+    const lavaLightBaseIntensities = [0.0, 0.0];
 
     // ============================================================================
     // 2B. CELESTIAL SKYBOX, DAY/NIGHT CYCLE, MOVING SUN, STARFIELD & FIXED GLOWING MOONS
@@ -3700,15 +3696,12 @@
       function emitWaterWallQuad(x0, z0, x1, z1, yb0, yb1, yt0, yt1, nx, nz) {
         const p = waterSkirtPositions;
         const n = waterSkirtNormals;
-        const verts = [
-          [x0, yb0, z0], [x1, yb1, z1], [x1, yt1, z1],
-          [x0, yb0, z0], [x1, yt1, z1], [x0, yt0, z0]
-        ];
-        for (let v = 0; v < 6; v++) {
-          p[wPtr] = verts[v][0]; p[wPtr + 1] = verts[v][1]; p[wPtr + 2] = verts[v][2];
-          n[wPtr] = nx;          n[wPtr + 1] = 0;           n[wPtr + 2] = nz;
-          wPtr += 3;
-        }
+        p[wPtr] = x0; p[wPtr + 1] = yb0; p[wPtr + 2] = z0; n[wPtr] = nx; n[wPtr + 1] = 0; n[wPtr + 2] = nz; wPtr += 3;
+        p[wPtr] = x1; p[wPtr + 1] = yb1; p[wPtr + 2] = z1; n[wPtr] = nx; n[wPtr + 1] = 0; n[wPtr + 2] = nz; wPtr += 3;
+        p[wPtr] = x1; p[wPtr + 1] = yt1; p[wPtr + 2] = z1; n[wPtr] = nx; n[wPtr + 1] = 0; n[wPtr + 2] = nz; wPtr += 3;
+        p[wPtr] = x0; p[wPtr + 1] = yb0; p[wPtr + 2] = z0; n[wPtr] = nx; n[wPtr + 1] = 0; n[wPtr + 2] = nz; wPtr += 3;
+        p[wPtr] = x1; p[wPtr + 1] = yt1; p[wPtr + 2] = z1; n[wPtr] = nx; n[wPtr + 1] = 0; n[wPtr + 2] = nz; wPtr += 3;
+        p[wPtr] = x0; p[wPtr + 1] = yt0; p[wPtr + 2] = z0; n[wPtr] = nx; n[wPtr + 1] = 0; n[wPtr + 2] = nz; wPtr += 3;
       }
 
       function emitEdgeColumn(i0, i1, x0, z0, x1, z1, nx, nz) {
@@ -4919,6 +4912,8 @@
       pendingRockHeight[i] = 0.0;
     }
 
+    const _waterFlowDiffs = new Float32Array(8);
+
     function waterShedAndPoolStep(stepScale = 1.0) {
       const rainAdd = params.rainRate * 0.0018 * stepScale;
       const evapSub = params.evapRate * (1.0 + params.windSpeed * 0.04) * 0.00048 * stepScale;
@@ -4939,10 +4934,10 @@
         }
       }
 
-      // Gravity downhill flow rate: water rushes briskly down slopes & valleys, while molten lava flows as a thick viscous magma (~4x slower)
-      const flowScale = Math.min(1.0, Math.max(stepScale * 8.5, 0.34));
+      // Gravity downhill flow rate: 2 bidirectional passes with pre-allocated _waterFlowDiffs (zero per-cell heap allocations!)
+      const flowScale = Math.min(1.0, Math.max(stepScale * 14.5, 0.58));
 
-      for (let pass = 0; pass < 4; pass++) {
+      for (let pass = 0; pass < 2; pass++) {
         waterNext.set(water);
         lavaFracNext.set(lavaFrac);
 
@@ -4964,7 +4959,6 @@
 
             let totalWeightedDiff = 0;
             let maxDrop = 0;
-            let diffs = [0, 0, 0, 0, 0, 0, 0, 0];
 
             for (let d = 0; d < 8; d++) {
               const ni = i + N8_OFFSETS[d];
@@ -4972,9 +4966,11 @@
               const dh = headCenter - headN;
               if (dh > 0.0001) {
                 const wd = dh * N8_WEIGHTS[d];
-                diffs[d] = wd;
+                _waterFlowDiffs[d] = wd;
                 totalWeightedDiff += wd;
                 if (dh > maxDrop) maxDrop = dh;
+              } else {
+                _waterFlowDiffs[d] = 0.0;
               }
             }
 
@@ -4989,9 +4985,10 @@
                 const invTotal = maxOutflow / totalWeightedDiff;
 
                 for (let d = 0; d < 8; d++) {
-                  if (diffs[d] > 0) {
+                  const diffD = _waterFlowDiffs[d];
+                  if (diffD > 0) {
                     const ni = i + N8_OFFSETS[d];
-                    const dFlow = diffs[d] * invTotal;
+                    const dFlow = diffD * invTotal;
                     const prevVol = Math.max(0, waterNext[ni]);
                     const newVol = prevVol + dFlow;
                     waterNext[ni] = newVol;
@@ -5008,8 +5005,9 @@
                   if (wash > 1e-7) {
                     sand[i] -= wash;
                     for (let d = 0; d < 8; d++) {
-                      if (diffs[d] > 0) {
-                        sand[i + N8_OFFSETS[d]] += wash * (diffs[d] / totalWeightedDiff);
+                      const diffD = _waterFlowDiffs[d];
+                      if (diffD > 0) {
+                        sand[i + N8_OFFSETS[d]] += wash * (diffD / totalWeightedDiff);
                       }
                     }
                   }
@@ -5512,19 +5510,18 @@
       sand.set(sandNext);
     }
 
+    const AVALANCHE_DIST = new Float32Array([1.0, 1.0, 1.0, 1.0, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2]);
+
     function avalancheStep(stepScale = 1.0) {
       const baseReposeTan = 0.62;
       const relaxScale = Math.min(1.0, Math.max(stepScale * 2.0, 0.12));
-      const dirs = [
-        [1, 0, 1.0], [-1, 0, 1.0], [0, 1, 1.0], [0, -1, 1.0],
-        [1, 1, Math.SQRT2], [-1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, -1, Math.SQRT2]
-      ];
 
       sandNext.set(sand);
 
       for (let y = 1; y < GRID - 1; y++) {
+        const row = y * GRID;
         for (let x = 1; x < GRID - 1; x++) {
-          const i = idx(x, y);
+          const i = row + x;
           const s = sand[i];
           if (s <= 0.001) continue;
 
@@ -5538,12 +5535,10 @@
           const hCenter = bedrock[i] + s;
 
           for (let d = 0; d < 8; d++) {
-            const nx = x + dirs[d][0];
-            const ny = y + dirs[d][1];
-            const ni = idx(nx, ny);
+            const ni = i + N8_OFFSETS[d];
             const hNeighbor = bedrock[ni] + sand[ni];
             const diff = hCenter - hNeighbor;
-            const limit = localMaxDelta * dirs[d][2];
+            const limit = localMaxDelta * AVALANCHE_DIST[d];
 
             if (diff > limit) {
               const slide = Math.min(sandNext[i] * 0.24, (diff - limit) * 0.18) * relaxScale;
@@ -5576,6 +5571,7 @@
     // ============================================================================
     const _lavaGlowBufA = new Float32Array(MAX_CELLS);
     const _lavaGlowBufB = new Float32Array(MAX_CELLS);
+    let _lastTerrainSyncFrame = -1;
 
     function syncTerrainAndWaterMeshes() {
       const tPos = terrainGeo.attributes.position.array;
@@ -5589,46 +5585,48 @@
 
       let totalW = 0;
       let totalL = 0;
-      const qLavaW = [0, 0, 0, 0];
-      const qLavaX = [0, 0, 0, 0];
-      const qLavaY = [0, 0, 0, 0];
-      const qLavaZ = [0, 0, 0, 0];
+      const qLavaW = [0, 0];
+      const qLavaX = [0, 0];
+      const qLavaY = [0, 0];
+      const qLavaZ = [0, 0];
       const cellArea = CELL_SIZE * CELL_SIZE;
       const nightFactor = skyUniforms.uNightFactor.value || 0.0;
       const timeNow = uniforms.uTime.value || 0.0;
       const hrNow = ((params.timeOfDay % 24) + 24) % 24;
       const isNightTimeNow = (hrNow >= 18.2 || hrNow < 6.0) || (nightFactor > 0.35);
 
-      // Compute multi-cell Lava Thermal Radiance Halo field (_lavaGlowBufA) around all active molten lava cells
+      // Compute multi-cell Lava Thermal Radiance Halo field (_lavaGlowBufA) ONLY when lava is actually present or being poured!
       let anyLavaOnMap = false;
-      for (let i = 0; i < MAX_CELLS; i++) {
-        const w = water[i];
-        const lf = w > 0.025 ? lavaFrac[i] : 0.0;
-        if (lf >= 0.25) {
-          _lavaGlowBufA[i] = clamp(lf * (0.65 + Math.min(1.0, w / 0.45) * 0.35), 0.0, 1.0);
-          anyLavaOnMap = true;
-        } else {
-          _lavaGlowBufA[i] = 0.0;
-        }
-      }
-      if (anyLavaOnMap) {
-        // 5-pass spatial diffusion (~7.5m radial glow halo casting warm orange-red magma light across surrounding dunes, rocks & walls!)
-        for (let pass = 0; pass < 5; pass++) {
-          const src = (pass % 2 === 0) ? _lavaGlowBufA : _lavaGlowBufB;
-          const dst = (pass % 2 === 0) ? _lavaGlowBufB : _lavaGlowBufA;
-          for (let y = 1; y < GRID - 1; y++) {
-            const row = y * GRID;
-            for (let x = 1; x < GRID - 1; x++) {
-              const ci = row + x;
-              const maxOrth = Math.max(src[ci - 1], src[ci + 1], src[ci - GRID], src[ci + GRID]);
-              const maxDiag = Math.max(src[ci - GRID - 1], src[ci - GRID + 1], src[ci + GRID - 1], src[ci + GRID + 1]);
-              const spread = Math.max(maxOrth * 0.78, maxDiag * 0.68);
-              dst[ci] = Math.max(src[ci], spread);
-            }
+      const mightHaveLava = (params.totalLavaVol > 0) || (params.tool === 'lava') || (typeof volcanoEruptionState !== 'undefined' && volcanoEruptionState.active);
+      if (mightHaveLava) {
+        for (let i = 0; i < MAX_CELLS; i++) {
+          const w = water[i];
+          const lf = w > 0.025 ? lavaFrac[i] : 0.0;
+          if (lf >= 0.25) {
+            _lavaGlowBufA[i] = clamp(lf * (0.65 + Math.min(1.0, w / 0.45) * 0.35), 0.0, 1.0);
+            anyLavaOnMap = true;
+          } else {
+            _lavaGlowBufA[i] = 0.0;
           }
         }
-        // After 5 passes (odd count), latest result is in _lavaGlowBufB; copy back to _lavaGlowBufA
-        _lavaGlowBufA.set(_lavaGlowBufB);
+        if (anyLavaOnMap) {
+          // 3-pass fast spatial diffusion (~6m radial glow halo casting warm orange-red magma light across surrounding dunes, rocks & walls!)
+          for (let pass = 0; pass < 3; pass++) {
+            const src = (pass % 2 === 0) ? _lavaGlowBufA : _lavaGlowBufB;
+            const dst = (pass % 2 === 0) ? _lavaGlowBufB : _lavaGlowBufA;
+            for (let y = 1; y < GRID - 1; y++) {
+              const row = y * GRID;
+              for (let x = 1; x < GRID - 1; x++) {
+                const ci = row + x;
+                const maxOrth = Math.max(src[ci - 1], src[ci + 1], src[ci - GRID], src[ci + GRID]);
+                const maxDiag = Math.max(src[ci - GRID - 1], src[ci - GRID + 1], src[ci + GRID - 1], src[ci + GRID + 1]);
+                const spread = Math.max(maxOrth * 0.72, maxDiag * 0.62);
+                dst[ci] = Math.max(src[ci], spread);
+              }
+            }
+          }
+          _lavaGlowBufA.set(_lavaGlowBufB);
+        }
       }
 
       // Gather active offroad truck dual headlights once per sync so they project twin beams onto the terrain ahead at night
@@ -5691,7 +5689,7 @@
             const wx = tPos[i * 3];
             const wz = tPos[i * 3 + 2];
             const wy = b + s + w;
-            const qIdx = (wx > 0 ? 1 : 0) + (wz > 0 ? 2 : 0);
+            const qIdx = wx > 0 ? 1 : 0;
             qLavaW[qIdx] += vol;
             qLavaX[qIdx] += wx * vol;
             qLavaY[qIdx] += wy * vol;
@@ -5947,8 +5945,8 @@
       params.totalWaterVol = Math.round(totalW);
       params.totalLavaVol = Math.round(totalL);
 
-      // Update 4-Quadrant Dynamic Volcanic Lava PointLights (bathes dunes, rocks, flora, items & wildlife in flickering orange-gold magma light!)
-      for (let q = 0; q < 4; q++) {
+      // Update 2 Dynamic Volcanic Lava PointLights (bathes dunes, rocks, flora, items & wildlife in flickering orange-gold magma light!)
+      for (let q = 0; q < 2; q++) {
         const qw = qLavaW[q];
         const ptLight = lavaPointLights[q];
         if (qw > 0.35) {
@@ -5956,7 +5954,7 @@
           const ly = (qLavaY[q] / qw) + 2.4;
           const lz = qLavaZ[q] / qw;
           ptLight.position.set(lx, ly, lz);
-          const baseInt = (3.8 + nightFactor * 12.5) * clamp(Math.sqrt(qw / 16.0), 0.52, 2.25);
+          const baseInt = (4.2 + nightFactor * 13.5) * clamp(Math.sqrt(qw / 16.0), 0.55, 2.35);
           lavaLightBaseIntensities[q] = baseInt;
           const flk = 0.92 + 0.10 * Math.sin(timeNow * 7.8 + q * 1.7) + 0.06 * Math.cos(timeNow * 13.4 + q * 2.3);
           ptLight.intensity = baseInt * flk;
@@ -5988,6 +5986,9 @@
       waterGeo.attributes.lavaMask.needsUpdate = true;
 
       updateTerrainSideSkirt();
+      if (typeof frameCount !== 'undefined') {
+        _lastTerrainSyncFrame = frameCount;
+      }
     }
 
     // Live 3D cactus crown perch registry (updated in rebuildFloraInstances so nocturnal owls can fly down and sit on top of cacti!)
@@ -6342,8 +6343,10 @@
       params.desertPlantCount = cScrub + cBarrel + cSaguaro + cGrassDesert;
       params.lilyPadCount = cLilyPad;
 
-      // Sync terrain vertex colors so green grass surfaces on angled slopes appear immediately!
-      syncTerrainAndWaterMeshes();
+      // Sync terrain vertex colors so green grass surfaces on angled slopes appear immediately (skip if already synced this frame!)
+      if (typeof frameCount === 'undefined' || _lastTerrainSyncFrame !== frameCount) {
+        syncTerrainAndWaterMeshes();
+      }
 
       const pools = [
         [fernInst, cFern],
@@ -8125,10 +8128,10 @@
           steerToward(bestAngle, turnUrgency);
         };
 
-        // Proactive Wide-Cone Lava Hazard Scan ahead of the animal (5 rays x 3 distances + active volcano check)
-        // Ensures animals actively detect and steer away from lava BEFORE walking into its thermal ignition zone!
+        // Proactive Wide-Cone Lava Hazard Scan ahead of the animal (only when lava or an active volcano exists on the map!)
         let isLavaHazardAhead = false;
-        if (!isFlyer && a.type !== 'fish') {
+        const mapHasLavaOrVolcano = (params.totalLavaVol > 0) || (typeof volcanoEruptionState !== 'undefined' && volcanoEruptionState.active);
+        if (mapHasLavaOrVolcano && !isFlyer && a.type !== 'fish') {
           const scanAngles = [0.0, -0.42, 0.42, -0.88, 0.88];
           const scanDists = [3.0, 6.2, 11.0];
           outerScan:
@@ -8951,7 +8954,7 @@
         }
 
         // Step-Guard: If a ground animal was on safe ground, prevent it from voluntarily stepping onto a lava cell or into the lava thermal ring!
-        if (!isFlyer && a.type !== 'fish' && !isNearMoltenLava && !a.isBurning) {
+        if (mapHasLavaOrVolcano && !isFlyer && a.type !== 'fish' && !isNearMoltenLava && !a.isBurning) {
           const nextH = sampleHeightsAtWorld(a.x, a.z);
           const ngx = clamp(Math.floor(((a.x / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
           const ngz = clamp(Math.floor(((a.z / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
@@ -9142,8 +9145,10 @@
       ];
       for (const [inst, count] of faunaPools) {
         inst.count = count;
-        inst.instanceMatrix.needsUpdate = true;
-        if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+        if (count > 0) {
+          inst.instanceMatrix.needsUpdate = true;
+          if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+        }
       }
 
       updateVoxelHumanArtist(dt);
@@ -10937,7 +10942,10 @@
       if (!voxelHuman.active) return;
 
       const mode = voxelHuman.paintingMode || 'landscape';
-      if (mode === 'landscape') {
+      // Only perform the offscreen 3D scene render + gl.readPixels snapshot once at the start of a landscape painting and once on final completion
+      // (avoids synchronous gl.readPixels GPU pipeline stalls every 1.4s during the painting routine!)
+      if (mode === 'landscape' && (voxelHuman.needsLandscapeSnapshot || isFinalFinish)) {
+        voxelHuman.needsLandscapeSnapshot = false;
         const fwdX = Math.sin(voxelHuman.heading);
         const fwdZ = Math.cos(voxelHuman.heading);
         const eyeX = voxelHuman.x + fwdX * 1.15;
@@ -14178,6 +14186,7 @@
         voxelHuman.routineDuration = 60.0 + Math.random() * 120.0; // 1 to 3 minutes
         voxelHuman.paintRenderStepTimer = 0.2;
         voxelHuman.nextEmojiTimer = 1.8;
+        voxelHuman.needsLandscapeSnapshot = true;
         voxelHuman.detectedSubjects = scanPainterVisibleSubjects();
       } else if (chosenMode === 'animal') {
         // Pick an animal currently alive on the map (or one of the 7 signature portrait species)
@@ -18284,9 +18293,9 @@
       return root;
     }
 
-    // Pre-allocated pool of 10 realistic THREE.PointLights for Lanterns at startup (intensity = 0.0 when unused).
-    // Dynamically assigned each frame to the 10 lanterns nearest the camera so placing a lantern has ZERO shader-recompile delay!
-    const LANTERN_LIGHT_POOL_SIZE = 10;
+    // Pre-allocated pool of 4 realistic THREE.PointLights for Lanterns at startup (intensity = 0.0 when unused).
+    // Dynamically assigned each frame to the 4 lanterns nearest the camera so placing a lantern has ZERO shader-recompile delay and fast 60fps PBR shading!
+    const LANTERN_LIGHT_POOL_SIZE = 4;
     const lanternLightPool = [];
     for (let k = 0; k < LANTERN_LIGHT_POOL_SIZE; k++) {
       const ptLight = new THREE.PointLight(0xff9e3b, 0.0, 26.0, 1.35);
@@ -20194,8 +20203,8 @@
 
     function updateLavaEmbers(dt) {
       const time = uniforms.uTime.value;
-      // Continuously flicker the 4 quadrant volcanic lava PointLights whenever molten lava is active on the map
-      for (let q = 0; q < 4; q++) {
+      // Continuously flicker the 2 volcanic lava PointLights whenever molten lava is active on the map
+      for (let q = 0; q < lavaPointLights.length; q++) {
         const baseInt = lavaLightBaseIntensities[q];
         if (baseInt > 0.01) {
           const flk = 0.90 + 0.12 * Math.sin(time * 8.2 + q * 1.7) + 0.07 * Math.cos(time * 14.1 + q * 2.3);
@@ -23337,7 +23346,7 @@
           pondAge[i] = nextAge;
           if (nextAge >= 10.0) {
             matureCount++;
-            if (prevAge < 18.0 && ((prevAge < 10.0 && nextAge >= 10.0) || (prevAge < 13.5 && nextAge >= 13.5) || (frameCount % 12 === 0))) {
+            if (prevAge < 18.0 && ((prevAge < 10.0 && nextAge >= 10.0) || (prevAge < 13.5 && nextAge >= 13.5) || (prevAge < 17.5 && nextAge >= 17.5))) {
               pondMaturityChanged = true;
             }
           }
@@ -23368,7 +23377,7 @@
         }
       }
       params.maturePondCells = matureCount;
-      if (submergedFloraDeleted || pondMaturityChanged || (matureCount > 0 && frameCount % 10 === 0)) {
+      if (submergedFloraDeleted || pondMaturityChanged) {
         rebuildFloraInstances();
       }
 
@@ -23453,8 +23462,10 @@
       }
 
       // Sync terrain/water colors & frost-dusted flora while snow/ice is accumulating or melting
-      syncTerrainAndWaterMeshes();
-      if (frameCount % 6 === 0) {
+      if (_lastTerrainSyncFrame !== frameCount) {
+        syncTerrainAndWaterMeshes();
+      }
+      if (frameCount % 24 === 0) {
         rebuildFloraInstances();
       }
     }
@@ -24409,20 +24420,32 @@
       }
 
       if (params.simSteps > 0) {
-        if (frameCount % 2 === 0) {
+        if (frameCount % 4 === 0) {
           computeWindShadowAndFlow();
         }
-        // Continuous fractional time-scaling (e.g. 0.01 runs 1 sub-step per frame scaled by 0.01; 2.50 runs 3 sub-steps scaled by 0.833)
-        const numSubSteps = Math.max(1, Math.ceil(params.simSteps));
-        const stepScale = params.simSteps / numSubSteps;
-
-        for (let s = 0; s < numSubSteps; s++) {
+        // Interleave heavy 25,600-cell hydrology vs. aeolian sand drift across alternating frames at normal sim speed
+        // while keeping full 60Hz immediate vertex sync whenever the user is actively sculpting (isPointerDown)!
+        if (params.simSteps <= 0.05 && !isPointerDown) {
+          const stepScale2x = params.simSteps * 2.0;
           simTick++;
-          waterShedAndPoolStep(stepScale);
-          saltationAndDriftStep(stepScale);
-          avalancheStep(stepScale);
+          if (frameCount % 2 === 0) {
+            waterShedAndPoolStep(stepScale2x);
+            syncTerrainAndWaterMeshes();
+          } else {
+            saltationAndDriftStep(stepScale2x);
+            avalancheStep(stepScale2x);
+          }
+        } else {
+          const numSubSteps = Math.max(1, Math.ceil(params.simSteps));
+          const stepScale = params.simSteps / numSubSteps;
+          for (let s = 0; s < numSubSteps; s++) {
+            simTick++;
+            waterShedAndPoolStep(stepScale);
+            saltationAndDriftStep(stepScale);
+            avalancheStep(stepScale);
+          }
+          syncTerrainAndWaterMeshes();
         }
-        syncTerrainAndWaterMeshes();
 
         if (frameCount % params.floraSyncInterval === 0) {
           ecologySuccessionStep(params.simSteps * params.floraSyncInterval);
