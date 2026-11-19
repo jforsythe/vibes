@@ -1143,6 +1143,115 @@
       flex-wrap: wrap;
     }
 
+    /* Voxel Human Telescope (Night Sky) & Binoculars (Birdwatching) Eyepiece Viewer Modal (Pauses Gameplay while Active!) */
+    #human-optics-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 48%, rgba(4, 7, 15, 0.88) 0%, rgba(2, 3, 7, 0.96) 100%);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 9400;
+      padding: 18px;
+      cursor: pointer;
+    }
+
+    #human-optics-modal.open {
+      display: flex;
+    }
+
+    .optics-modal-card {
+      background: linear-gradient(165deg, rgba(16, 21, 34, 0.96) 0%, rgba(9, 12, 20, 0.98) 100%);
+      border: 2px solid rgba(56, 189, 248, 0.65);
+      border-radius: 20px;
+      padding: 16px 20px;
+      max-width: 610px;
+      width: 100%;
+      box-shadow: 0 26px 70px rgba(0, 0, 0, 0.92), 0 0 36px rgba(56, 189, 248, 0.22);
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      color: var(--text);
+      cursor: default;
+    }
+
+    #human-optics-modal.binoculars-mode .optics-modal-card {
+      background: linear-gradient(165deg, rgba(24, 28, 19, 0.96) 0%, rgba(12, 15, 10, 0.98) 100%);
+      border-color: rgba(132, 204, 22, 0.68);
+      box-shadow: 0 26px 70px rgba(0, 0, 0, 0.92), 0 0 36px rgba(132, 204, 22, 0.22);
+    }
+
+    .optics-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .optics-pause-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #fde047;
+      background: rgba(234, 179, 8, 0.18);
+      border: 1px solid rgba(250, 204, 21, 0.55);
+      padding: 3px 9px;
+      border-radius: 999px;
+      margin-bottom: 3px;
+    }
+
+    .optics-title {
+      font-size: 15.5px;
+      font-weight: 800;
+      color: #7dd3fc;
+      letter-spacing: 0.02em;
+    }
+
+    #human-optics-modal.binoculars-mode .optics-title {
+      color: #bef264;
+    }
+
+    .optics-sub {
+      font-size: 11.5px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .optics-viewport-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: #02040a;
+      border-radius: 14px;
+      border: 3px solid #334155;
+      box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.95), 0 12px 32px rgba(0, 0, 0, 0.78);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #human-optics-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+    .optics-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     kbd {
       background: rgba(255,255,255,0.1);
       border: 1px solid rgba(255,255,255,0.18);
@@ -2087,6 +2196,30 @@
     </div>
   </div>
 
+  <!-- Voxel Human Telescope (Night Sky) & Binoculars (Birdwatching) Eyepiece Modal (Pauses Gameplay while Active!) -->
+  <div id="human-optics-modal">
+    <div class="optics-modal-card">
+      <div class="optics-header">
+        <div>
+          <div class="optics-pause-badge" id="human-optics-pause-badge">⏸️ Gameplay Paused · Looking Through Telescope</div>
+          <div class="optics-title" id="human-optics-title">🔭 Andromeda Spiral Galaxy (M31)</div>
+          <div class="optics-sub" id="human-optics-sub">RA 00h 42m 44s · Dec +41° 16′ 9″ · Distance: 2.54 Million ly</div>
+        </div>
+        <button type="button" id="btn-close-optics-modal" style="padding:7px 13px; font-weight:700;">✕ Exit View</button>
+      </div>
+      <div class="optics-viewport-wrap">
+        <canvas id="human-optics-canvas" width="640" height="480"></canvas>
+      </div>
+      <div class="optics-footer">
+        <span id="human-optics-footer-note" style="font-size:11px; color:var(--text-dim);">All simulation &amp; gameplay is paused while looking through the optics. Click Exit or press ESC to resume.</span>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="btn-next-optics-target" style="padding:7px 12px; font-weight:700;">🔄 Next Target</button>
+          <button type="button" id="btn-exit-optics-footer" class="primary" style="padding:7px 14px; font-weight:700;">▶️ Exit &amp; Resume Game</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Right Control Sidebar (Collapsed to Small Icons by Default, Auto-Collapses after 20s Inactivity) -->
   <aside class="control-panel collapsed" id="control-panel">
     <!-- Compact Icon Strip (Shown when Collapsed) -->
@@ -2288,6 +2421,8 @@
         <div class="btn-grid" style="margin-top:4px;">
           <button type="button" id="btn-locate-voxel-human" title="Focus camera on the wandering Voxel Human artist">👁️ Find Artist</button>
           <button type="button" id="btn-trigger-human-paint" title="Prompt the Voxel Human to set up their chair &amp; easel right here (or finish their active painting so you can click 🖼️)">🎨 Paint / Finish</button>
+          <button type="button" id="btn-trigger-human-telescope" title="Switch to Night (if needed) &amp; have the Oasis Artist set up their 3D Telescope to stargaze">🔭 Stargaze (Night)</button>
+          <button type="button" id="btn-trigger-human-birdwatch" title="Have the Oasis Artist take out their 3D Binoculars for birdwatching">🦜 Birdwatch</button>
         </div>
       </div>
 
@@ -9309,6 +9444,97 @@
       );
       kiteGroup.add(kiteStringLine);
 
+      // 6. 3D Brass & Mahogany Astronomical Telescope on Tripod (`telescopeGroup`) — Erected at Night during STARGAZE_TELESCOPE!
+      const telescopeGroup = new THREE.Group();
+      telescopeGroup.position.set(0, 0, 0.88);
+      telescopeGroup.visible = false;
+      root.add(telescopeGroup);
+
+      const brassMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.65, roughness: 0.28 });
+      const darkBrassMat = new THREE.MeshStandardMaterial({ color: 0xb45309, metalness: 0.55, roughness: 0.35 });
+      const lensGlassMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+
+      // 3 Tripod Legs supporting the Telescope Mount at y = 1.24
+      const tripodAngles = [0, (Math.PI * 2) / 3, (Math.PI * 4) / 3];
+      for (let tl = 0; tl < 3; tl++) {
+        const ang = tripodAngles[tl];
+        const legPivot = new THREE.Group();
+        legPivot.position.set(0, 1.22, 0);
+        legPivot.rotation.y = ang;
+        telescopeGroup.add(legPivot);
+        const tLeg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.34, 0.06), darkWoodMat);
+        tLeg.position.set(0, -0.60, 0.22);
+        tLeg.rotation.x = -0.34;
+        tLeg.castShadow = true;
+        legPivot.add(tLeg);
+      }
+
+      const mountHub = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.16, 8), darkBrassMat);
+      mountHub.position.set(0, 1.24, 0);
+      telescopeGroup.add(mountHub);
+
+      // Articulated Telescope Optical Tube Assembly (tilted upward toward the night stars!)
+      const telescopeTubePivot = new THREE.Group();
+      telescopeTubePivot.position.set(0, 1.34, 0);
+      telescopeTubePivot.rotation.x = 0.54; // Aimed ~31° up into the starry night sky
+      telescopeGroup.add(telescopeTubePivot);
+
+      const mainTubeGeo = new THREE.CylinderGeometry(0.095, 0.072, 1.18, 10);
+      mainTubeGeo.rotateX(Math.PI * 0.5);
+      const mainTubeMesh = new THREE.Mesh(mainTubeGeo, brassMat);
+      mainTubeMesh.position.set(0, 0, 0.14);
+      mainTubeMesh.castShadow = true;
+      telescopeTubePivot.add(mainTubeMesh);
+
+      const dewShieldGeo = new THREE.CylinderGeometry(0.112, 0.098, 0.28, 10);
+      dewShieldGeo.rotateX(Math.PI * 0.5);
+      const dewShieldMesh = new THREE.Mesh(dewShieldGeo, darkBrassMat);
+      dewShieldMesh.position.set(0, 0, 0.76);
+      telescopeTubePivot.add(dewShieldMesh);
+
+      const objectiveLens = new THREE.Mesh(new THREE.CircleGeometry(0.095, 12), lensGlassMat);
+      objectiveLens.position.set(0, 0, 0.902);
+      telescopeTubePivot.add(objectiveLens);
+
+      // Eyepiece & Diagonal Prism at the back end (closest to the human's eye)
+      const eyepieceTube = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.14, 0.18), darkBrassMat);
+      eyepieceTube.position.set(0, 0.04, -0.48);
+      eyepieceTube.rotation.x = -0.35;
+      telescopeTubePivot.add(eyepieceTube);
+
+      // Tiny Finder Scope on top of main tube
+      const finderGeo = new THREE.CylinderGeometry(0.026, 0.026, 0.38, 6);
+      finderGeo.rotateX(Math.PI * 0.5);
+      const finderMesh = new THREE.Mesh(finderGeo, darkBrassMat);
+      finderMesh.position.set(0, 0.13, 0.05);
+      telescopeTubePivot.add(finderMesh);
+
+      // 7. 3D Field Binoculars (`binocularsGroup`) — Held up to the eyes during BIRDWATCHING!
+      const binocularsGroup = new THREE.Group();
+      binocularsGroup.position.set(0, 0.23, 0.34);
+      binocularsGroup.visible = false;
+      headPivot.add(binocularsGroup);
+
+      const binoBodyMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.45, metalness: 0.35 });
+      for (const side of [-1, 1]) {
+        const barrelGeo = new THREE.CylinderGeometry(0.058, 0.046, 0.28, 8);
+        barrelGeo.rotateX(Math.PI * 0.5);
+        const barrel = new THREE.Mesh(barrelGeo, binoBodyMat);
+        barrel.position.set(side * 0.085, 0, 0);
+        binocularsGroup.add(barrel);
+
+        const binoRim = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.11, 0.03), brassMat);
+        binoRim.position.set(side * 0.085, 0, 0.14);
+        binocularsGroup.add(binoRim);
+
+        const binoLens = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.085, 0.035), lensGlassMat);
+        binoLens.position.set(side * 0.085, 0, 0.145);
+        binocularsGroup.add(binoLens);
+      }
+      const binoBridge = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.045, 0.14), brassMat);
+      binoBridge.position.set(0, 0.01, -0.02);
+      binocularsGroup.add(binoBridge);
+
       scene.add(root);
       return {
         root,
@@ -9330,7 +9556,10 @@
         kiteGroup,
         kiteDiamondGroup,
         kiteTailRibbons,
-        kiteStrGeo
+        kiteStrGeo,
+        telescopeGroup,
+        telescopeTubePivot,
+        binocularsGroup
       };
     }
 
@@ -9348,13 +9577,16 @@
       targetHeading: 0,
       speed: 2.8,
       scale: 1.15,
-      routine: 'WANDER',          // 'WANDER' | 'SURVEY_HORIZON' | 'CAMP_REST' | 'NATURE_OBSERVE' | 'POND_FISHING' | 'FLY_KITE' | 'LANDSCAPE_PAINTING' | 'PAINTING_READY'
+      routine: 'WANDER',          // 'WANDER' | 'SURVEY_HORIZON' | 'CAMP_REST' | 'NATURE_OBSERVE' | 'POND_FISHING' | 'FLY_KITE' | 'STARGAZE_TELESCOPE' | 'BIRDWATCHING' | 'LANDSCAPE_PAINTING' | 'PAINTING_READY'
       routineTimer: 0,
       routineDuration: 14.0,
       routinesSinceLastPaint: 1,
       fishBiteTimer: 5.0,
       fishCaughtDisplayTimer: 0.0,
       kiteStormTimer: 0.0,
+      telescopeSpaceTargetIdx: 0,
+      birdwatchSpecies: 'macaw',
+      birdwatchTargetAgent: null,
       bubbleEmoji: '',
       bubbleTimer: 0.0,
       nextEmojiTimer: 0.0,
@@ -9368,6 +9600,9 @@
       rig: createVoxelHumanArtistRig()
     };
 
+    let isOpticsGameplayPaused = false;
+    let activeOpticsMode = ''; // 'telescope' | 'binoculars' | ''
+
     const voxelHumanBubbleEl = document.getElementById('voxel-human-bubble');
     const voxelHumanBubbleEmojiEl = document.getElementById('voxel-human-bubble-emoji');
     const voxelHumanBubbleTimerEl = document.getElementById('voxel-human-bubble-timer');
@@ -9377,6 +9612,12 @@
     const humanPaintingTitleEl = document.getElementById('human-painting-title');
     const humanPaintingSubjectsEl = document.getElementById('human-painting-subjects');
     const humanPaintingExpiryEl = document.getElementById('human-painting-expiry-note');
+    const humanOpticsModalEl = document.getElementById('human-optics-modal');
+    const humanOpticsPauseBadgeEl = document.getElementById('human-optics-pause-badge');
+    const humanOpticsTitleEl = document.getElementById('human-optics-title');
+    const humanOpticsSubEl = document.getElementById('human-optics-sub');
+    const humanOpticsCanvasEl = document.getElementById('human-optics-canvas');
+    const humanOpticsCtx = humanOpticsCanvasEl ? humanOpticsCanvasEl.getContext('2d') : null;
 
     // Evaluate whether a candidate world position (tx, tz) is a safe, compatible location where the artist will NOT immediately drown or perish
     function evaluateVoxelHumanSpawnLocation(tx, tz, strictDryLand = true) {
@@ -10610,6 +10851,800 @@
       setVoxelHumanBubble('🪁', 4.5);
     }
 
+    const TELESCOPE_SPACE_CATALOG = [
+      {
+        id: 'andromeda',
+        title: '🔭 Andromeda Spiral Galaxy (M31)',
+        sub: 'RA 00h 42m 44s · Dec +41° 16′ 9″ · Distance: 2.54 Million Light-Years · Mag 3.44'
+      },
+      {
+        id: 'orion',
+        title: '🔭 Great Orion Emission Nebula (M42)',
+        sub: 'RA 05h 35m 17s · Dec −05° 23′ 28″ · Trapezium Star Nursery · Distance: 1,344 Light-Years'
+      },
+      {
+        id: 'pillars',
+        title: '🔭 Eagle Nebula: Pillars of Creation (M16)',
+        sub: 'RA 18h 18m 48s · Dec −13° 49′ 0″ · Molecular Hydrogen Spires · Distance: 5,700 Light-Years'
+      },
+      {
+        id: 'ring',
+        title: '🔭 Lyra Ring Planetary Nebula (M57)',
+        sub: 'RA 18h 53m 35s · Dec +33° 01′ 45″ · White Dwarf Ionized Shell · Distance: 2,567 Light-Years'
+      },
+      {
+        id: 'saturn',
+        title: '🔭 Ringed Gas Giant & Moons (Cassini Division)',
+        sub: 'Apparent Dia 18.8″ · Tilt +23.7° · Titan, Enceladus & Rhea in Quadrature · 8.9 AU'
+      },
+      {
+        id: 'crab',
+        title: '🔭 Crab Supernova Remnant & Pulsar (M1)',
+        sub: 'RA 05h 34m 31s · Dec +22° 00′ 52″ · SN 1054 Synchrotron Filaments · Distance: 6,500 Light-Years'
+      },
+      {
+        id: 'whirlpool',
+        title: '🔭 Whirlpool Interacting Galaxies (M51a & M51b)',
+        sub: 'RA 13h 29m 52s · Dec +47° 11′ 43″ · Grand-Design Spiral Bridge · Distance: 31 Million Light-Years'
+      },
+      {
+        id: 'pleiades',
+        title: '🔭 Pleiades Seven Sisters Reflection Cluster (M45)',
+        sub: 'RA 03h 47m 24s · Dec +24° 07′ 0″ · Merope Blue Dust Veils · Distance: 444 Light-Years'
+      }
+    ];
+
+    const BIRDWATCH_SPECIES_CATALOG = {
+      macaw: {
+        emoji: '🦜',
+        title: '🔭 Scarlet Oasis Macaw (Ara macao)',
+        sub: '8×42 Field Binoculars · Canopy Flight & Plumage Study · Wingspan 96 cm',
+        biome: 'jungle'
+      },
+      flamingo: {
+        emoji: '🦩',
+        title: '🔭 Coral Lagoon Flamingo (Phoenicopterus roseus)',
+        sub: '8×42 Field Binoculars · Shallow Shoreline Wading Study · Height 135 cm',
+        biome: 'lagoon'
+      },
+      hawk: {
+        emoji: '🦅',
+        title: '🔭 Desert Red-Tailed Hawk (Buteo jamaicensis)',
+        sub: '8×42 Field Binoculars · High Thermal Soaring Study · Wingspan 128 cm',
+        biome: 'desert'
+      },
+      owl: {
+        emoji: '🦉',
+        title: '🔭 Saguaro Horned Night Owl (Bubo virginianus)',
+        sub: '8×42 Field Binoculars · Cactus Crown Perch Study · Nocturnal Predator',
+        biome: 'cactus'
+      }
+    };
+
+    let telescopeTargetCycleIdx = 0;
+
+    // Night-Only Telescope Stargazing Routine (35–55 seconds so the player has plenty of time to click the 🔭 bubble!)
+    function startVoxelHumanTelescopeRoutine() {
+      const targetIdx = telescopeTargetCycleIdx % TELESCOPE_SPACE_CATALOG.length;
+      telescopeTargetCycleIdx++;
+      voxelHuman.telescopeSpaceTargetIdx = targetIdx;
+      voxelHuman.routine = 'STARGAZE_TELESCOPE';
+      voxelHuman.routineDuration = 36.0 + Math.random() * 18.0;
+      voxelHuman.routineTimer = 0.0;
+      voxelHuman.bubbleEmoji = '🔭';
+      voxelHuman.bubbleTimer = voxelHuman.routineDuration;
+    }
+
+    // Birdwatching with Binoculars Routine (32–48 seconds so the player has plenty of time to click the 🦜/🦅/🦩/🦉 bubble!)
+    function startVoxelHumanBirdwatchingRoutine() {
+      const hr = ((params.timeOfDay % 24) + 24) % 24;
+      const isNight = (hr >= 19.0 || hr < 5.5) || ((skyUniforms.uNightFactor.value || 0) > 0.55);
+
+      // Look for an actual living bird on the map (macaw, flamingo, hawk, or owl) to aim the binoculars toward!
+      const birdTypes = isNight ? ['owl', 'flamingo'] : ['macaw', 'flamingo', 'hawk'];
+      let chosenBirdAgent = null;
+      let bestDist = 1e9;
+      if (typeof faunaAgents !== 'undefined') {
+        for (let i = 0; i < faunaAgents.length; i++) {
+          const a = faunaAgents[i];
+          if (a.state !== 'alive') continue;
+          if (a.type === 'macaw' || a.type === 'flamingo' || a.type === 'hawk' || a.type === 'owl') {
+            const d = Math.hypot(a.x - voxelHuman.x, a.z - voxelHuman.z);
+            if (d < bestDist) {
+              bestDist = d;
+              chosenBirdAgent = a;
+            }
+          }
+        }
+      }
+
+      if (chosenBirdAgent) {
+        voxelHuman.birdwatchTargetAgent = chosenBirdAgent;
+        voxelHuman.birdwatchSpecies = chosenBirdAgent.type;
+        voxelHuman.heading = Math.atan2(chosenBirdAgent.x - voxelHuman.x, chosenBirdAgent.z - voxelHuman.z);
+        voxelHuman.targetHeading = voxelHuman.heading;
+      } else {
+        voxelHuman.birdwatchTargetAgent = null;
+        voxelHuman.birdwatchSpecies = birdTypes[Math.floor(Math.random() * birdTypes.length)];
+      }
+
+      const birdMeta = BIRDWATCH_SPECIES_CATALOG[voxelHuman.birdwatchSpecies] || BIRDWATCH_SPECIES_CATALOG.macaw;
+      voxelHuman.routine = 'BIRDWATCHING';
+      voxelHuman.routineDuration = 34.0 + Math.random() * 14.0;
+      voxelHuman.routineTimer = 0.0;
+      voxelHuman.bubbleEmoji = birdMeta.emoji;
+      voxelHuman.bubbleTimer = voxelHuman.routineDuration;
+    }
+
+    function renderTelescopeDeepSpaceCanvas(targetIdx) {
+      if (!humanOpticsCtx || !humanOpticsCanvasEl) return;
+      const ctx = humanOpticsCtx;
+      const w = humanOpticsCanvasEl.width;
+      const h = humanOpticsCanvasEl.height;
+      const cx = w * 0.5;
+      const cy = h * 0.5;
+      const lensR = Math.min(w, h) * 0.455;
+      const spec = TELESCOPE_SPACE_CATALOG[targetIdx % TELESCOPE_SPACE_CATALOG.length];
+
+      ctx.save();
+      ctx.fillStyle = '#010206';
+      ctx.fillRect(0, 0, w, h);
+
+      // Clip inside circular telescope eyepiece aperture
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, lensR, 0, Math.PI * 2);
+      ctx.clip();
+
+      // Deep cosmos radial background
+      const spaceBg = ctx.createRadialGradient(cx, cy, 12, cx, cy, lensR);
+      spaceBg.addColorStop(0.0, '#090d24');
+      spaceBg.addColorStop(0.65, '#040613');
+      spaceBg.addColorStop(1.0, '#010208');
+      ctx.fillStyle = spaceBg;
+      ctx.fillRect(0, 0, w, h);
+
+      // Deterministic starfield with multi-colored stars & diffraction spikes
+      let seed = (targetIdx + 1) * 9187;
+      const rand = () => {
+        seed = (seed * 16807) % 2147483647;
+        return (seed - 1) / 2147483646;
+      };
+      const starColors = ['#ffffff', '#bae6fd', '#fde68a', '#fed7aa', '#e0e7ff', '#fbcfe8'];
+      for (let s = 0; s < 320; s++) {
+        const sx = cx + (rand() - 0.5) * lensR * 2.0;
+        const sy = cy + (rand() - 0.5) * lensR * 2.0;
+        const sr = 0.5 + Math.pow(rand(), 3.2) * 2.3;
+        ctx.fillStyle = starColors[s % starColors.length];
+        ctx.globalAlpha = 0.35 + rand() * 0.65;
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+        ctx.fill();
+        if (sr > 1.85) {
+          ctx.strokeStyle = ctx.fillStyle;
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(sx - sr * 4.5, sy); ctx.lineTo(sx + sr * 4.5, sy);
+          ctx.moveTo(sx, sy - sr * 4.5); ctx.lineTo(sx, sy + sr * 4.5);
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1.0;
+
+      if (spec.id === 'andromeda') {
+        // Andromeda Spiral Galaxy (M31): tilted luminous galactic disc, dust lanes, glowing core & satellite galaxy M110
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(-0.42);
+        ctx.scale(1.0, 0.42);
+
+        for (let arm = 0; arm < 2; arm++) {
+          const baseAng = arm * Math.PI;
+          for (let k = 0; k < 210; k++) {
+            const t = k / 210;
+            const r = 14 + t * 215;
+            const ang = baseAng + t * 4.4;
+            const gx = Math.cos(ang) * r + (rand() - 0.5) * 24;
+            const gy = Math.sin(ang) * r + (rand() - 0.5) * 24;
+            const glow = ctx.createRadialGradient(gx, gy, 1, gx, gy, 16 + (1 - t) * 20);
+            glow.addColorStop(0.0, t < 0.3 ? 'rgba(254, 240, 138, 0.36)' : 'rgba(125, 211, 252, 0.24)');
+            glow.addColorStop(0.5, 'rgba(168, 85, 247, 0.11)');
+            glow.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(gx, gy, 24, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        const coreGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, 92);
+        coreGrad.addColorStop(0.0, '#ffffff');
+        coreGrad.addColorStop(0.22, '#fef08a');
+        coreGrad.addColorStop(0.55, 'rgba(251, 191, 36, 0.45)');
+        coreGrad.addColorStop(1.0, 'rgba(56, 189, 248, 0.0)');
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, 92, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Companion dwarf galaxy M110
+        const satGrad = ctx.createRadialGradient(cx - 115, cy - 82, 1, cx - 115, cy - 82, 34);
+        satGrad.addColorStop(0.0, '#fef9c3');
+        satGrad.addColorStop(0.45, 'rgba(186, 230, 253, 0.38)');
+        satGrad.addColorStop(1.0, 'rgba(0,0,0,0)');
+        ctx.fillStyle = satGrad;
+        ctx.beginPath();
+        ctx.arc(cx - 115, cy - 82, 34, 0, Math.PI * 2);
+        ctx.fill();
+
+      } else if (spec.id === 'orion') {
+        // Great Orion Nebula (M42): glowing magenta/crimson/teal ionized gas cavern + 4 bright Trapezium stars
+        const clouds = [
+          { x: cx - 25, y: cy + 10, r: 165, c0: 'rgba(236, 72, 153, 0.52)', c1: 'rgba(126, 34, 206, 0.18)' },
+          { x: cx + 45, y: cy - 28, r: 145, c0: 'rgba(56, 189, 248, 0.48)', c1: 'rgba(16, 185, 129, 0.15)' },
+          { x: cx - 5,  y: cy - 8,  r: 110, c0: 'rgba(253, 224, 71, 0.55)', c1: 'rgba(244, 63, 94, 0.25)' },
+          { x: cx - 75, y: cy - 45, r: 120, c0: 'rgba(192, 132, 252, 0.42)', c1: 'rgba(0, 0, 0, 0)' }
+        ];
+        for (const cl of clouds) {
+          const g = ctx.createRadialGradient(cl.x, cl.y, 6, cl.x, cl.y, cl.r);
+          g.addColorStop(0.0, cl.c0);
+          g.addColorStop(0.55, cl.c1);
+          g.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(cl.x, cl.y, cl.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Filaments & dark dust bay
+        ctx.fillStyle = 'rgba(4, 6, 16, 0.72)';
+        ctx.beginPath();
+        ctx.ellipse(cx + 55, cy + 48, 75, 34, -0.5, 0, Math.PI * 2);
+        ctx.fill();
+        // 4 Trapezium cluster stars in the bright heart
+        const trapCoords = [[-10, -8], [11, -12], [-6, 10], [9, 8]];
+        for (const [tx, ty] of trapCoords) {
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(cx + tx, cy + ty, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+      } else if (spec.id === 'pillars') {
+        // Eagle Nebula: Pillars of Creation (M16)
+        const bgNeb = ctx.createRadialGradient(cx, cy - 30, 15, cx, cy, 195);
+        bgNeb.addColorStop(0.0, 'rgba(56, 189, 248, 0.46)');
+        bgNeb.addColorStop(0.55, 'rgba(16, 185, 129, 0.24)');
+        bgNeb.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = bgNeb;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 195, 0, Math.PI * 2);
+        ctx.fill();
+
+        const pillarSpecs = [
+          { x: cx - 58, topY: cy - 95, w: 46 },
+          { x: cx + 4,  topY: cy - 55, w: 38 },
+          { x: cx + 62, topY: cy - 18, w: 32 }
+        ];
+        for (const p of pillarSpecs) {
+          const pGrad = ctx.createLinearGradient(p.x, p.topY, p.x, cy + 165);
+          pGrad.addColorStop(0.0, '#fde047');
+          pGrad.addColorStop(0.18, '#ea580c');
+          pGrad.addColorStop(0.55, '#451a03');
+          pGrad.addColorStop(1.0, '#09060a');
+          ctx.fillStyle = pGrad;
+          ctx.beginPath();
+          ctx.moveTo(p.x - p.w * 0.65, cy + 165);
+          ctx.bezierCurveTo(p.x - p.w * 0.55, cy + 40, p.x - p.w * 0.4, p.topY + 25, p.x, p.topY);
+          ctx.bezierCurveTo(p.x + p.w * 0.45, p.topY + 25, p.x + p.w * 0.5, cy + 45, p.x + p.w * 0.65, cy + 165);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+      } else if (spec.id === 'ring') {
+        // Lyra Ring Planetary Nebula (M57)
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(0.28);
+        ctx.scale(1.18, 0.86);
+        const ringG = ctx.createRadialGradient(0, 0, 24, 0, 0, 128);
+        ringG.addColorStop(0.0, 'rgba(56, 189, 248, 0.25)');
+        ringG.addColorStop(0.38, 'rgba(45, 212, 191, 0.72)');
+        ringG.addColorStop(0.58, 'rgba(250, 204, 21, 0.85)');
+        ringG.addColorStop(0.76, 'rgba(239, 68, 68, 0.75)');
+        ringG.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = ringG;
+        ctx.beginPath();
+        ctx.arc(0, 0, 128, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Central White Dwarf star
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3.6, 0, Math.PI * 2);
+        ctx.fill();
+
+      } else if (spec.id === 'saturn') {
+        // Ringed Gas Giant (Saturn) & 3 Moons
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(-0.34);
+
+        // Back half of concentric icy rings
+        for (let r = 0; r < 3; r++) {
+          ctx.strokeStyle = r === 0 ? 'rgba(253, 230, 138, 0.82)' : (r === 1 ? 'rgba(217, 119, 6, 0.72)' : 'rgba(254, 243, 199, 0.52)');
+          ctx.lineWidth = r === 0 ? 15 : (r === 1 ? 12 : 8);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 125 + r * 22, 38 + r * 6.5, 0, Math.PI, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Banded golden gas giant sphere
+        const planetG = ctx.createRadialGradient(-18, -16, 8, 0, 0, 68);
+        planetG.addColorStop(0.0, '#fef3c7');
+        planetG.addColorStop(0.55, '#eab308');
+        planetG.addColorStop(1.0, '#78350f');
+        ctx.fillStyle = planetG;
+        ctx.beginPath();
+        ctx.arc(0, 0, 66, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Front half of concentric rings crossing in front of planet
+        for (let r = 0; r < 3; r++) {
+          ctx.strokeStyle = r === 0 ? 'rgba(253, 230, 138, 0.90)' : (r === 1 ? 'rgba(217, 119, 6, 0.78)' : 'rgba(254, 243, 199, 0.58)');
+          ctx.lineWidth = r === 0 ? 15 : (r === 1 ? 12 : 8);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 125 + r * 22, 38 + r * 6.5, 0, 0, Math.PI);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // Moons: Titan, Rhea, Enceladus
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath(); ctx.arc(cx - 165, cy + 54, 6.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#e2e8f0';
+        ctx.beginPath(); ctx.arc(cx + 148, cy - 62, 4.0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx + 112, cy + 32, 3.0, 0, Math.PI * 2); ctx.fill();
+
+      } else if (spec.id === 'crab') {
+        // Crab Supernova Remnant (M1): glowing blue synchrotron core + web of orange/crimson filaments
+        const coreG = ctx.createRadialGradient(cx, cy, 4, cx, cy, 135);
+        coreG.addColorStop(0.0, 'rgba(186, 230, 253, 0.85)');
+        coreG.addColorStop(0.45, 'rgba(56, 189, 248, 0.45)');
+        coreG.addColorStop(0.8, 'rgba(168, 85, 247, 0.22)');
+        coreG.addColorStop(1.0, 'rgba(0,0,0,0)');
+        ctx.fillStyle = coreG;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 145, 105, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        for (let f = 0; f < 42; f++) {
+          const ang = (f / 42) * Math.PI * 2;
+          const len = 65 + rand() * 80;
+          ctx.strokeStyle = f % 2 === 0 ? 'rgba(249, 115, 22, 0.72)' : 'rgba(239, 68, 68, 0.65)';
+          ctx.lineWidth = 1.6 + rand() * 2.2;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(ang) * 14, cy + Math.sin(ang) * 14);
+          ctx.quadraticCurveTo(
+            cx + Math.cos(ang + 0.25) * (len * 0.55),
+            cy + Math.sin(ang + 0.25) * (len * 0.55),
+            cx + Math.cos(ang) * len,
+            cy + Math.sin(ang) * (len * 0.78)
+          );
+          ctx.stroke();
+        }
+
+      } else if (spec.id === 'whirlpool') {
+        // Whirlpool Interacting Galaxies (M51a & companion M51b)
+        const drawSpiral = (gx, gy, maxR) => {
+          for (let arm = 0; arm < 2; arm++) {
+            const bA = arm * Math.PI;
+            for (let k = 0; k < 140; k++) {
+              const t = k / 140;
+              const r = 8 + t * maxR;
+              const a = bA + t * 5.2;
+              const px = gx + Math.cos(a) * r;
+              const py = gy + Math.sin(a) * r;
+              ctx.fillStyle = t < 0.25 ? 'rgba(254, 240, 138, 0.35)' : (k % 5 === 0 ? 'rgba(244, 114, 182, 0.45)' : 'rgba(125, 211, 252, 0.25)');
+              ctx.beginPath();
+              ctx.arc(px, py, 6 + (1 - t) * 8, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          const cg = ctx.createRadialGradient(gx, gy, 2, gx, gy, 38);
+          cg.addColorStop(0.0, '#ffffff');
+          cg.addColorStop(0.4, '#fef08a');
+          cg.addColorStop(1.0, 'rgba(0,0,0,0)');
+          ctx.fillStyle = cg;
+          ctx.beginPath(); ctx.arc(gx, gy, 38, 0, Math.PI * 2); ctx.fill();
+        };
+        drawSpiral(cx - 24, cy + 14, 118);
+        drawSpiral(cx + 105, cy - 72, 42);
+
+      } else {
+        // Pleiades Seven Sisters Reflection Cluster (M45)
+        const sisters = [
+          [-55, -25, 11], [-15, -45, 9.5], [32, -28, 10.5],
+          [-28, 22, 10], [24, 18, 11.5], [72, 8, 8.5], [64, -14, 8]
+        ];
+        for (const [ox, oy, sr] of sisters) {
+          const sx = cx + ox;
+          const sy = cy + oy;
+          const halo = ctx.createRadialGradient(sx, sy, 2, sx, sy, sr * 5.5);
+          halo.addColorStop(0.0, '#ffffff');
+          halo.addColorStop(0.25, 'rgba(125, 211, 252, 0.78)');
+          halo.addColorStop(0.65, 'rgba(56, 189, 248, 0.22)');
+          halo.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = halo;
+          ctx.beginPath(); ctx.arc(sx, sy, sr * 5.5, 0, Math.PI * 2); ctx.fill();
+
+          // Long blue diffraction spikes
+          ctx.strokeStyle = 'rgba(186, 230, 253, 0.85)';
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(sx - sr * 3.8, sy); ctx.lineTo(sx + sr * 3.8, sy);
+          ctx.moveTo(sx, sy - sr * 3.8); ctx.lineTo(sx, sy + sr * 3.8);
+          ctx.stroke();
+        }
+      }
+
+      // Eyepiece optical reticle crosshairs & degree ticks
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.36)';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 42, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 115, 0, Math.PI * 2);
+      ctx.moveTo(cx - lensR, cy); ctx.lineTo(cx - 18, cy);
+      ctx.moveTo(cx + 18, cy); ctx.lineTo(cx + lensR, cy);
+      ctx.moveTo(cx, cy - lensR); ctx.lineTo(cx, cy - 18);
+      ctx.moveTo(cx, cy + 18); ctx.lineTo(cx, cy + lensR);
+      ctx.stroke();
+
+      ctx.restore(); // End circular lens clip
+
+      // Brass & blackened steel telescope eyepiece bezel rim
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, lensR + 2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.arc(cx, cy, lensR + 9, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function renderBinocularsBirdCanvas(speciesKey) {
+      if (!humanOpticsCtx || !humanOpticsCanvasEl) return;
+      const ctx = humanOpticsCtx;
+      const w = humanOpticsCanvasEl.width;
+      const h = humanOpticsCanvasEl.height;
+      const cx = w * 0.5;
+      const cy = h * 0.5;
+      const rLens = h * 0.43;
+
+      ctx.save();
+      ctx.fillStyle = '#050705';
+      ctx.fillRect(0, 0, w, h);
+
+      // Dual-lens overlapping binocular figure-8 aperture mask
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx - 108, cy, rLens, 0, Math.PI * 2);
+      ctx.arc(cx + 108, cy, rLens, 0, Math.PI * 2);
+      ctx.clip();
+
+      if (speciesKey === 'macaw') {
+        // Scarlet Oasis Macaw perched/soaring against lush emerald jungle palm fronds
+        const skyG = ctx.createLinearGradient(0, 0, 0, h);
+        skyG.addColorStop(0.0, '#0284c7');
+        skyG.addColorStop(0.6, '#38bdf8');
+        skyG.addColorStop(1.0, '#065f46');
+        ctx.fillStyle = skyG;
+        ctx.fillRect(0, 0, w, h);
+
+        // Soft out-of-focus jungle palm foliage bokeh
+        ctx.fillStyle = 'rgba(4, 120, 87, 0.55)';
+        for (let f = 0; f < 8; f++) {
+          ctx.beginPath();
+          ctx.ellipse(90 + f * 75, h - 55 + (f % 2) * 30, 85, 38, (f - 3) * 0.25, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Branch perch
+        ctx.strokeStyle = '#5c3a1d';
+        ctx.lineWidth = 18;
+        ctx.beginPath();
+        ctx.moveTo(80, cy + 95);
+        ctx.quadraticCurveTo(cx, cy + 72, w - 70, cy + 115);
+        ctx.stroke();
+
+        // Scarlet Macaw body, yellow/blue wings, curved beak & long tail feathers
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.moveTo(cx - 15, cy + 75);
+        ctx.lineTo(cx - 55, cy + 205);
+        ctx.lineTo(cx + 8, cy + 205);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 12, 52, 74, -0.15, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Wing bands: golden yellow -> royal blue
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.ellipse(cx + 18, cy + 8, 34, 48, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#0284c7';
+        ctx.beginPath();
+        ctx.ellipse(cx + 28, cy + 28, 28, 44, 0.28, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head, white facial patch, eye & curved hooked beak
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(cx - 14, cy - 68, 34, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(cx - 26, cy - 72, 16, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#111827';
+        ctx.beginPath();
+        ctx.arc(cx - 28, cy - 73, 5, 0, Math.PI * 2);
+        ctx.fill();
+        // Upper & lower beak
+        ctx.fillStyle = '#fef3c7';
+        ctx.beginPath();
+        ctx.moveTo(cx - 42, cy - 82);
+        ctx.quadraticCurveTo(cx - 76, cy - 78, cx - 64, cy - 52);
+        ctx.lineTo(cx - 38, cy - 64);
+        ctx.closePath();
+        ctx.fill();
+
+      } else if (speciesKey === 'flamingo') {
+        // Coral Flamingo wading in turquoise oasis lagoon
+        const bg = ctx.createLinearGradient(0, 0, 0, h);
+        bg.addColorStop(0.0, '#7dd3fc');
+        bg.addColorStop(0.55, '#fef3c7');
+        bg.addColorStop(0.56, '#0284c7');
+        bg.addColorStop(1.0, '#0369a1');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, h);
+
+        // Water ripples
+        ctx.strokeStyle = 'rgba(224, 242, 254, 0.55)';
+        ctx.lineWidth = 3;
+        for (let r = 0; r < 5; r++) {
+          ctx.beginPath();
+          ctx.ellipse(cx, cy + 125 + r * 14, 70 + r * 24, 7, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Long slender legs
+        ctx.strokeStyle = '#f43f5e';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(cx - 8, cy + 32); ctx.lineTo(cx - 8, cy + 145);
+        ctx.moveTo(cx + 12, cy + 32); ctx.lineTo(cx + 28, cy + 92); ctx.lineTo(cx + 4, cy + 110);
+        ctx.stroke();
+
+        // Flamingo plumage body & S-curved neck
+        ctx.fillStyle = '#f472b6';
+        ctx.beginPath();
+        ctx.ellipse(cx + 10, cy + 16, 62, 36, -0.12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fb7185';
+        ctx.beginPath();
+        ctx.ellipse(cx + 18, cy + 12, 44, 22, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#f472b6';
+        ctx.lineWidth = 17;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(cx - 38, cy + 10);
+        ctx.bezierCurveTo(cx - 72, cy - 35, cx - 22, cy - 75, cx - 44, cy - 112);
+        ctx.stroke();
+
+        // Head & black-tipped curved bill
+        ctx.fillStyle = '#f472b6';
+        ctx.beginPath();
+        ctx.arc(cx - 48, cy - 114, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#111827';
+        ctx.beginPath();
+        ctx.moveTo(cx - 64, cy - 114);
+        ctx.quadraticCurveTo(cx - 88, cy - 106, cx - 80, cy - 86);
+        ctx.lineTo(cx - 60, cy - 102);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(cx - 52, cy - 116, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+      } else if (speciesKey === 'owl') {
+        // Horned Night Owl perched on a giant Saguaro Cactus crown with glowing red/amber eyes
+        const nightG = ctx.createLinearGradient(0, 0, 0, h);
+        nightG.addColorStop(0.0, '#090d1e');
+        nightG.addColorStop(1.0, '#1e1b4b');
+        ctx.fillStyle = nightG;
+        ctx.fillRect(0, 0, w, h);
+
+        // Full moon halo behind the owl
+        const moonG = ctx.createRadialGradient(cx + 85, cy - 85, 10, cx + 85, cy - 85, 78);
+        moonG.addColorStop(0.0, '#fef9c3');
+        moonG.addColorStop(0.55, 'rgba(254, 240, 138, 0.35)');
+        moonG.addColorStop(1.0, 'rgba(0,0,0,0)');
+        ctx.fillStyle = moonG;
+        ctx.beginPath(); ctx.arc(cx + 85, cy - 85, 78, 0, Math.PI * 2); ctx.fill();
+
+        // Saguaro cactus crown ribbed top
+        ctx.fillStyle = '#15803d';
+        ctx.beginPath();
+        ctx.roundRect(cx - 68, cy + 68, 136, 160, 48);
+        ctx.fill();
+
+        // Owl body & mottled feathers
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 12, 58, 74, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#d6d3d1';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 22, 38, 52, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Owl head & ear tufts
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath();
+        ctx.arc(cx, cy - 58, 46, 0, Math.PI * 2);
+        ctx.moveTo(cx - 42, cy - 82); ctx.lineTo(cx - 56, cy - 118); ctx.lineTo(cx - 18, cy - 96);
+        ctx.moveTo(cx + 42, cy - 82); ctx.lineTo(cx + 56, cy - 118); ctx.lineTo(cx + 18, cy - 96);
+        ctx.fill();
+
+        // Glowing red-amber nocturnal eyes
+        for (const side of [-1, 1]) {
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath();
+          ctx.arc(cx + side * 19, cy - 58, 14, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#111827';
+          ctx.beginPath();
+          ctx.arc(cx + side * 19, cy - 58, 6.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(cx + side * 16, cy - 62, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+      } else {
+        // Desert Red-Tailed Hawk soaring on an updraft over golden barchan dunes
+        const skyG = ctx.createLinearGradient(0, 0, 0, h);
+        skyG.addColorStop(0.0, '#0284c7');
+        skyG.addColorStop(0.7, '#bae6fd');
+        skyG.addColorStop(1.0, '#f59e0b');
+        ctx.fillStyle = skyG;
+        ctx.fillRect(0, 0, w, h);
+
+        // Outspread soaring wings, fanned rust-red tail & hooked raptor beak
+        ctx.fillStyle = '#b45309';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy + 28);
+        ctx.lineTo(cx - 46, cy + 102);
+        ctx.quadraticCurveTo(cx, cy + 118, cx + 46, cy + 102);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 22);
+        ctx.bezierCurveTo(cx - 95, cy - 68, cx - 185, cy - 42, cx - 235, cy + 12);
+        ctx.bezierCurveTo(cx - 155, cy + 34, cx - 75, cy + 28, cx, cy + 32);
+        ctx.bezierCurveTo(cx + 75, cy + 28, cx + 155, cy + 34, cx + 235, cy + 12);
+        ctx.bezierCurveTo(cx + 185, cy - 42, cx + 95, cy - 68, cx, cy - 22);
+        ctx.fill();
+
+        ctx.fillStyle = '#fef3c7';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 6, 28, 42, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(cx, cy - 44, 22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 46);
+        ctx.lineTo(cx - 18, cy - 38);
+        ctx.lineTo(cx, cy - 30);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Binocular rangefinder mil-dot reticle markings
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 85, cy); ctx.lineTo(cx - 16, cy);
+      ctx.moveTo(cx + 16, cy); ctx.lineTo(cx + 85, cy);
+      ctx.moveTo(cx, cy - 65); ctx.lineTo(cx, cy - 16);
+      ctx.moveTo(cx, cy + 16); ctx.lineTo(cx, cy + 65);
+      ctx.stroke();
+
+      ctx.restore(); // End dual-lens clip
+
+      // Dual-lens binocular rim outline
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(cx - 108, cy, rLens, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx + 108, cy, rLens, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function openVoxelHumanOpticsModal(mode) {
+      if (!humanOpticsModalEl) return;
+      activeOpticsMode = mode;
+      isOpticsGameplayPaused = true;
+      isPointerDown = false;
+      clock.stop();
+
+      // Suspend audio engine hum while gameplay is paused in optics view
+      if (audioCtx && audioCtx.state === 'running') {
+        audioCtx.suspend().catch(() => {});
+      }
+
+      humanOpticsModalEl.classList.toggle('binoculars-mode', mode === 'binoculars');
+      if (mode === 'telescope') {
+        const idxT = voxelHuman.telescopeSpaceTargetIdx || 0;
+        const spec = TELESCOPE_SPACE_CATALOG[idxT % TELESCOPE_SPACE_CATALOG.length];
+        if (humanOpticsPauseBadgeEl) humanOpticsPauseBadgeEl.textContent = '⏸️ Gameplay Paused · Looking Through Astronomical Telescope';
+        if (humanOpticsTitleEl) humanOpticsTitleEl.textContent = spec.title;
+        if (humanOpticsSubEl) humanOpticsSubEl.textContent = spec.sub;
+        renderTelescopeDeepSpaceCanvas(idxT);
+      } else {
+        const spKey = voxelHuman.birdwatchSpecies || 'macaw';
+        const bMeta = BIRDWATCH_SPECIES_CATALOG[spKey] || BIRDWATCH_SPECIES_CATALOG.macaw;
+        if (humanOpticsPauseBadgeEl) humanOpticsPauseBadgeEl.textContent = '⏸️ Gameplay Paused · Looking Through Birdwatching Binoculars';
+        if (humanOpticsTitleEl) humanOpticsTitleEl.textContent = bMeta.title;
+        if (humanOpticsSubEl) humanOpticsSubEl.textContent = bMeta.sub;
+        renderBinocularsBirdCanvas(spKey);
+      }
+
+      humanOpticsModalEl.classList.add('open');
+    }
+
+    function closeVoxelHumanOpticsModal() {
+      if (!isOpticsGameplayPaused && (!humanOpticsModalEl || !humanOpticsModalEl.classList.contains('open'))) {
+        return;
+      }
+      isOpticsGameplayPaused = false;
+      activeOpticsMode = '';
+      if (humanOpticsModalEl) {
+        humanOpticsModalEl.classList.remove('open');
+      }
+      if (params.audioEnabled && audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+      clock.start();
+      clock.getDelta();
+    }
+
     // Destroy the Voxel Human AND anything he is currently working on (chair, easel, painting, fishing rod, kite), starting a 25s respawn cooldown!
     function destroyVoxelHuman(cause = 'destroyed') {
       if (!voxelHuman.active) return;
@@ -10639,12 +11674,19 @@
         });
       }
 
-      // 2. Destroy anything the human was working on (Easel + Painting, Chair, Fishing Rod, or Kite!)
+      // 2. Destroy anything the human was working on (Easel + Painting, Chair, Fishing Rod, Kite, Telescope, or Binoculars!)
       if (voxelHuman.routine === 'LANDSCAPE_PAINTING' || voxelHuman.routine === 'PAINTING_READY') {
         const easelWx = hx + fwdX * 0.94;
         const easelWz = hz + fwdZ * 0.94;
         spawnExplosionShards(easelWx, hy + 1.15, easelWz, 14, [0x854d0e, 0x5c3a1d, 0xf3ead8, 0xef4444, 0x38bdf8, 0xfacc15]);
         spawnSteamPuffAtWorld(easelWx, hy + 1.0, easelWz, 6);
+      } else if (voxelHuman.routine === 'STARGAZE_TELESCOPE') {
+        const scopeWx = hx + fwdX * 0.88;
+        const scopeWz = hz + fwdZ * 0.88;
+        spawnExplosionShards(scopeWx, hy + 1.25, scopeWz, 14, [0xf59e0b, 0xb45309, 0x38bdf8, 0x5c3a1d]);
+        spawnSteamPuffAtWorld(scopeWx, hy + 1.1, scopeWz, 6);
+      } else if (voxelHuman.routine === 'BIRDWATCHING') {
+        spawnExplosionShards(hx + fwdX * 0.35, hy + 1.55, hz + fwdZ * 0.35, 10, [0x1e293b, 0xf59e0b, 0x38bdf8]);
       } else if (voxelHuman.routine === 'POND_FISHING' || voxelHuman.routine === 'CAMP_REST') {
         spawnExplosionShards(hx - fwdX * 0.2, hy + 0.55, hz - fwdZ * 0.2, 10, [0x5c3a1d, 0xfef3c7, 0xef4444]);
       } else if (voxelHuman.routine === 'FLY_KITE') {
@@ -10667,6 +11709,7 @@
       voxelHuman.bubbleEmoji = '';
       clearEaselCanvasToLinen();
       closeVoxelHumanPaintingModal();
+      closeVoxelHumanOpticsModal();
 
       rig.root.visible = false;
       rig.chairGroup.visible = false;
@@ -10676,6 +11719,8 @@
       rig.fishingGroup.visible = false;
       rig.caughtFishGroup.visible = false;
       rig.kiteGroup.visible = false;
+      rig.telescopeGroup.visible = false;
+      rig.binocularsGroup.visible = false;
       if (voxelHumanBubbleEl) {
         voxelHumanBubbleEl.style.display = 'none';
         voxelHumanBubbleEl.classList.remove('painting-ready');
@@ -10912,6 +11957,49 @@
         e.stopPropagation();
         if (voxelHuman.routine === 'PAINTING_READY') {
           openVoxelHumanPaintingModal();
+        } else if (voxelHuman.routine === 'STARGAZE_TELESCOPE') {
+          openVoxelHumanOpticsModal('telescope');
+        } else if (voxelHuman.routine === 'BIRDWATCHING') {
+          openVoxelHumanOpticsModal('binoculars');
+        }
+      });
+    }
+    const btnCloseOpticsModal = document.getElementById('btn-close-optics-modal');
+    if (btnCloseOpticsModal) {
+      btnCloseOpticsModal.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeVoxelHumanOpticsModal();
+      });
+    }
+    const btnExitOpticsFooter = document.getElementById('btn-exit-optics-footer');
+    if (btnExitOpticsFooter) {
+      btnExitOpticsFooter.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeVoxelHumanOpticsModal();
+      });
+    }
+    const btnNextOpticsTarget = document.getElementById('btn-next-optics-target');
+    if (btnNextOpticsTarget) {
+      btnNextOpticsTarget.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (activeOpticsMode === 'telescope') {
+          voxelHuman.telescopeSpaceTargetIdx = ((voxelHuman.telescopeSpaceTargetIdx || 0) + 1) % TELESCOPE_SPACE_CATALOG.length;
+          openVoxelHumanOpticsModal('telescope');
+        } else if (activeOpticsMode === 'binoculars') {
+          const bKeys = Object.keys(BIRDWATCH_SPECIES_CATALOG);
+          const curIdx = bKeys.indexOf(voxelHuman.birdwatchSpecies || 'macaw');
+          voxelHuman.birdwatchSpecies = bKeys[(curIdx + 1) % bKeys.length];
+          if (voxelHuman.routine === 'BIRDWATCHING') {
+            voxelHuman.bubbleEmoji = BIRDWATCH_SPECIES_CATALOG[voxelHuman.birdwatchSpecies].emoji;
+          }
+          openVoxelHumanOpticsModal('binoculars');
+        }
+      });
+    }
+    if (humanOpticsModalEl) {
+      humanOpticsModalEl.addEventListener('click', (e) => {
+        if (e.target === humanOpticsModalEl) {
+          closeVoxelHumanOpticsModal();
         }
       });
     }
@@ -10978,6 +12066,46 @@
           };
           showCartridgeToast(`🎨 Oasis Artist started painting ${modeLabels[pickedMode]}!`);
         }
+      });
+    }
+
+    const btnTriggerHumanTelescope = document.getElementById('btn-trigger-human-telescope');
+    if (btnTriggerHumanTelescope) {
+      btnTriggerHumanTelescope.addEventListener('click', () => {
+        if (!voxelHuman.active) {
+          voxelHuman.respawnCooldown = 0.0;
+          if (!spawnOrRelocateVoxelHuman()) {
+            showCartridgeToast(`🌊 No safe dry land available to place the Oasis Artist right now!`, true);
+            return;
+          }
+        }
+        // Telescope stargazing only happens at night: if currently daytime, advance timeOfDay to starry midnight (22.5h)!
+        const hrNow = ((params.timeOfDay % 24) + 24) % 24;
+        const isNightNow = (hrNow >= 18.8 || hrNow < 5.5);
+        if (!isNightNow) {
+          params.timeOfDay = 22.5;
+          if (typeof sliderSunAngle !== 'undefined' && sliderSunAngle) sliderSunAngle.value = '22.5';
+          updateSunPosition();
+          syncUILabels();
+        }
+        startVoxelHumanTelescopeRoutine();
+        showCartridgeToast(`🔭 Oasis Artist set up their night telescope! Click the 🔭 speech bubble to look through it`);
+      });
+    }
+
+    const btnTriggerHumanBirdwatch = document.getElementById('btn-trigger-human-birdwatch');
+    if (btnTriggerHumanBirdwatch) {
+      btnTriggerHumanBirdwatch.addEventListener('click', () => {
+        if (!voxelHuman.active) {
+          voxelHuman.respawnCooldown = 0.0;
+          if (!spawnOrRelocateVoxelHuman()) {
+            showCartridgeToast(`🌊 No safe dry land available to place the Oasis Artist right now!`, true);
+            return;
+          }
+        }
+        startVoxelHumanBirdwatchingRoutine();
+        const bMeta = BIRDWATCH_SPECIES_CATALOG[voxelHuman.birdwatchSpecies] || BIRDWATCH_SPECIES_CATALOG.macaw;
+        showCartridgeToast(`${bMeta.emoji} Oasis Artist is birdwatching with binoculars! Click their speech bubble to look through them`);
       });
     }
 
@@ -11103,6 +12231,8 @@
       rig.fishingGroup.visible = false;
       rig.caughtFishGroup.visible = false;
       rig.kiteGroup.visible = false;
+      rig.telescopeGroup.visible = false;
+      rig.binocularsGroup.visible = false;
 
       // 4. Advance active routine state machine
       if (voxelHuman.routine === 'PAINTING_READY') {
@@ -11339,6 +12469,79 @@
           voxelHuman.routineTimer = 0.0;
           voxelHuman.routineDuration = 12.0 + Math.random() * 10.0;
         }
+      } else if (voxelHuman.routine === 'STARGAZE_TELESCOPE') {
+        // Night-Only Telescope Stargazing Routine (35–55 seconds): sets up the 3D brass telescope on a tripod and peers into the eyepiece!
+        // Clicking the 🔭 speech bubble opens the Deep-Space Telescope View and pauses gameplay!
+        voxelHuman.routineTimer += dt;
+        const hrNow = ((params.timeOfDay % 24) + 24) % 24;
+        const isStillNight = (hrNow >= 18.2 || hrNow < 6.0) || ((skyUniforms.uNightFactor.value || 0) > 0.35);
+
+        // If dawn breaks while stargazing (and the player isn't actively looking through the telescope modal), pack up the telescope!
+        if (!isStillNight && !isOpticsGameplayPaused) {
+          voxelHuman.routine = 'WANDER';
+          voxelHuman.routineTimer = 0.0;
+          voxelHuman.routineDuration = 12.0 + Math.random() * 8.0;
+          setVoxelHumanBubble('🌅', 3.0);
+        } else {
+          rig.telescopeGroup.visible = true;
+          rig.bodyGroup.position.y = -0.06;
+          rig.legLPivot.rotation.x = -0.14;
+          rig.legRPivot.rotation.x = 0.14;
+
+          // Hands steadying the brass telescope focus knob while leaning forward into the eyepiece
+          rig.armLPivot.rotation.set(-0.92, 0.22, 0.12);
+          rig.armRPivot.rotation.set(-0.98 + Math.sin(time * 2.2) * 0.05, -0.22, -0.10);
+          const slowScan = Math.sin(time * 0.55) * 0.12;
+          rig.headPivot.rotation.set(0.18, slowScan * 0.5, 0);
+          rig.telescopeTubePivot.rotation.set(0.54 + Math.sin(time * 0.4) * 0.06, slowScan, 0);
+
+          // Keep the clickable 🔭 speech bubble active for the entire stargazing duration!
+          voxelHuman.bubbleEmoji = '🔭';
+          voxelHuman.bubbleTimer = Math.max(0.5, voxelHuman.routineDuration - voxelHuman.routineTimer);
+
+          if (voxelHuman.routineTimer >= voxelHuman.routineDuration && !isOpticsGameplayPaused) {
+            voxelHuman.routine = 'WANDER';
+            voxelHuman.routineTimer = 0.0;
+            voxelHuman.routineDuration = 12.0 + Math.random() * 10.0;
+          }
+        }
+      } else if (voxelHuman.routine === 'BIRDWATCHING') {
+        // Birdwatching with 3D Field Binoculars Routine (32–48 seconds): holds 3D binoculars up to his eyes and tracks a bird!
+        // Clicking the bird speech bubble opens the Binoculars View and pauses gameplay!
+        voxelHuman.routineTimer += dt;
+        rig.binocularsGroup.visible = true;
+        rig.bodyGroup.position.y = 0.0;
+        rig.legLPivot.rotation.x = -0.08;
+        rig.legRPivot.rotation.x = 0.08;
+
+        // If tracking a live bird agent on the map, smoothly turn toward the bird!
+        if (voxelHuman.birdwatchTargetAgent && voxelHuman.birdwatchTargetAgent.state === 'alive') {
+          const targetYaw = Math.atan2(
+            voxelHuman.birdwatchTargetAgent.x - voxelHuman.x,
+            voxelHuman.birdwatchTargetAgent.z - voxelHuman.z
+          );
+          let dYaw = targetYaw - voxelHuman.heading;
+          while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+          while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+          voxelHuman.heading += dYaw * Math.min(1.0, dt * 3.0);
+        }
+
+        // Both hands raised holding the field binoculars to the eyes
+        rig.armLPivot.rotation.set(-1.45, 0.36, 0.18);
+        rig.armRPivot.rotation.set(-1.45, -0.36, -0.18);
+        const trackYaw = Math.sin(time * 0.85) * 0.28;
+        const trackPitch = -0.22 + Math.sin(time * 0.65) * 0.10;
+        rig.headPivot.rotation.set(trackPitch, trackYaw, 0);
+
+        const bMeta = BIRDWATCH_SPECIES_CATALOG[voxelHuman.birdwatchSpecies] || BIRDWATCH_SPECIES_CATALOG.macaw;
+        voxelHuman.bubbleEmoji = bMeta.emoji;
+        voxelHuman.bubbleTimer = Math.max(0.5, voxelHuman.routineDuration - voxelHuman.routineTimer);
+
+        if (voxelHuman.routineTimer >= voxelHuman.routineDuration && !isOpticsGameplayPaused) {
+          voxelHuman.routine = 'WANDER';
+          voxelHuman.routineTimer = 0.0;
+          voxelHuman.routineDuration = 12.0 + Math.random() * 10.0;
+        }
       } else {
         // Non-painting routines: WANDER, SURVEY_HORIZON, CAMP_REST, NATURE_OBSERVE
         voxelHuman.routineTimer += dt;
@@ -11441,25 +12644,40 @@
           } else if (fishHeadingHere !== null && Math.random() < 0.55) {
             startVoxelHumanFishingRoutine(fishHeadingHere);
           } else {
+            const hr = ((params.timeOfDay % 24) + 24) % 24;
+            const isNight = (hr >= 18.5 || hr < 5.8) || ((skyUniforms.uNightFactor.value || 0) > 0.45);
             const pickR = Math.random();
-            if (pickR < 0.34) {
-              startVoxelHumanKiteRoutine();
-            } else if (pickR < 0.58) {
-              voxelHuman.routine = 'SURVEY_HORIZON';
-              voxelHuman.routineDuration = 7.0 + Math.random() * 5.0;
-              setVoxelHumanBubble('🔭', 3.8);
-            } else if (pickR < 0.80) {
-              voxelHuman.routine = 'CAMP_REST';
-              voxelHuman.routineDuration = 8.0 + Math.random() * 6.0;
-              const hr = ((params.timeOfDay % 24) + 24) % 24;
-              const isNight = (hr >= 19.0 || hr < 5.5);
-              setVoxelHumanBubble(isNight ? '🌙' : '💧', 3.8);
+
+            if (isNight) {
+              // At night: frequently set up the 3D Astronomical Telescope to stargaze (or birdwatch nocturnal Owls, fly a night kite, or rest)!
+              if (pickR < 0.48) {
+                startVoxelHumanTelescopeRoutine();
+              } else if (pickR < 0.74) {
+                startVoxelHumanBirdwatchingRoutine();
+              } else if (pickR < 0.88) {
+                voxelHuman.routine = 'CAMP_REST';
+                voxelHuman.routineDuration = 8.0 + Math.random() * 6.0;
+                setVoxelHumanBubble('🌙', 3.8);
+              } else {
+                startVoxelHumanKiteRoutine();
+              }
             } else {
-              voxelHuman.routine = 'NATURE_OBSERVE';
-              voxelHuman.routineDuration = 7.0 + Math.random() * 5.0;
-              const subjs = scanPainterVisibleSubjects();
-              const pick = subjs[Math.floor(Math.random() * subjs.length)] || { emoji: '🌵' };
-              setVoxelHumanBubble(pick.emoji, 3.8);
+              // During the day: birdwatch with 3D field binoculars, fly a kite, rest, or observe nature (never set up the star telescope in daylight!)
+              if (pickR < 0.36) {
+                startVoxelHumanBirdwatchingRoutine();
+              } else if (pickR < 0.68) {
+                startVoxelHumanKiteRoutine();
+              } else if (pickR < 0.85) {
+                voxelHuman.routine = 'CAMP_REST';
+                voxelHuman.routineDuration = 8.0 + Math.random() * 6.0;
+                setVoxelHumanBubble('💧', 3.8);
+              } else {
+                voxelHuman.routine = 'NATURE_OBSERVE';
+                voxelHuman.routineDuration = 7.0 + Math.random() * 5.0;
+                const subjs = scanPainterVisibleSubjects();
+                const pick = subjs[Math.floor(Math.random() * subjs.length)] || { emoji: '🌵' };
+                setVoxelHumanBubble(pick.emoji, 3.8);
+              }
             }
           }
         }
@@ -11477,12 +12695,19 @@
           valVoxelHumanStatusEl.textContent = `🎨 Painting (${pct}%)`;
         } else if (voxelHuman.routine === 'PAINTING_READY') {
           valVoxelHumanStatusEl.textContent = `🖼️ Ready (${Math.ceil(voxelHuman.paintReadyTimer)}s)`;
+        } else if (voxelHuman.routine === 'STARGAZE_TELESCOPE') {
+          const remT = Math.max(1, Math.ceil(voxelHuman.routineDuration - voxelHuman.routineTimer));
+          valVoxelHumanStatusEl.textContent = `🔭 Stargazing (${remT}s)`;
+        } else if (voxelHuman.routine === 'BIRDWATCHING') {
+          const remB = Math.max(1, Math.ceil(voxelHuman.routineDuration - voxelHuman.routineTimer));
+          const bIcon = (BIRDWATCH_SPECIES_CATALOG[voxelHuman.birdwatchSpecies] || BIRDWATCH_SPECIES_CATALOG.macaw).emoji;
+          valVoxelHumanStatusEl.textContent = `${bIcon} Birdwatching (${remB}s)`;
         } else if (voxelHuman.routine === 'POND_FISHING') {
           valVoxelHumanStatusEl.textContent = voxelHuman.fishCaughtDisplayTimer > 0 ? '🐟 Caught Fish!' : '🎣 Fishing';
         } else if (voxelHuman.routine === 'FLY_KITE') {
           valVoxelHumanStatusEl.textContent = '🪁 Flying Kite';
         } else if (voxelHuman.routine === 'SURVEY_HORIZON') {
-          valVoxelHumanStatusEl.textContent = '🔭 Surveying';
+          valVoxelHumanStatusEl.textContent = '🧭 Surveying';
         } else if (voxelHuman.routine === 'CAMP_REST') {
           valVoxelHumanStatusEl.textContent = '🪑 Resting';
         } else if (voxelHuman.routine === 'NATURE_OBSERVE') {
@@ -11493,11 +12718,16 @@
       }
 
       // Project floating 2D Voice Bubble above the Voxel Human's head
-      if (voxelHuman.bubbleTimer > 0.0 && voxelHuman.routine !== 'PAINTING_READY') {
+      const isClickableBubbleRoutine = (
+        voxelHuman.routine === 'PAINTING_READY' ||
+        voxelHuman.routine === 'STARGAZE_TELESCOPE' ||
+        voxelHuman.routine === 'BIRDWATCHING'
+      );
+      if (voxelHuman.bubbleTimer > 0.0 && !isClickableBubbleRoutine) {
         voxelHuman.bubbleTimer = Math.max(0.0, voxelHuman.bubbleTimer - dt);
       }
 
-      const showBubble = (voxelHuman.routine === 'PAINTING_READY') || (voxelHuman.bubbleTimer > 0.0 && voxelHuman.bubbleEmoji);
+      const showBubble = isClickableBubbleRoutine || (voxelHuman.bubbleTimer > 0.0 && voxelHuman.bubbleEmoji);
       if (voxelHumanBubbleEl) {
         if (!showBubble) {
           voxelHumanBubbleEl.style.display = 'none';
@@ -11528,12 +12758,12 @@
           voxelHumanBubbleEl.style.setProperty('--bubble-scale', bubbleScale.toFixed(3));
 
           const isReady = (voxelHuman.routine === 'PAINTING_READY');
-          // If behind camera or offscreen: when PAINTING_READY is active, clamp the clickable 🖼️ bubble to the screen margin so the player never misses the 60s window!
+          // If behind camera or offscreen: when PAINTING_READY, STARGAZE_TELESCOPE, or BIRDWATCHING is active, clamp the clickable bubble to the screen margin so the player can easily click it!
           const isBehind = (_bubbleProjVec.z > 1.0);
           let sx = (_bubbleProjVec.x * 0.5 + 0.5) * window.innerWidth;
           let sy = (-_bubbleProjVec.y * 0.5 + 0.5) * window.innerHeight;
 
-          if (isBehind && !isReady) {
+          if (isBehind && !isClickableBubbleRoutine) {
             voxelHumanBubbleEl.style.display = 'none';
           } else {
             if (isBehind) {
@@ -11542,7 +12772,7 @@
             }
             const marginX = Math.round(38 * bubbleScale + 14);
             const marginY = Math.round(44 * bubbleScale + 16);
-            if (isReady) {
+            if (isClickableBubbleRoutine) {
               sx = clamp(sx, marginX, window.innerWidth - marginX);
               sy = clamp(sy, marginY, window.innerHeight - marginY);
             } else if (sx < 10 || sx > window.innerWidth - 10 || sy < 10 || sy > window.innerHeight - 10) {
@@ -11553,15 +12783,36 @@
             voxelHumanBubbleEl.style.display = 'inline-flex';
             voxelHumanBubbleEl.style.left = `${Math.round(sx)}px`;
             voxelHumanBubbleEl.style.top = `${Math.round(sy)}px`;
-            voxelHumanBubbleEl.classList.toggle('painting-ready', isReady);
+            voxelHumanBubbleEl.classList.toggle('painting-ready', isClickableBubbleRoutine);
+
+            if (voxelHuman.routine === 'PAINTING_READY') {
+              voxelHumanBubbleEl.title = "Click to view & download the Oasis Artist's painting!";
+            } else if (voxelHuman.routine === 'STARGAZE_TELESCOPE') {
+              voxelHumanBubbleEl.title = "Click to look through the Oasis Artist's Telescope at deep space (pauses gameplay)!";
+            } else if (voxelHuman.routine === 'BIRDWATCHING') {
+              voxelHumanBubbleEl.title = "Click to look through the Oasis Artist's Binoculars at the bird being watched (pauses gameplay)!";
+            }
 
             if (voxelHumanBubbleEmojiEl) {
-              voxelHumanBubbleEmojiEl.textContent = isReady ? '🖼️' : voxelHuman.bubbleEmoji;
+              if (isReady) {
+                voxelHumanBubbleEmojiEl.textContent = '🖼️';
+              } else if (voxelHuman.routine === 'STARGAZE_TELESCOPE') {
+                voxelHumanBubbleEmojiEl.textContent = '🔭';
+              } else if (voxelHuman.routine === 'BIRDWATCHING') {
+                const bIcon = (BIRDWATCH_SPECIES_CATALOG[voxelHuman.birdwatchSpecies] || BIRDWATCH_SPECIES_CATALOG.macaw).emoji;
+                voxelHumanBubbleEmojiEl.textContent = `🔭${bIcon}`;
+              } else {
+                voxelHumanBubbleEmojiEl.textContent = voxelHuman.bubbleEmoji;
+              }
             }
             if (voxelHumanBubbleTimerEl) {
               if (isReady) {
                 voxelHumanBubbleTimerEl.style.display = 'inline-block';
                 voxelHumanBubbleTimerEl.textContent = `${Math.max(1, Math.ceil(voxelHuman.paintReadyTimer))}s`;
+              } else if (voxelHuman.routine === 'STARGAZE_TELESCOPE' || voxelHuman.routine === 'BIRDWATCHING') {
+                const remSec = Math.max(1, Math.ceil(voxelHuman.routineDuration - voxelHuman.routineTimer));
+                voxelHumanBubbleTimerEl.style.display = 'inline-block';
+                voxelHumanBubbleTimerEl.textContent = `${remSec}s`;
               } else {
                 voxelHumanBubbleTimerEl.style.display = 'none';
               }
@@ -17851,6 +19102,10 @@
         return;
       }
       if (e.code === 'Escape') {
+        if (isOpticsGameplayPaused || (humanOpticsModalEl && humanOpticsModalEl.classList.contains('open'))) {
+          closeVoxelHumanOpticsModal();
+          return;
+        }
         if (humanPaintingModalEl && humanPaintingModalEl.classList.contains('open')) {
           closeVoxelHumanPaintingModal();
           return;
@@ -20485,6 +21740,11 @@
     function animate() {
       if (isBackgroundSuspended) return;
       animFrameId = requestAnimationFrame(animate);
+
+      // While the player is looking through the Oasis Artist's Telescope or Binoculars, all gameplay & simulation is paused until they exit!
+      if (isOpticsGameplayPaused) {
+        return;
+      }
 
       const dt = Math.min(clock.getDelta(), 0.05);
       uniforms.uTime.value += dt;
