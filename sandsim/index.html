@@ -4936,6 +4936,11 @@
       updateTerrainSideSkirt();
     }
 
+    // Live 3D cactus crown perch registry (updated in rebuildFloraInstances so nocturnal owls can fly down and sit on top of cacti!)
+    const activeCactusPerches = [];
+    const cactusPerchByCell = new Map();
+    const _cactusApexVec = new THREE.Vector3();
+
     function rebuildFloraInstances() {
       let cFern = 0;
       let cJungleBush = 0;
@@ -4950,6 +4955,8 @@
       let cGrassJungle = 0;
       let cGrassDesert = 0;
       grassMask.fill(0);
+      activeCactusPerches.length = 0;
+      cactusPerchByCell.clear();
 
       // Count total vegetated cells so we can scale keepProb evenly across the entire map if over activePlantCap
       let totalVegCells = 0;
@@ -5143,6 +5150,20 @@
               barrelCactusInst.setColorAt(cBarrel, tempColor);
               cBarrel++;
 
+              if (!isPlantBurning) {
+                _cactusApexVec.set(0, 1.48, 0).applyMatrix4(dummy.matrix);
+                const perchObj = {
+                  cellIdx: i,
+                  x: _cactusApexVec.x,
+                  y: _cactusApexVec.y,
+                  z: _cactusApexVec.z,
+                  heightAboveGround: _cactusApexVec.y - hCenter,
+                  isSaguaro: false
+                };
+                activeCactusPerches.push(perchObj);
+                cactusPerchByCell.set(i, perchObj);
+              }
+
               // CACTUS BLOOM CHECK (Prickly Pear / Barrel Cactus blooms vibrant magenta, gold & coral flowers when healthy & moist!)
               const mHere = soilMoisture[i];
               const wpHere = waterProximity[i];
@@ -5170,6 +5191,20 @@
               applyFrostTint(0.30 * vh + 0.58 * (1 - vh), 0.56 * vh + 0.45 * (1 - vh), 0.15);
               saguaroInst.setColorAt(cSaguaro, tempColor);
               cSaguaro++;
+
+              if (!isPlantBurning) {
+                _cactusApexVec.set(0, 3.85, 0).applyMatrix4(dummy.matrix);
+                const perchObj = {
+                  cellIdx: i,
+                  x: _cactusApexVec.x,
+                  y: _cactusApexVec.y,
+                  z: _cactusApexVec.z,
+                  heightAboveGround: _cactusApexVec.y - hCenter,
+                  isSaguaro: true
+                };
+                activeCactusPerches.push(perchObj);
+                cactusPerchByCell.set(i, perchObj);
+              }
 
               // CACTUS BLOOM CHECK (Tall Saguaro crowns & arm tips bloom when mature, healthy & nourished by moisture/rain!)
               const mHere = soilMoisture[i];
@@ -5505,20 +5540,57 @@
       return safeMergeGeometries(parts, true);
     }
 
-    // 6D. Nocturnal Desert Horned Owl (Night Sky Predator: plumed body with ear tufts + broad silent wings)
+    // 6D. Nocturnal Desert Horned Owl (Night Sky Predator: plumed body with head, beak, ear tufts + broad silent wings)
     function createOwlBodyGeometry() {
       const parts = [];
       const body = new THREE.SphereGeometry(0.22, 7, 6);
       body.scale(0.9, 0.85, 1.65);
       parts.push(body);
 
+      const head = new THREE.SphereGeometry(0.18, 7, 6);
+      head.scale(1.06, 0.98, 0.96);
+      head.translate(0, 0.05, 0.30);
+      parts.push(head);
+
+      const beak = new THREE.ConeGeometry(0.045, 0.11, 4);
+      beak.rotateX(Math.PI * 0.36);
+      beak.translate(0, -0.08, 0.43);
+      parts.push(beak);
+
       for (const side of [-1, 1]) {
-        const tuft = new THREE.ConeGeometry(0.05, 0.16, 4);
+        const tuft = new THREE.ConeGeometry(0.055, 0.17, 4);
         tuft.rotateZ(side * -0.35);
-        tuft.translate(side * 0.11, 0.18, 0.24);
+        tuft.rotateX(0.35);
+        tuft.translate(side * 0.11, 0.16, 0.36);
         parts.push(tuft);
       }
       return safeMergeGeometries(parts, true);
+    }
+
+    // Glowing Crimson-Red Eyes for Owls Perched on Top of Cacti at Night!
+    function createOwlGlowingEyesGeometry() {
+      const parts = [];
+      for (const side of [-1, 1]) {
+        // Positioned on the front face of the owl's head when pitched upright (-0.95 rad) on a cactus crown
+        const eye = new THREE.SphereGeometry(0.052, 7, 6);
+        eye.translate(side * 0.095, -0.04, 0.42);
+        parts.push(eye);
+      }
+      return safeMergeGeometries(parts, true);
+    }
+
+    function createOwlGlowingEyesPool() {
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false });
+      const mesh = new THREE.InstancedMesh(createOwlGlowingEyesGeometry(), mat, MAX_FAUNA_PER_SPECIES);
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.count = 0;
+      mesh.frustumCulled = false;
+      for (let i = 0; i < MAX_FAUNA_PER_SPECIES; i++) {
+        mesh.setColorAt(i, tempColor.setHex(0xff1414));
+      }
+      scene.add(mesh);
+      return mesh;
     }
 
     const camelInst = createFaunaPool(createCamelGeometry(), 0xd97706, true);
@@ -5540,6 +5612,7 @@
     const owlInst = createFaunaPool(createOwlBodyGeometry(), 0xe2e8f0, true);
     const owlWingLInst = createFaunaPool(createBirdWingGeometry(1.18, 0.44, 1), 0xe2e8f0, true);
     const owlWingRInst = createFaunaPool(createBirdWingGeometry(1.18, 0.44, -1), 0xe2e8f0, true);
+    const owlEyesInst = createOwlGlowingEyesPool();
 
     // 6E. Oasis Pond Frog (facing +Z: crouching amphibious torso, wide head with bulging eyes, folded muscular hind legs & forelegs)
     function createFrogGeometry() {
@@ -6758,7 +6831,7 @@
       const isNightTime = (hr >= 19.0 || hr < 5.5) || ((skyUniforms.uNightFactor.value || 0) > 0.55);
 
       let cCamel = 0, cOryx = 0, cFlamingo = 0, cMacaw = 0, cFish = 0, cHawk = 0, cSkeleton = 0;
-      let cFennec = 0, cBat = 0, cOwl = 0, cFrog = 0, cRabbit = 0;
+      let cFennec = 0, cBat = 0, cOwl = 0, cOwlEyes = 0, cFrog = 0, cRabbit = 0;
 
       for (let i = faunaAgents.length - 1; i >= 0; i--) {
         const a = faunaAgents[i];
@@ -7528,20 +7601,13 @@
               const diveBlend = clamp(1.0 - (swoopDist - 3.6) / 18.0, 0.0, 1.0);
               targetAlt = targetAlt * (1.0 - diveBlend) + (swoopingLantern.ly + 0.35 + Math.sin(time * 7.5 + a.phase) * 0.45) * diveBlend;
             } else {
-              // Tight acrobatic moth-catching swoop right around the hanging lantern globe — eats & depletes the moths!
+              // Tight acrobatic moth-catching swoop right around the hanging lantern globe — flags lantern for slow, rate-capped moth consumption!
               const orbitTangent = angleToLantern + Math.PI * 0.42;
               steerToward(orbitTangent, 7.5);
               batSpeedMult = 1.28;
               targetAlt = swoopingLantern.ly + Math.sin(time * 9.0 + a.phase) * 0.42;
               const lan = swoopingLantern.it;
-              lan.mothSupply = Math.max(0.0, (lan.mothSupply || 0.0) - dt * 1.25);
-              if (lan.mothSupply <= 0.05) {
-                // Bats ate all the moths! Start a random cooldown (10 to 24 seconds) before the lantern attracts moths again!
-                lan.mothSupply = 0.0;
-                lan.mothsActive = false;
-                lan.mothSpawning = false;
-                lan.mothCooldown = 10.0 + Math.random() * 14.0;
-              }
+              lan.batsFeedingThisFrame = (lan.batsFeedingThisFrame || 0) + 1;
             }
           } else if (waterProximity[pIdx] < 0.25) {
             a.heading += 1.5 * dt;
@@ -7555,15 +7621,131 @@
           a.y += (targetAlt - a.y) * Math.min(1.0, dt * (swoopingLantern ? 7.0 : 4.5));
           a.climbRate = (a.y - prevY) / Math.max(dt, 0.001);
 
-        } else if (a.type === 'hawk' || a.type === 'owl') {
+        } else if (a.type === 'hawk') {
           a.heading += (0.38 + Math.sin(a.phase) * 0.15) * dt;
           a.x += Math.sin(a.heading) * a.speed * dt;
           a.z += Math.cos(a.heading) * a.speed * dt;
           const prevY = a.y;
-          const baseAlt = a.type === 'owl' ? 14.5 : 20.0;
-          const targetAlt = groundY + baseAlt + Math.sin(time * 0.85 + a.phase) * 4.2;
+          const targetAlt = groundY + 20.0 + Math.sin(time * 0.85 + a.phase) * 4.2;
           a.y += (targetAlt - a.y) * Math.min(1.0, dt * 3.0);
           a.climbRate = (a.y - prevY) / Math.max(dt, 0.001);
+
+        } else if (a.type === 'owl') {
+          if (!a.owlState) {
+            a.owlState = 'SOARING';
+            a.perchCooldown = 1.5 + Math.random() * 5.0;
+            a.perchCellIdx = -1;
+          }
+
+          const livePerch = (a.perchCellIdx >= 0) ? cactusPerchByCell.get(a.perchCellIdx) : null;
+          const isPerchValid = Boolean(
+            livePerch &&
+            veg[a.perchCellIdx] >= 1.15 &&
+            water[a.perchCellIdx] < 0.085 &&
+            plantBurnTimer[a.perchCellIdx] <= 0.0
+          );
+
+          if (a.owlState === 'PERCHED') {
+            if (!isPerchValid || !isNightTime) {
+              a.owlState = 'SOARING';
+              a.perchCellIdx = -1;
+              a.perchCooldown = 6.0 + Math.random() * 10.0;
+              a.y += 0.35;
+              a.climbRate = 2.6;
+            } else {
+              // Sit upright on top of the cactus crown with glowing red eyes for a random duration
+              a.x = livePerch.x;
+              a.z = livePerch.z;
+              a.y = livePerch.y + 0.18 * a.scale;
+              a.climbRate = 0.0;
+              a.heading = (a.perchBaseHeading ?? a.heading) + Math.sin(time * 0.95 + a.phase) * 0.58;
+              a.perchTimer = (a.perchTimer || 0.0) - dt;
+              if (a.perchTimer <= 0.0) {
+                // Random sit duration finished -> take off back into the night sky!
+                a.owlState = 'SOARING';
+                a.perchCellIdx = -1;
+                a.perchCooldown = 7.0 + Math.random() * 14.0;
+                a.y += 0.35;
+                a.climbRate = 2.8;
+              }
+            }
+          } else if (a.owlState === 'LANDING') {
+            a.landingTimeout = (a.landingTimeout || 14.0) - dt;
+            if (!isPerchValid || !isNightTime || a.landingTimeout <= 0.0) {
+              a.owlState = 'SOARING';
+              a.perchCellIdx = -1;
+              a.perchCooldown = 4.0 + Math.random() * 7.0;
+            } else {
+              const dx = livePerch.x - a.x;
+              const dz = livePerch.z - a.z;
+              const dist2D = Math.hypot(dx, dz);
+              const targetAngle = Math.atan2(dx, dz);
+              steerToward(targetAngle, 5.8);
+              const approachSpd = a.speed * clamp(dist2D / 8.5, 0.25, 1.12);
+              a.x += Math.sin(a.heading) * approachSpd * dt;
+              a.z += Math.cos(a.heading) * approachSpd * dt;
+
+              const perchTopY = livePerch.y + 0.18 * a.scale;
+              const glideSlopeY = perchTopY + Math.max(0.0, (dist2D - 0.75) * 0.28);
+              const prevY = a.y;
+              a.y += (glideSlopeY - a.y) * Math.min(1.0, dt * 5.2);
+              a.climbRate = (dist2D < 5.5) ? 0.35 : ((a.y - prevY) / Math.max(dt, 0.001));
+
+              if (dist2D < 0.78 && Math.abs(a.y - perchTopY) < 0.58) {
+                a.owlState = 'PERCHED';
+                a.x = livePerch.x;
+                a.z = livePerch.z;
+                a.y = perchTopY;
+                a.perchBaseHeading = a.heading;
+                a.perchTimer = 8.0 + Math.random() * 16.0; // Sit on the cactus for a random duration (8 - 24s)
+                a.climbRate = 0.0;
+              }
+            }
+          } else {
+            // SOARING across the night sky
+            a.heading += (0.38 + Math.sin(a.phase) * 0.15) * dt;
+            a.x += Math.sin(a.heading) * a.speed * dt;
+            a.z += Math.cos(a.heading) * a.speed * dt;
+            const prevY = a.y;
+            const targetAlt = groundY + 14.5 + Math.sin(time * 0.85 + a.phase) * 4.2;
+            a.y += (targetAlt - a.y) * Math.min(1.0, dt * 3.0);
+            a.climbRate = (a.y - prevY) / Math.max(dt, 0.001);
+
+            a.perchCooldown = (a.perchCooldown ?? 4.0) - dt;
+            if (a.perchCooldown <= 0.0 && isNightTime && activeCactusPerches.length > 0) {
+              // Pick a nearby unoccupied cactus (preferring tall Saguaro cacti) to fly down and sit on!
+              let bestPerch = null;
+              let bestScore = 1e9;
+              const step = Math.max(1, Math.floor(activeCactusPerches.length / 40));
+              const startOffset = Math.floor(Math.random() * step);
+              for (let pIdx = startOffset; pIdx < activeCactusPerches.length; pIdx += step) {
+                const p = activeCactusPerches[pIdx];
+                if (water[p.cellIdx] >= 0.085) continue;
+                let occupied = false;
+                for (let o = 0; o < faunaAgents.length; o++) {
+                  const other = faunaAgents[o];
+                  if (other !== a && other.type === 'owl' && other.state === 'alive' && other.perchCellIdx === p.cellIdx) {
+                    occupied = true;
+                    break;
+                  }
+                }
+                if (occupied) continue;
+                const d = Math.hypot(p.x - a.x, p.z - a.z);
+                const score = d - (p.isSaguaro ? 26.0 : 0.0) + (Math.random() - 0.5) * 14.0;
+                if (score < bestScore) {
+                  bestScore = score;
+                  bestPerch = p;
+                }
+              }
+              if (bestPerch) {
+                a.owlState = 'LANDING';
+                a.perchCellIdx = bestPerch.cellIdx;
+                a.landingTimeout = 14.0;
+              } else {
+                a.perchCooldown = 3.5 + Math.random() * 5.0;
+              }
+            }
+          }
         }
 
         // Step-Guard: If a ground animal was on safe ground, prevent it from voluntarily stepping onto a lava cell or into the lava thermal ring!
@@ -7602,9 +7784,12 @@
         dummy.position.set(a.x, a.y, a.z);
         const struggleTilt = isDrowning ? Math.sin(time * 11.0 + a.phase) * 0.18 : 0;
         const isBird = isFlyer;
+        const isOwlPerched = (a.type === 'owl' && a.owlState === 'PERCHED');
         const climb = isBird ? (a.climbRate || 0) : 0;
-        const birdPitch = isBird ? clamp(-climb * 0.08, -0.32, 0.32) : ((a.type === 'frog' || a.type === 'rabbit') ? (a.hopPitch || 0) : 0);
-        const roll = (isBird ? -a.turnRate * 0.35 : 0) + struggleTilt;
+        const birdPitch = isOwlPerched
+          ? -0.95
+          : (isBird ? clamp(-climb * 0.08, -0.32, 0.32) : ((a.type === 'frog' || a.type === 'rabbit') ? (a.hopPitch || 0) : 0));
+        const roll = (isOwlPerched ? 0 : (isBird ? -a.turnRate * 0.35 : 0)) + struggleTilt;
         const wiggle = (a.type === 'fish') ? Math.sin(time * 11.0 + a.phase) * 0.14 : 0;
         dummy.rotation.order = 'YXZ';
         dummy.rotation.set(birdPitch, a.heading + wiggle, roll);
@@ -7688,7 +7873,36 @@
         } else if (a.type === 'owl' && cOwl < MAX_FAUNA_PER_SPECIES) {
           owlInst.setMatrixAt(cOwl, dummy.matrix);
           owlInst.setColorAt(cOwl, tempColor);
-          setBirdWingMatrices(owlWingLInst, owlWingRInst, cOwl, 14.0);
+          if (isOwlPerched) {
+            // Perched upright on top of a cactus: fold wings neatly against the owl's sides
+            dummy.scale.set(a.scale * 0.24, a.scale * 0.88, a.scale * 0.92);
+            dummy.rotation.set(birdPitch, a.heading, 0.35);
+            dummy.updateMatrix();
+            owlWingLInst.setMatrixAt(cOwl, dummy.matrix);
+            owlWingLInst.setColorAt(cOwl, tempColor);
+
+            dummy.rotation.set(birdPitch, a.heading, -0.35);
+            dummy.updateMatrix();
+            owlWingRInst.setMatrixAt(cOwl, dummy.matrix);
+            owlWingRInst.setColorAt(cOwl, tempColor);
+
+            // When sitting on top of a cactus, the owl's eyes glow bright red!
+            if (cOwlEyes < MAX_FAUNA_PER_SPECIES) {
+              const eyePulse = 0.94 + 0.14 * Math.sin(time * 6.5 + a.phase);
+              dummy.position.set(a.x, a.y, a.z);
+              dummy.rotation.set(birdPitch, a.heading, 0);
+              dummy.scale.setScalar(a.scale * eyePulse);
+              dummy.updateMatrix();
+              owlEyesInst.setMatrixAt(cOwlEyes, dummy.matrix);
+              const eyeGlow = 0.85 + 0.15 * Math.sin(time * 8.0 + a.phase);
+              tempColor.setRGB(1.0, 0.06 * eyeGlow, 0.05 * eyeGlow);
+              owlEyesInst.setColorAt(cOwlEyes, tempColor);
+              cOwlEyes++;
+            }
+            dummy.scale.setScalar(a.scale);
+          } else {
+            setBirdWingMatrices(owlWingLInst, owlWingRInst, cOwl, 14.0);
+          }
           cOwl++;
         } else if (a.type === 'frog' && cFrog < MAX_FAUNA_PER_SPECIES) {
           frogInst.setMatrixAt(cFrog, dummy.matrix);
@@ -7720,6 +7934,7 @@
         [owlInst, cOwl],
         [owlWingLInst, cOwl],
         [owlWingRInst, cOwl],
+        [owlEyesInst, cOwlEyes],
         [frogInst, cFrog],
         [skeletonInst, cSkeleton]
       ];
@@ -10846,6 +11061,22 @@
               }
             }
 
+            // Rate-capped bat feeding per lantern: moths are eaten at a slow, steady pace (~1 moth every 4.5-6s)
+            // even when multiple bats swarm the same lantern simultaneously!
+            if ((it.mothSupply || 0.0) > 0.0 && (it.batsFeedingThisFrame || 0) > 0) {
+              const multiBatBonus = Math.min(1.35, 1.0 + (it.batsFeedingThisFrame - 1) * 0.10);
+              const slowEatRate = 0.18 * multiBatBonus;
+              it.mothSupply = Math.max(0.0, (it.mothSupply || 0.0) - dt * slowEatRate);
+              if (it.mothSupply <= 0.05) {
+                // Bats ate all the moths! Start a random cooldown (10 to 24 seconds) before the lantern produces moths again!
+                it.mothSupply = 0.0;
+                it.mothsActive = false;
+                it.mothSpawning = false;
+                it.mothCooldown = 10.0 + Math.random() * 14.0;
+              }
+            }
+            it.batsFeedingThisFrame = 0;
+
             const visibleMothCount = Math.min(5, Math.ceil(it.mothSupply || 0.0));
             it.mothsActive = visibleMothCount > 0;
 
@@ -13599,7 +13830,7 @@
         macawInst, macawWingLInst, macawWingRInst,
         batInst, batWingLInst, batWingRInst,
         fishInst, hawkInst, hawkWingLInst, hawkWingRInst,
-        owlInst, owlWingLInst, owlWingRInst, frogInst, skeletonInst
+        owlInst, owlWingLInst, owlWingRInst, owlEyesInst, frogInst, skeletonInst
       ];
       for (const inst of allFaunaInst) {
         inst.count = 0;
