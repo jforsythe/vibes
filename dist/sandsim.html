@@ -2374,6 +2374,7 @@
       depthWrite: false
     });
     const waterSkirtMesh = new THREE.Mesh(waterSkirtGeo, waterSkirtMat);
+    waterSkirtMesh.renderOrder = 1;
     scene.add(waterSkirtMesh);
 
     function updateTerrainSideSkirt() {
@@ -2685,6 +2686,9 @@
 
     const waterMesh = new THREE.Mesh(waterGeo, waterMat);
     waterMesh.receiveShadow = true;
+    // Render translucent water & lava surfaces (renderOrder = 2) BEFORE all aerial particle systems (fireworks, embers, flames, steam, lightning)
+    // so distant water/lava pools never overwrite or darken foreground fireworks!
+    waterMesh.renderOrder = 2;
     scene.add(waterMesh);
 
     // Diorama Base Plinth
@@ -2706,6 +2710,7 @@
       depthTest: false
     });
     const brushRing = new THREE.Mesh(brushRingGeo, brushRingMat);
+    brushRing.renderOrder = 99;
     brushRing.visible = false;
     scene.add(brushRing);
 
@@ -7080,6 +7085,7 @@
     });
 
     const particleSystem = new THREE.Points(particleGeo, particleMat);
+    particleSystem.renderOrder = 10;
     scene.add(particleSystem);
 
     // 11B. 3D RISING VOLCANIC LAVA EMBERS & SPARKS PARTICLE SYSTEM (Always active above molten lava pools, glowing at night!)
@@ -7105,6 +7111,7 @@
       depthWrite: false
     });
     const lavaEmberSystem = new THREE.Points(lavaEmberGeo, lavaEmberMat);
+    lavaEmberSystem.renderOrder = 14;
     lavaEmberSystem.visible = false;
     scene.add(lavaEmberSystem);
 
@@ -7131,6 +7138,7 @@
     });
     const fireFlameSystem = new THREE.Points(fireGeo, fireMat);
     fireFlameSystem.frustumCulled = false;
+    fireFlameSystem.renderOrder = 15;
     scene.add(fireFlameSystem);
     let fireWriteHead = 0;
 
@@ -7187,6 +7195,7 @@
     });
     const steamCloudSystem = new THREE.Points(steamGeo, steamMat);
     steamCloudSystem.frustumCulled = false;
+    steamCloudSystem.renderOrder = 12;
     scene.add(steamCloudSystem);
     let steamWriteHead = 0;
 
@@ -7382,6 +7391,7 @@
       const mesh = new THREE.Mesh(sharedCloudGeo, mat);
       mesh.castShadow = true;
       mesh.receiveShadow = false;
+      mesh.renderOrder = 8;
       const gx = (c % 5) - 2;
       const gz = Math.floor(c / 5) - 1.5;
       const bx = gx * 44 + (Math.random() - 0.5) * 24;
@@ -7436,6 +7446,7 @@
       const dir = new THREE.Vector3().subVectors(p1, p0);
       const len = dir.length();
       const mesh = new THREE.Mesh(unitCylGeo, mat);
+      mesh.renderOrder = 18;
       mesh.position.copy(p0).addScaledVector(dir, 0.5);
       mesh.scale.set(radius, len, radius);
       mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
@@ -7492,12 +7503,14 @@
         new THREE.SphereGeometry(2.4, 12, 10),
         coreMat
       );
+      flashDome.renderOrder = 18;
       flashDome.position.copy(endPt);
       boltRoot.add(flashDome);
 
       const shockRingGeo = new THREE.RingGeometry(0.75, 1.0, 28);
       shockRingGeo.rotateX(-Math.PI / 2);
       const shockRing = new THREE.Mesh(shockRingGeo, haloMat);
+      shockRing.renderOrder = 18;
       shockRing.position.set(endPt.x, endPt.y + 0.25, endPt.z);
       boltRoot.add(shockRing);
 
@@ -7927,6 +7940,7 @@
     });
     const volcanoAshSystem = new THREE.Points(volcanoAshGeo, volcanoAshMat);
     volcanoAshSystem.frustumCulled = false;
+    volcanoAshSystem.renderOrder = 11;
     volcanoAshSystem.visible = false;
     scene.add(volcanoAshSystem);
     let volcanoAshHead = 0;
@@ -8367,6 +8381,7 @@
     });
     const fireworkSparkSystem = new THREE.Points(fireworkSparkGeo, fireworkSparkMat);
     fireworkSparkSystem.frustumCulled = false;
+    fireworkSparkSystem.renderOrder = 20;
     fireworkSparkSystem.visible = false;
     scene.add(fireworkSparkSystem);
     let fireworkSparkHead = 0;
