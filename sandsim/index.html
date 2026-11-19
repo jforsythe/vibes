@@ -4606,21 +4606,13 @@
       const hrNow = ((params.timeOfDay % 24) + 24) % 24;
       const isNightTimeNow = (hrNow >= 18.2 || hrNow < 6.0) || (nightFactor > 0.35);
 
-      // Gather active night lanterns & offroad truck dual headlights once per sync so they illuminate the terrain vertex colors with zero WebGL PointLight shader recompilation!
-      const activeNightLanterns = [];
+      // Gather active offroad truck dual headlights once per sync so they project twin beams onto the terrain ahead at night
       const activeTruckHeadlights = [];
       if (isNightTimeNow && typeof placedWorldItems !== 'undefined') {
         const lanternNightGlow = clamp((nightFactor - 0.15) / 0.65, 0.28, 1.0);
         for (let k = 0; k < placedWorldItems.length; k++) {
           const it = placedWorldItems[k];
-          if (it.type === 'item-lantern') {
-            const flk = 0.92 + 0.08 * Math.sin(timeNow * 11.5 + it.phase);
-            activeNightLanterns.push({
-              lx: it.x + Math.cos(it.yaw) * 1.02,
-              lz: it.z - Math.sin(it.yaw) * 1.02,
-              strength: lanternNightGlow * flk
-            });
-          } else if (it.type === 'item-truck') {
+          if (it.type === 'item-truck') {
             const fwdX = Math.sin(it.yaw);
             const fwdZ = Math.cos(it.yaw);
             const rightX = Math.cos(it.yaw);
@@ -4851,29 +4843,6 @@
           tr = tr * (1 - snowBlend) + 0.95 * snowBlend;
           tg = tg * (1 - snowBlend) + 0.97 * snowBlend;
           tb = tb * (1 - snowBlend) + 1.00 * snowBlend;
-        }
-
-        // Warm Golden Night Lantern Illumination on Terrain (Zero PointLight shader-recompile cost!)
-        if (activeNightLanterns.length > 0) {
-          const cellWx = tPos[i3];
-          const cellWz = tPos[i3 + 2];
-          let lanternBoost = 0.0;
-          for (let k = 0; k < activeNightLanterns.length; k++) {
-            const lan = activeNightLanterns[k];
-            const dx = cellWx - lan.lx;
-            const dz = cellWz - lan.lz;
-            const d2 = dx * dx + dz * dz;
-            if (d2 < 324.0) { // 18m illumination radius
-              const falloff = 1.0 - Math.sqrt(d2) / 18.0;
-              lanternBoost += falloff * falloff * lan.strength;
-            }
-          }
-          if (lanternBoost > 0.001) {
-            const lb = Math.min(1.25, lanternBoost);
-            tr = Math.min(1.0, tr + lb * 0.62);
-            tg = Math.min(1.0, tg + lb * 0.40);
-            tb = Math.min(1.0, tb + lb * 0.14);
-          }
         }
 
         // Offroad Truck Twin Headlight Beams Projected Out in Front of the Vehicle at Night
@@ -10825,18 +10794,12 @@
       glassBody.position.y = -0.63;
       lanternPivot.add(glassBody);
 
-      // Soft additive halo spheres around the lantern glass (visible at night)
+      // Soft additive halo sphere around the lantern glass (visible at night)
       const haloSphere = new THREE.Mesh(sharedLanternGeos.haloSphere, sharedLanternHaloMat);
       haloSphere.position.y = -0.63;
       haloSphere.renderOrder = 17;
       haloSphere.visible = false;
       lanternPivot.add(haloSphere);
-
-      const outerHaloSphere = new THREE.Mesh(sharedLanternGeos.outerHaloSphere, sharedLanternGroundPoolMat);
-      outerHaloSphere.position.y = -0.63;
-      outerHaloSphere.renderOrder = 17;
-      outerHaloSphere.visible = false;
-      lanternPivot.add(outerHaloSphere);
 
       // 4. Small cluster of 5 Nocturnal Moths that eventually gather and flutter around the lit lantern at night (attracting swooping bats!)
       const mothsGroup = new THREE.Group();
@@ -10866,11 +10829,21 @@
 
       root.userData.lanternPivot = lanternPivot;
       root.userData.haloSphere = haloSphere;
-      root.userData.outerHaloSphere = outerHaloSphere;
       root.userData.mothsGroup = mothsGroup;
       root.userData.mothAgents = mothAgents;
       return root;
     }
+
+    // Pre-allocated pool of 6 realistic THREE.PointLights for Lanterns at startup (intensity = 0.0 when unused).
+    // Dynamically assigned each frame to the 6 lanterns nearest the camera so placing a lantern has ZERO shader-recompile delay!
+    const LANTERN_LIGHT_POOL_SIZE = 6;
+    const lanternLightPool = [];
+    for (let k = 0; k < LANTERN_LIGHT_POOL_SIZE; k++) {
+      const ptLight = new THREE.PointLight(0xff9e3b, 0.0, 26.0, 1.35);
+      scene.add(ptLight);
+      lanternLightPool.push(ptLight);
+    }
+    const _activeLanternCandidates = [];
 
     // ============================================================================
     // 11G-2. DRIVABLE 4x4 OFFROAD BAJA TRUCK (Item + Drive Mode + Twin Night Headlights + V8/Drift Audio)
@@ -11416,9 +11389,9 @@
       }
 
       let waterAddedByTaps = false;
-      let hasActiveLanterns = false;
       let hasActiveTrucks = false;
       const activeDrivenTruck = params.driveMode ? getLatestPlacedTruck() : null;
+      _activeLanternCandidates.length = 0;
 
       for (let i = placedWorldItems.length - 1; i >= 0; i--) {
         const it = placedWorldItems[i];
@@ -11525,11 +11498,10 @@
           }
 
         } else if (it.type === 'item-lantern') {
-          hasActiveLanterns = true;
-          // Lantern: Swings gently in the wind, illuminates the area at night only, and eventually attracts fluttering moths & swooping bats!
+          // Lantern: Swings gently in the wind, illuminates the area at night with a realistic 3D PointLight (from the pre-allocated 6-light pool!),
+          // and eventually attracts fluttering moths & swooping bats!
           const pivot = it.mesh.userData.lanternPivot;
           const haloSphere = it.mesh.userData.haloSphere;
-          const outerHaloSphere = it.mesh.userData.outerHaloSphere;
           const mothsGroup = it.mesh.userData.mothsGroup;
           const mothAgents = it.mesh.userData.mothAgents;
 
@@ -11542,15 +11514,26 @@
           const isWeatherTooHarshForMoths = (params.rainRate > 0.25) || (params.snowRate > 0.05) || (params.windSpeed > 22.0);
 
           if (isNightTime) {
-            const pulseScale = 0.94 + 0.08 * Math.sin(time * 11.5 + it.phase);
+            const flk = 0.92 + 0.08 * Math.sin(time * 11.5 + it.phase);
             if (haloSphere) {
               haloSphere.visible = true;
-              haloSphere.scale.setScalar(pulseScale);
+              haloSphere.scale.setScalar(0.94 + 0.08 * Math.sin(time * 11.5 + it.phase));
             }
-            if (outerHaloSphere) {
-              outerHaloSphere.visible = true;
-              outerHaloSphere.scale.setScalar(pulseScale);
-            }
+
+            // World position of the hanging lantern glass globe for the pre-allocated PointLight pool
+            const lx = it.x + Math.cos(it.yaw) * 1.02;
+            const ly = groundY + 2.20;
+            const lz = it.z - Math.sin(it.yaw) * 1.02;
+            const dxCam = lx - camera.position.x;
+            const dyCam = ly - camera.position.y;
+            const dzCam = lz - camera.position.z;
+            _activeLanternCandidates.push({
+              lx,
+              ly,
+              lz,
+              flk,
+              distSq: dxCam * dxCam + dyCam * dyCam + dzCam * dzCam
+            });
 
             // Lantern Moth Lifecycle:
             // 1. Wait out random mothCooldown (initial 3.5-8s or post-bat-depletion 10-24s)
@@ -11625,7 +11608,6 @@
             it.mothsActive = false;
             if (mothsGroup) mothsGroup.visible = false;
             if (haloSphere) haloSphere.visible = false;
-            if (outerHaloSphere) outerHaloSphere.visible = false;
           }
 
         } else if (it.type === 'item-truck') {
@@ -11856,9 +11838,31 @@
         truckHeadlightPoint.intensity = 0.0;
       }
 
+      // Assign the 6 pre-allocated THREE.PointLights to the 6 lanterns nearest the camera at night!
+      if (isNightTime && _activeLanternCandidates.length > 0) {
+        if (_activeLanternCandidates.length > LANTERN_LIGHT_POOL_SIZE) {
+          _activeLanternCandidates.sort((a, b) => a.distSq - b.distSq);
+        }
+        const nightGlow = clamp((nightFactor - 0.20) / 0.65, 0.25, 1.0);
+        const activeCount = Math.min(LANTERN_LIGHT_POOL_SIZE, _activeLanternCandidates.length);
+        for (let k = 0; k < LANTERN_LIGHT_POOL_SIZE; k++) {
+          const ptLight = lanternLightPool[k];
+          if (k < activeCount) {
+            const cand = _activeLanternCandidates[k];
+            ptLight.position.set(cand.lx, cand.ly, cand.lz);
+            ptLight.intensity = (2.4 + nightGlow * 3.8) * cand.flk;
+          } else {
+            ptLight.intensity = 0.0;
+          }
+        }
+      } else {
+        for (let k = 0; k < LANTERN_LIGHT_POOL_SIZE; k++) {
+          lanternLightPool[k].intensity = 0.0;
+        }
+      }
+
       if (
         (waterAddedByTaps && frameCount % 3 === 0) ||
-        (hasActiveLanterns && isNightTime && frameCount % 6 === 0) ||
         (hasActiveTrucks && isNightTime && (params.driveMode || frameCount % 4 === 0))
       ) {
         syncTerrainAndWaterMeshes();
