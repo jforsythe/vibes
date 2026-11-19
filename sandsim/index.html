@@ -22627,48 +22627,72 @@
       panDownY: 0
     };
 
-    // 3D Selection Highlight Reticle Group (Ground Ring + Rotating brackets + Vertical Beacon + 3D Bounding Box)
+    // 3D Selection Highlight Reticle Group (Terrain-Conforming Projected Ground Circle + Floating Overhead Diamond Marker)
     const selectionHighlightGroup = new THREE.Group();
     selectionHighlightGroup.visible = false;
     scene.add(selectionHighlightGroup);
 
-    const selOuterRingGeo = new THREE.RingGeometry(0.84, 1.0, 36);
-    selOuterRingGeo.rotateX(-Math.PI / 2);
-    const selOuterRingMat = new THREE.MeshBasicMaterial({
+    const SEL_RING_SEGMENTS = 48;
+    const selGroundCircleGeo = new THREE.BufferGeometry();
+    const selGroundCirclePos = new Float32Array((SEL_RING_SEGMENTS + 1) * 2 * 3);
+    const selGroundCircleIndices = [];
+    for (let s = 0; s < SEL_RING_SEGMENTS; s++) {
+      const a = s * 2;
+      const b = s * 2 + 1;
+      const c = (s + 1) * 2;
+      const d = (s + 1) * 2 + 1;
+      selGroundCircleIndices.push(a, b, c, b, d, c);
+    }
+    selGroundCircleGeo.setAttribute('position', new THREE.BufferAttribute(selGroundCirclePos, 3));
+    selGroundCircleGeo.setIndex(selGroundCircleIndices);
+    const selGroundCircleMat = new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.88,
       depthWrite: false
     });
-    const selOuterRingMesh = new THREE.Mesh(selOuterRingGeo, selOuterRingMat);
-    selOuterRingMesh.renderOrder = 24;
-    selectionHighlightGroup.add(selOuterRingMesh);
+    const selGroundCircleMesh = new THREE.Mesh(selGroundCircleGeo, selGroundCircleMat);
+    selGroundCircleMesh.frustumCulled = false;
+    selGroundCircleMesh.renderOrder = 24;
+    selectionHighlightGroup.add(selGroundCircleMesh);
 
-    const selInnerRingGeo = new THREE.RingGeometry(0.52, 0.62, 32);
-    selInnerRingGeo.rotateX(-Math.PI / 2);
-    const selInnerRingMat = new THREE.MeshBasicMaterial({
-      color: 0xffc56d,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.78,
-      depthWrite: false
-    });
-    const selInnerRingMesh = new THREE.Mesh(selInnerRingGeo, selInnerRingMat);
-    selInnerRingMesh.renderOrder = 24;
-    selectionHighlightGroup.add(selInnerRingMesh);
+    function sampleSurfaceSlopeHeightAt(wx, wz) {
+      const halfW = WORLD_SIZE * 0.495;
+      const cx = clamp(wx, -halfW, halfW);
+      const cz = clamp(wz, -halfW, halfW);
+      const s = sampleHeightsAtWorld(cx, cz);
+      // Match open water surface if over water, otherwise match the exact sloped ground surface
+      return (s.waterDepth > 0.04 && s.waterSurfaceY > s.groundY) ? s.waterSurfaceY : s.groundY;
+    }
 
-    // 3D Wireframe Highlight Box around the hovered/selected entity
-    const selBoxEdgesGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
-    const selBoxLineMat = new THREE.LineBasicMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0.85,
-      depthWrite: false
-    });
-    const selBoxWireframe = new THREE.LineSegments(selBoxEdgesGeo, selBoxLineMat);
-    selBoxWireframe.renderOrder = 25;
-    selectionHighlightGroup.add(selBoxWireframe);
+    function updateProjectedGroundCircle(cx, cz, radius) {
+      const innerR = Math.max(0.25, radius * 0.86);
+      const outerR = Math.max(0.35, radius);
+      const liftY = 0.055; // Slight offset above the sloped terrain/water surface to prevent z-fighting
+      for (let s = 0; s <= SEL_RING_SEGMENTS; s++) {
+        const theta = (s / SEL_RING_SEGMENTS) * Math.PI * 2;
+        const cosT = Math.cos(theta);
+        const sinT = Math.sin(theta);
+
+        const ix = cx + cosT * innerR;
+        const iz = cz + sinT * innerR;
+        const iy = sampleSurfaceSlopeHeightAt(ix, iz) + liftY;
+
+        const ox = cx + cosT * outerR;
+        const oz = cz + sinT * outerR;
+        const oy = sampleSurfaceSlopeHeightAt(ox, oz) + liftY;
+
+        const base = s * 6;
+        selGroundCirclePos[base]     = ix;
+        selGroundCirclePos[base + 1] = iy;
+        selGroundCirclePos[base + 2] = iz;
+        selGroundCirclePos[base + 3] = ox;
+        selGroundCirclePos[base + 4] = oy;
+        selGroundCirclePos[base + 5] = oz;
+      }
+      selGroundCircleGeo.attributes.position.needsUpdate = true;
+    }
 
     // Floating overhead diamond marker above the highlighted/followed target
     const selMarkerGeo = new THREE.OctahedronGeometry(0.24, 0);
@@ -23157,31 +23181,26 @@
         }
       }
 
-      // 3. Position & animate the 3D Selection Highlight Reticle on the hovered target (if Spacebar held) or the actively followed target
+      // 3. Position & animate the terrain-conforming projected ground circle & floating overhead diamond marker
       const activeVisualTarget = objectSelectState.hoveredTarget || objectSelectState.followedTarget;
       if (activeVisualTarget) {
         const timeNow = uniforms.uTime.value || 0;
-        const pulse = 1.0 + Math.sin(timeNow * 6.5) * 0.08;
-        const r = Math.max(0.75, activeVisualTarget.radius || 1.2);
+        const pulse = 1.0 + Math.sin(timeNow * 5.0) * 0.05;
+        const r = Math.max(0.85, activeVisualTarget.radius || 1.2) * pulse;
         const h = Math.max(0.75, activeVisualTarget.height || 1.6);
         const isHovered = Boolean(objectSelectState.hoveredTarget);
 
         selectionHighlightGroup.visible = true;
-        selectionHighlightGroup.position.set(activeVisualTarget.wx, activeVisualTarget.wy + 0.08, activeVisualTarget.wz);
+        selectionHighlightGroup.position.set(0, 0, 0);
 
-        selOuterRingMesh.scale.setScalar(r * pulse);
-        selOuterRingMesh.rotation.z = timeNow * 1.4;
-        selOuterRingMat.color.setHex(isHovered ? 0x38bdf8 : 0xffc56d);
+        updateProjectedGroundCircle(activeVisualTarget.wx, activeVisualTarget.wz, r);
+        selGroundCircleMat.color.setHex(isHovered ? 0x38bdf8 : 0xffc56d);
 
-        selInnerRingMesh.scale.setScalar(r * (1.0 - Math.sin(timeNow * 6.5) * 0.06));
-        selInnerRingMesh.rotation.z = -timeNow * 2.1;
-
-        selBoxWireframe.visible = isHovered || objectSelectState.spaceHeld;
-        selBoxWireframe.scale.set(r * 1.35 * pulse, h * 1.08, r * 1.35 * pulse);
-        selBoxWireframe.position.set(0, h * 0.54, 0);
-        selBoxLineMat.color.setHex(activeVisualTarget.colorHex || 0x38bdf8);
-
-        selMarkerMesh.position.set(0, h + 0.55 + Math.sin(timeNow * 5.2) * 0.14, 0);
+        selMarkerMesh.position.set(
+          activeVisualTarget.wx,
+          activeVisualTarget.wy + h + 0.55 + Math.sin(timeNow * 5.2) * 0.14,
+          activeVisualTarget.wz
+        );
         selMarkerMesh.rotation.y = timeNow * 2.8;
         selMarkerMat.color.setHex(isHovered ? 0x38bdf8 : 0xffc56d);
       } else {
