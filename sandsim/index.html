@@ -1544,6 +1544,7 @@
     const steamStageTimer = new Float32Array(MAX_CELLS);// 0 = not steaming; 0.01..0.95s = water turning to steam on lava before hardening to rock
     const pendingRockHeight = new Float32Array(MAX_CELLS);
     const pondAge = new Float32Array(MAX_CELLS);        // Seconds a pond cell has held calm water (spawns lily pads & frogs once mature!)
+    const grassMask = new Uint8Array(MAX_CELLS);        // 1 = vegetated sand surface at an angle too steep for 3D plant models (renders as green grass & counts as a plant)
 
     const params = {
       fidelity: 3,            // 1: Low-Poly Fast, 2: Balanced, 3: High, 4: Ultra, 5: Cinematic Max
@@ -3309,6 +3310,8 @@
       steamStageTimer.fill(0);
       pendingRockHeight.fill(0);
       pondAge.fill(0);
+      grassMask.fill(0);
+      grassMask.fill(0);
       // Remove aquatic & jungle-dependent wildlife while keeping desert camels, oryx, lions, and hawks
       if (typeof faunaAgents !== 'undefined') {
         for (let i = faunaAgents.length - 1; i >= 0; i--) {
@@ -3334,6 +3337,8 @@
       steamStageTimer.fill(0);
       pendingRockHeight.fill(0);
       pondAge.fill(0);
+      grassMask.fill(0);
+      grassMask.fill(0);
       soilMoisture.fill(0);
       waterProximity.fill(0);
       veg.fill(0);
@@ -4357,6 +4362,7 @@
         wCol[i3 + 2] = wb;
 
         const sandBlend = clamp(s / 0.32, 0.0, 1.0);
+        const isGrassCell = grassMask[i] === 1 && v >= 0.12;
 
         let br, bg, bb;
         if (obstacleType[i] === 3) {
@@ -4382,11 +4388,22 @@
         let sb = (0.43 + crestTint * 0.5) * (1.0 - m * 0.42);
 
         if (v > 0.08) {
-          if (isJungleZone) {
-            const vegGroundBlend = clamp(v / 1.6, 0.0, 0.88);
-            const mr = 0.14 * vh + 0.44 * (1 - vh);
-            const mg = 0.46 * vh + 0.38 * (1 - vh);
-            const mb = 0.20 * vh + 0.20 * (1 - vh);
+          if (isJungleZone || isGrassCell) {
+            // Lush green surface (used near ponds AND as "grass" on angled sand surfaces where 3D plant models cannot spawn!)
+            const vegGroundBlend = isGrassCell
+              ? clamp(0.52 + (v / 1.5) * 0.38, 0.52, 0.90)
+              : clamp(v / 1.6, 0.0, 0.88);
+            let mr = 0.14 * vh + 0.44 * (1 - vh);
+            let mg = 0.46 * vh + 0.38 * (1 - vh);
+            let mb = 0.20 * vh + 0.20 * (1 - vh);
+            if (isGrassCell && plantBurnTimer[i] > 0.0) {
+              // Ignited grass slope flickers orange-red for 1s before burning away
+              const burnP = clamp(plantBurnTimer[i] / 1.10, 0.0, 1.0);
+              const flk = 0.5 + 0.5 * Math.sin(timeNow * 34.0 + i * 1.7);
+              mr = burnP < 0.7 ? 1.0 : (1.0 - (burnP - 0.7) * 2.2);
+              mg = burnP < 0.5 ? (0.45 + flk * 0.50) : Math.max(0.08, (1.0 - burnP) * 0.55);
+              mb = 0.05;
+            }
             sr = sr * (1 - vegGroundBlend) + mr * vegGroundBlend;
             sg = sg * (1 - vegGroundBlend) + mg * vegGroundBlend;
             sb = sb * (1 - vegGroundBlend) + mb * vegGroundBlend;
@@ -4413,9 +4430,10 @@
           sb = sb * (1 - mh) + 0.96 * mh;
         }
 
-        let tr = br * (1 - sandBlend) + sr * sandBlend;
-        let tg = bg * (1 - sandBlend) + sg * sandBlend;
-        let tb = bb * (1 - sandBlend) + sb * sandBlend;
+        const effectiveSandBlend = isGrassCell ? Math.max(sandBlend, 0.86) : sandBlend;
+        let tr = br * (1 - effectiveSandBlend) + sr * effectiveSandBlend;
+        let tg = bg * (1 - effectiveSandBlend) + sg * effectiveSandBlend;
+        let tb = bb * (1 - effectiveSandBlend) + sb * effectiveSandBlend;
 
         // Underneath translucent molten lava, make the basin floor glow bright molten red/orange/yellow
         // so looking through the transparent lava surface reveals deep glowing liquid magma!
@@ -4554,6 +4572,9 @@
       let cSaguaroBloom = 0;
       let cLilyPad = 0;
       let cLilyFlower = 0;
+      let cGrassJungle = 0;
+      let cGrassDesert = 0;
+      grassMask.fill(0);
 
       // Count total vegetated cells so we can scale keepProb evenly across the entire map if over activePlantCap
       let totalVegCells = 0;
@@ -4587,12 +4608,8 @@
           const v = veg[i];
           if (v < 0.12) continue;
 
-          if ((cFern + cJungleBush + cJungleTree + cScrub + cBarrel + cSaguaro) >= fidelityCap) {
+          if ((cFern + cJungleBush + cJungleTree + cScrub + cBarrel + cSaguaro + cGrassJungle + cGrassDesert) >= fidelityCap) {
             break;
-          }
-
-          if (keepProb < 1.0 && fastRand(x, y, 91) > keepProb) {
-            continue;
           }
 
           const vh = vegHealth[i];
@@ -4623,19 +4640,27 @@
           const ridgePeak = Math.max(0, hCenter - avgNeighborH);
           const baseDrop = hCenter - minFootH;
 
-          // If the terrain is an extreme cliff face or razor-sharp peak where nothing can securely mount, skip placement!
-          if (slopeTan > 1.32 || ridgePeak > 0.42 || baseDrop > 0.72) {
+          // Instead of ignoring any surfaces of sand with angles that 3D plants cannot be spawned on,
+          // mark them as green "grass" on the terrain surface (like near the ponds) and count each as a plant!
+          if (slopeTan > 0.78 || ridgePeak > 0.24 || baseDrop > 0.45) {
+            grassMask[i] = 1;
+            if (isJungleZone) {
+              cGrassJungle++;
+            } else {
+              cGrassDesert++;
+            }
             continue;
           }
 
-          // Determine candidate tier (2 = Tall Saguaro / Jungle Tree, 1 = Medium Barrel Cactus / Bush, 0 = Low Scrub / Fern / Rock)
-          // and automatically downgrade to a smaller/flatter model if the ground angle or ridge convexity doesn't fit a tall base
+          if (keepProb < 1.0 && fastRand(x, y, 91) > keepProb) {
+            continue;
+          }
+
+          // Determine candidate tier (2 = Tall Saguaro / Jungle Tree, 1 = Medium Barrel Cactus / Bush, 0 = Low Scrub / Fern)
+          // and downgrade tall trees/saguaros to medium bushes/barrels on moderate slopes
           let tier = v < 1.15 ? 0 : (v < 2.15 ? 1 : 2);
           if (tier === 2 && (slopeTan > 0.44 || ridgePeak > 0.14 || baseDrop > 0.26)) {
             tier = 1; // Downgrade Saguaro / Tree to Barrel Cactus / Bush on moderate slopes
-          }
-          if (tier === 1 && (slopeTan > 0.78 || ridgePeak > 0.24 || baseDrop > 0.45)) {
-            tier = 0; // Downgrade Barrel Cactus / Bush to compact ground-hugging Scrub / Fern on steeper slopes
           }
 
           // Compute surface normal at exact (wx, wz)
@@ -4863,9 +4888,12 @@
       lilyPadInst.count = cLilyPad;
       lilyFlowerInst.count = cLilyFlower;
 
-      params.junglePlantCount = cFern + cJungleBush + cJungleTree;
-      params.desertPlantCount = cScrub + cBarrel + cSaguaro;
+      params.junglePlantCount = cFern + cJungleBush + cJungleTree + cGrassJungle;
+      params.desertPlantCount = cScrub + cBarrel + cSaguaro + cGrassDesert;
       params.lilyPadCount = cLilyPad;
+
+      // Sync terrain vertex colors so green grass surfaces on angled slopes appear immediately!
+      syncTerrainAndWaterMeshes();
 
       const pools = [
         [fernInst, cFern],
@@ -10396,12 +10424,21 @@
             const isAlreadyPlant = veg[i] >= 0.12;
             if (!isAlreadyPlant && currentVegCells >= params.activePlantCap) continue;
             if (sand[i] < 0.25) sand[i] = Math.min(Math.max(0, MAX_TERRAIN_HEIGHT - bedrock[i]), 0.25);
+
+            // Check if this cell is an angled slope where grass grows instead of a 3D cactus
+            const hRCell = bedrock[i + 1] + sand[i + 1];
+            const hLCell = bedrock[i - 1] + sand[i - 1];
+            const hDCell = bedrock[i + GRID] + sand[i + GRID];
+            const hUCell = bedrock[i - GRID] + sand[i - GRID];
+            const localSlopeTan = Math.hypot(hRCell - hLCell, hDCell - hUCell) / (2.0 * CELL_SIZE);
+            const isAngledGrassSlope = localSlopeTan > 0.72;
+
             if (waterProximity[i] >= 0.38) {
               soilMoisture[i] = Math.max(soilMoisture[i], 0.75);
               veg[i] = Math.min(3.3, veg[i] + falloff * 0.65);
               vegHealth[i] = 1.0;
               if (!isAlreadyPlant && veg[i] >= 0.12) currentVegCells++;
-            } else if (hash2(x * 2.3, y * 3.7) > 0.42) {
+            } else if (isAngledGrassSlope || hash2(x * 2.3, y * 3.7) > 0.42) {
               soilMoisture[i] = Math.max(soilMoisture[i], 0.30);
               veg[i] = Math.min(3.3, veg[i] + falloff * 0.65);
               vegHealth[i] = 1.0;
@@ -11534,6 +11571,7 @@
       steamStageTimer.fill(0);
       pendingRockHeight.fill(0);
       pondAge.fill(0);
+      grassMask.fill(0);
 
       // 5. Release WebGL shadow map textures, render lists, and GPU program/buffer caches
       if (sunLight.shadow && sunLight.shadow.map) {
