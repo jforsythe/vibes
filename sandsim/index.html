@@ -9405,50 +9405,811 @@
       return subjects;
     }
 
-    // Capture the 3D scene from the Voxel Human's viewpoint and paint progressive oil/impressionist brushstrokes onto easelWorkCanvas!
+    // ============================================================================
+    // 10B-2. 4 PAINTING MODES FOR THE OASIS ARTIST:
+    //        1. 'landscape' — Live 3D Plein-Air Landscape (1-3 minutes)
+    //        2. 'animal'    — Close-Up Single Animal Wildlife Portrait
+    //        3. 'famous'    — Recreation of 1 of 4 Famous Masterpieces
+    //        4. 'abstract'  — Totally Abstract New Painting Generated in 20 Seconds
+    // ============================================================================
+    let famousPaintingCycleIdx = 0;
+    let abstractPaintingCounter = 1;
+    let nextForcedPaintModeIdx = -1; // Cycles 0..3 when user clicks "🎨 Paint / Finish" button
+
+    // Mode 2 Generator: Paint a rich close-up portrait of a single animal onto painterSnapshotCanvas (320x240)
+    function drawAnimalPortraitReference(speciesKey) {
+      const ctx = painterSnapshotCtx;
+      const w = 320;
+      const h = 240;
+      ctx.save();
+
+      if (speciesKey === 'lion') {
+        // Royal Desert Lion Portrait against a golden-crimson savanna sunset
+        const bg = ctx.createLinearGradient(0, 0, 0, h);
+        bg.addColorStop(0.0, '#7c2d12');
+        bg.addColorStop(0.55, '#d97706');
+        bg.addColorStop(1.0, '#451a03');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, h);
+
+        // Glowing setting sun behind the lion
+        ctx.fillStyle = 'rgba(254, 240, 138, 0.38)';
+        ctx.beginPath(); ctx.arc(160, 110, 92, 0, Math.PI * 2); ctx.fill();
+
+        // Layered dark mahogany & russet royal mane
+        const maneColors = ['#2a1205', '#451a03', '#78350f', '#9a3412'];
+        for (let ring = 0; ring < 4; ring++) {
+          ctx.fillStyle = maneColors[ring];
+          const rad = 96 - ring * 11;
+          for (let a = 0; a < 22; a++) {
+            const ang = (a / 22) * Math.PI * 2;
+            const tx = 160 + Math.cos(ang) * (rad * 0.72);
+            const ty = 128 + Math.sin(ang) * (rad * 0.85);
+            ctx.beginPath();
+            ctx.ellipse(tx, ty, 28, 18, ang, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Round golden ears
+        ctx.fillStyle = '#b45309';
+        ctx.beginPath(); ctx.arc(108, 66, 18, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(212, 66, 18, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#451a03';
+        ctx.beginPath(); ctx.arc(108, 66, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(212, 66, 10, 0, Math.PI * 2); ctx.fill();
+
+        // Tawny golden face & cheekbones
+        ctx.fillStyle = '#d97706';
+        ctx.beginPath(); ctx.ellipse(160, 118, 52, 56, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath(); ctx.ellipse(160, 112, 42, 44, 0, 0, Math.PI * 2); ctx.fill();
+
+        // Sculpted bridge of nose & muzzle
+        ctx.fillStyle = '#fde68a';
+        ctx.beginPath(); ctx.ellipse(144, 144, 20, 17, 0.1, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(176, 144, 20, 17, -0.1, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fef3c7';
+        ctx.beginPath(); ctx.ellipse(160, 162, 18, 11, 0, 0, Math.PI * 2); ctx.fill();
+
+        // Dark triangle nose
+        ctx.fillStyle = '#29150c';
+        ctx.beginPath();
+        ctx.moveTo(146, 128); ctx.lineTo(174, 128); ctx.lineTo(160, 143);
+        ctx.closePath(); ctx.fill();
+
+        // Piercing amber-gold eyes
+        for (const sx of [-1, 1]) {
+          const ex = 160 + sx * 24;
+          ctx.fillStyle = '#1c1917';
+          ctx.beginPath(); ctx.ellipse(ex, 102, 12, 8, sx * 0.12, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#facc15';
+          ctx.beginPath(); ctx.arc(ex, 102, 6.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#000000';
+          ctx.beginPath(); ctx.arc(ex, 102, 2.8, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath(); ctx.arc(ex - 2, 100, 1.6, 0, Math.PI * 2); ctx.fill();
+        }
+
+      } else if (speciesKey === 'flamingo') {
+        // Coral Oasis Flamingo Portrait wading in a turquoise lagoon
+        const bg = ctx.createLinearGradient(0, 0, 0, h);
+        bg.addColorStop(0.0, '#0284c7');
+        bg.addColorStop(0.55, '#38bdf8');
+        bg.addColorStop(0.58, '#0d9488');
+        bg.addColorStop(1.0, '#115e59');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, h);
+
+        // Shimmering water ripples
+        ctx.strokeStyle = 'rgba(186, 230, 253, 0.45)';
+        ctx.lineWidth = 2.5;
+        for (let r = 0; r < 14; r++) {
+          const ry = 148 + r * 6;
+          ctx.beginPath(); ctx.moveTo(30 + (r % 3) * 20, ry); ctx.lineTo(290 - (r % 2) * 25, ry); ctx.stroke();
+        }
+
+        // Long slender legs in water
+        ctx.strokeStyle = '#fb7185';
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(148, 138); ctx.lineTo(148, 225); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(164, 138); ctx.lineTo(176, 185); ctx.lineTo(155, 220); ctx.stroke();
+
+        // Plump coral-pink body & layered rose wing plumage
+        ctx.fillStyle = '#f43f5e';
+        ctx.beginPath(); ctx.ellipse(158, 128, 48, 28, -0.12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fb7185';
+        ctx.beginPath(); ctx.ellipse(154, 124, 40, 21, -0.08, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fda4af';
+        ctx.beginPath(); ctx.ellipse(150, 120, 28, 14, -0.05, 0, Math.PI * 2); ctx.fill();
+
+        // Graceful S-curved neck
+        ctx.strokeStyle = '#fb7185';
+        ctx.lineWidth = 13;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(192, 118);
+        ctx.bezierCurveTo(222, 102, 175, 58, 202, 38);
+        ctx.stroke();
+
+        // Head & curved black-tipped flamingo bill
+        ctx.fillStyle = '#fb7185';
+        ctx.beginPath(); ctx.arc(206, 38, 13, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fecdd3';
+        ctx.beginPath(); ctx.moveTo(216, 34); ctx.lineTo(234, 42); ctx.lineTo(216, 46); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#111827';
+        ctx.beginPath(); ctx.moveTo(226, 38); ctx.lineTo(238, 54); ctx.lineTo(221, 46); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath(); ctx.arc(209, 36, 3.2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(209, 36, 1.5, 0, Math.PI * 2); ctx.fill();
+
+      } else if (speciesKey === 'frog') {
+        // Nocturnal Coquí Frog sitting on a floating lily pad at night
+        const bg = ctx.createRadialGradient(160, 120, 20, 160, 120, 190);
+        bg.addColorStop(0.0, '#065f46');
+        bg.addColorStop(0.6, '#064e3b');
+        bg.addColorStop(1.0, '#022c22');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, h);
+
+        // Large floating green lily pad
+        ctx.fillStyle = '#15803d';
+        ctx.beginPath(); ctx.ellipse(160, 175, 118, 42, 0, 0.15, Math.PI * 1.92); ctx.lineTo(160, 175); ctx.fill();
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath(); ctx.ellipse(160, 173, 106, 36, 0, 0.18, Math.PI * 1.90); ctx.lineTo(160, 173); ctx.fill();
+
+        // Frog hind legs, lime-green torso & glowing golden vocal sac
+        ctx.fillStyle = '#16a34a';
+        ctx.beginPath(); ctx.ellipse(118, 152, 24, 16, -0.4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(202, 152, 24, 16, 0.4, 0, Math.PI * 2); ctx.fill();
+
+        ctx.fillStyle = '#4ade80';
+        ctx.beginPath(); ctx.ellipse(160, 134, 46, 38, 0, 0, Math.PI * 2); ctx.fill();
+
+        // Inflated golden Coquí vocal sac!
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath(); ctx.ellipse(160, 132, 34, 24, 0, 0, Math.PI * 2); ctx.fill();
+
+        // Bulging ruby-gold amphibian eyes
+        for (const sx of [-1, 1]) {
+          const ex = 160 + sx * 27;
+          ctx.fillStyle = '#22c55e';
+          ctx.beginPath(); ctx.arc(ex, 94, 16, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#f59e0b';
+          ctx.beginPath(); ctx.arc(ex, 94, 11, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#111827';
+          ctx.beginPath(); ctx.ellipse(ex, 94, 7, 4, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath(); ctx.arc(ex - 3, 91, 2.5, 0, Math.PI * 2); ctx.fill();
+        }
+
+      } else if (speciesKey === 'fennec') {
+        // Starlit Desert Fennec Fox with oversized ears
+        const bg = ctx.createLinearGradient(0, 0, 0, h);
+        bg.addColorStop(0.0, '#0f172a');
+        bg.addColorStop(0.62, '#1e1b4b');
+        bg.addColorStop(0.65, '#b45309');
+        bg.addColorStop(1.0, '#78350f');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, h);
+
+        // Crescent moon & stars
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath(); ctx.arc(62, 48, 18, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath(); ctx.arc(70, 44, 15, 0, Math.PI * 2); ctx.fill();
+
+        // Iconic huge triangular Fennec Fox ears!
+        for (const sx of [-1, 1]) {
+          ctx.fillStyle = '#f59e0b';
+          ctx.beginPath();
+          ctx.moveTo(160 + sx * 16, 108);
+          ctx.lineTo(160 + sx * 86, 26);
+          ctx.lineTo(160 + sx * 54, 128);
+          ctx.closePath(); ctx.fill();
+
+          ctx.fillStyle = '#fde68a';
+          ctx.beginPath();
+          ctx.moveTo(160 + sx * 22, 108);
+          ctx.lineTo(160 + sx * 74, 42);
+          ctx.lineTo(160 + sx * 48, 122);
+          ctx.closePath(); ctx.fill();
+        }
+
+        // Creamy-sand fox body & pointed face
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath(); ctx.ellipse(160, 178, 48, 42, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fcd34d';
+        ctx.beginPath();
+        ctx.moveTo(112, 112); ctx.lineTo(208, 112); ctx.lineTo(160, 168);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.arc(160, 114, 44, 0, Math.PI * 2); ctx.fill();
+
+        // Dark expressive eyes & little button nose
+        for (const sx of [-1, 1]) {
+          const ex = 160 + sx * 20;
+          ctx.fillStyle = '#1c1917';
+          ctx.beginPath(); ctx.arc(ex, 118, 8.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath(); ctx.arc(ex - 2.5, 115, 2.5, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = '#1c1917';
+        ctx.beginPath(); ctx.arc(160, 148, 6.5, 0, Math.PI * 2); ctx.fill();
+
+      } else if (speciesKey === 'owl') {
+        // Night Owl with Glowing Red Eyes perched on a Saguaro Cactus
+        const bg = ctx.createLinearGradient(0, 0, 0, h);
+        bg.addColorStop(0.0, '#090d16');
+        bg.addColorStop(0.5, '#1e293b');
+        bg.addColorStop(1.0, '#312e81');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, h);
+
+        // Full moon halo behind the owl
+        ctx.fillStyle = 'rgba(254, 249, 195, 0.22)';
+        ctx.beginPath(); ctx.arc(160, 108, 84, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(254, 249, 195, 0.85)';
+        ctx.beginPath(); ctx.arc(160, 108, 56, 0, Math.PI * 2); ctx.fill();
+
+        // Saguaro cactus crown beneath the owl
+        ctx.fillStyle = '#3f6212';
+        ctx.beginPath(); ctx.arc(160, 220, 44, 0, Math.PI * 2); ctx.fill();
+
+        // Owl body & folded wings
+        ctx.fillStyle = '#94a3b8';
+        ctx.beginPath(); ctx.ellipse(160, 152, 42, 54, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#e2e8f0';
+        ctx.beginPath(); ctx.ellipse(160, 156, 30, 42, 0, 0, Math.PI * 2); ctx.fill();
+
+        // Owl head & ear tufts
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath(); ctx.arc(160, 96, 34, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(128, 78); ctx.lineTo(116, 52); ctx.lineTo(144, 72); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(192, 78); ctx.lineTo(204, 52); ctx.lineTo(176, 72); ctx.fill();
+
+        // Glowing Red Eyes!
+        for (const sx of [-1, 1]) {
+          const ex = 160 + sx * 15;
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.45)';
+          ctx.beginPath(); ctx.arc(ex, 96, 13, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath(); ctx.arc(ex, 96, 8.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#fecaca';
+          ctx.beginPath(); ctx.arc(ex - 2, 94, 2.5, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = '#334155';
+        ctx.beginPath(); ctx.moveTo(154, 104); ctx.lineTo(166, 104); ctx.lineTo(160, 116); ctx.closePath(); ctx.fill();
+
+      } else if (speciesKey === 'jaguar') {
+        // Rainforest Jaguar with Black Rosette Spots
+        const bg = ctx.createLinearGradient(0, 0, 0, h);
+        bg.addColorStop(0.0, '#064e3b');
+        bg.addColorStop(1.0, '#14532d');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, h);
+
+        // Golden jaguar head & shoulders
+        ctx.fillStyle = '#eab308';
+        ctx.beginPath(); ctx.ellipse(160, 195, 72, 55, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(114, 72, 18, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(206, 72, 18, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(160, 120, 56, 52, 0, 0, Math.PI * 2); ctx.fill();
+
+        // Black rosette spots
+        ctx.strokeStyle = '#1c1917';
+        ctx.lineWidth = 4;
+        const spots = [[125, 88], [195, 88], [160, 82], [116, 126], [204, 126], [132, 182], [188, 182], [160, 195]];
+        for (const [rx, ry] of spots) {
+          ctx.beginPath(); ctx.arc(rx, ry, 8, 0.2, Math.PI * 1.7); ctx.stroke();
+        }
+
+        // Emerald green feline eyes & muzzle
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath(); ctx.ellipse(145, 145, 18, 15, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(175, 145, 18, 15, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#991b1b';
+        ctx.beginPath(); ctx.moveTo(148, 132); ctx.lineTo(172, 132); ctx.lineTo(160, 144); ctx.closePath(); ctx.fill();
+
+        for (const sx of [-1, 1]) {
+          const ex = 160 + sx * 23;
+          ctx.fillStyle = '#4ade80';
+          ctx.beginPath(); ctx.ellipse(ex, 108, 10, 7, sx * 0.15, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.ellipse(ex, 108, 3, 6.5, 0, 0, Math.PI * 2); ctx.fill();
+        }
+
+      } else {
+        // Golden Desert Camel Portrait against sweeping Barchan Dunes & Sun
+        const bg = ctx.createLinearGradient(0, 0, 0, h);
+        bg.addColorStop(0.0, '#ea580c');
+        bg.addColorStop(0.55, '#fbbf24');
+        bg.addColorStop(0.58, '#d97706');
+        bg.addColorStop(1.0, '#92400e');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath(); ctx.arc(82, 64, 28, 0, Math.PI * 2); ctx.fill();
+
+        // Camel hump, curved neck & noble head in profile
+        ctx.fillStyle = '#b45309';
+        ctx.beginPath(); ctx.ellipse(115, 178, 65, 48, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#d97706';
+        ctx.lineWidth = 34;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(155, 175);
+        ctx.quadraticCurveTo(195, 155, 205, 82);
+        ctx.stroke();
+
+        // Camel head, snout & ear
+        ctx.fillStyle = '#d97706';
+        ctx.beginPath(); ctx.ellipse(222, 76, 34, 20, 0.18, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(194, 56, 8, 15, -0.3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#1c1917';
+        ctx.beginPath(); ctx.arc(216, 70, 5.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(215, 68, 1.8, 0, Math.PI * 2); ctx.fill();
+      }
+
+      ctx.restore();
+      const imgData = ctx.getImageData(0, 0, w, h);
+      // Copy into painterPixelBuf (bottom-up WebGL order so renderPainterViewToEaselCanvas samples it identically!)
+      for (let y = 0; y < h; y++) {
+        const srcRow = y * w * 4;
+        const dstRow = (h - 1 - y) * w * 4;
+        for (let x = 0; x < w * 4; x++) {
+          painterPixelBuf[dstRow + x] = imgData.data[srcRow + x];
+        }
+      }
+    }
+
+    // Mode 3 Generator: Recreation of 1 of 4 Famous Masterpiece Paintings onto painterSnapshotCanvas (320x240)
+    const FAMOUS_PAINTINGS_CATALOG = [
+      {
+        id: 'starry-night',
+        title: 'The Starry Night (after Van Gogh)',
+        emojis: ['🌌', '🌙', '✨', '🌲'],
+        labels: ['Swirling Night Sky', 'Crescent Moon', 'Radiant Stars', 'Cypress Tree']
+      },
+      {
+        id: 'great-wave',
+        title: 'The Great Wave off Kanagawa (after Hokusai)',
+        emojis: ['🌊', '🗻', '⛵', '☁️'],
+        labels: ['Towering Wave Crest', 'Mount Fuji', 'Wooden Boats', 'Sea Foam']
+      },
+      {
+        id: 'persistence-memory',
+        title: 'The Persistence of Memory (after Dalí)',
+        emojis: ['🕰️', '🏜️', '🌅', '🪵'],
+        labels: ['Melting Pocket Watches', 'Catalan Cliffs', 'Twilight Horizon', 'Olive Branch']
+      },
+      {
+        id: 'the-scream',
+        title: 'The Scream (after Edvard Munch)',
+        emojis: ['😱', '🌅', '🌉', '🌊'],
+        labels: ['Screaming Figure', 'Blood-Red Sunset', 'Fjord Bridge', 'Swirling Water']
+      }
+    ];
+
+    function drawFamousPaintingReference(famousId) {
+      const ctx = painterSnapshotCtx;
+      const w = 320;
+      const h = 240;
+      ctx.save();
+
+      if (famousId === 'starry-night') {
+        // 1. "The Starry Night" (Vincent van Gogh, 1889)
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, h);
+        skyGrad.addColorStop(0.0, '#0b1d48');
+        skyGrad.addColorStop(0.55, '#1d4ed8');
+        skyGrad.addColorStop(0.78, '#1e3a8a');
+        skyGrad.addColorStop(1.0, '#0f172a');
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Swirling S-curve nebula eddy across the center sky
+        ctx.lineCap = 'round';
+        const swirlColors = ['#3b82f6', '#60a5fa', '#93c5fd', '#fde047', '#1e40af'];
+        for (let s = 0; s < 14; s++) {
+          ctx.strokeStyle = swirlColors[s % swirlColors.length];
+          ctx.lineWidth = 7 - (s % 4);
+          ctx.beginPath();
+          ctx.moveTo(40, 65 + s * 3.5);
+          ctx.bezierCurveTo(125, 18 + s * 4, 175, 138 - s * 3, 255, 82 + s * 2);
+          ctx.stroke();
+        }
+        // Central spiral vortex
+        for (let r = 6; r < 34; r += 5) {
+          ctx.strokeStyle = r % 2 === 0 ? '#93c5fd' : '#3b82f6';
+          ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.arc(178, 86, r, 0, Math.PI * 1.65); ctx.stroke();
+        }
+
+        // 11 Radiant glowing yellow stars & bright orange-gold crescent moon
+        const stars = [[45, 34, 12], [95, 28, 10], [142, 42, 13], [212, 32, 11], [118, 96, 14], [230, 112, 11], [82, 126, 12]];
+        for (const [sx, sy, sr] of stars) {
+          ctx.fillStyle = 'rgba(254, 240, 138, 0.35)';
+          ctx.beginPath(); ctx.arc(sx, sy, sr * 1.9, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#fde047';
+          ctx.beginPath(); ctx.arc(sx, sy, sr * 0.85, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath(); ctx.arc(sx, sy, sr * 0.35, 0, Math.PI * 2); ctx.fill();
+        }
+        // Glowing Crescent Moon top-right
+        ctx.fillStyle = 'rgba(253, 224, 71, 0.38)';
+        ctx.beginPath(); ctx.arc(276, 46, 36, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath(); ctx.arc(276, 46, 22, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath(); ctx.arc(274, 46, 16, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#1d4ed8';
+        ctx.beginPath(); ctx.arc(282, 42, 11, 0, Math.PI * 2); ctx.fill();
+
+        // Rolling dark cobalt hills & village church spire
+        ctx.fillStyle = '#172554';
+        ctx.beginPath();
+        ctx.moveTo(0, 172); ctx.quadraticCurveTo(90, 148, 175, 168); ctx.quadraticCurveTo(255, 142, 320, 165);
+        ctx.lineTo(320, 240); ctx.lineTo(0, 240); ctx.closePath(); ctx.fill();
+
+        // Church spire
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath(); ctx.moveTo(154, 188); ctx.lineTo(162, 132); ctx.lineTo(170, 188); ctx.closePath(); ctx.fill();
+
+        // Iconic dark flame-like foreground Cypress Tree on the left
+        ctx.fillStyle = '#091512';
+        ctx.beginPath();
+        ctx.moveTo(28, 240);
+        ctx.bezierCurveTo(18, 165, 38, 88, 52, 18);
+        ctx.bezierCurveTo(64, 92, 85, 145, 76, 240);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#143326';
+        ctx.beginPath();
+        ctx.moveTo(42, 240);
+        ctx.bezierCurveTo(36, 170, 48, 105, 54, 44);
+        ctx.bezierCurveTo(60, 110, 68, 175, 64, 240);
+        ctx.closePath(); ctx.fill();
+
+      } else if (famousId === 'great-wave') {
+        // 2. "The Great Wave off Kanagawa" (Hokusai, c. 1831)
+        const sky = ctx.createLinearGradient(0, 0, 0, h);
+        sky.addColorStop(0.0, '#d6c3a5');
+        sky.addColorStop(0.35, '#efe2c8');
+        sky.addColorStop(0.75, '#e2d2b5');
+        sky.addColorStop(1.0, '#1e3a8a');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h);
+
+        // Snow-capped Mount Fuji on the distant horizon
+        ctx.fillStyle = '#1e3a5f';
+        ctx.beginPath();
+        ctx.moveTo(155, 195);
+        ctx.quadraticCurveTo(205, 182, 224, 138);
+        ctx.lineTo(240, 138);
+        ctx.quadraticCurveTo(258, 182, 305, 195);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.moveTo(214, 156); ctx.lineTo(224, 138); ctx.lineTo(240, 138); ctx.lineTo(250, 156);
+        ctx.lineTo(238, 150); ctx.lineTo(232, 159); ctx.lineTo(224, 151);
+        ctx.closePath(); ctx.fill();
+
+        // Towering Curling Great Wave on the left
+        ctx.fillStyle = '#0f2952';
+        ctx.beginPath();
+        ctx.moveTo(0, 240);
+        ctx.lineTo(0, 82);
+        ctx.bezierCurveTo(45, 22, 148, 18, 188, 68);
+        ctx.bezierCurveTo(140, 56, 98, 98, 118, 148);
+        ctx.bezierCurveTo(155, 188, 245, 165, 320, 192);
+        ctx.lineTo(320, 240);
+        ctx.closePath(); ctx.fill();
+
+        // Prussian blue inner wave striations
+        ctx.fillStyle = '#1d4ed8';
+        ctx.beginPath();
+        ctx.moveTo(0, 220);
+        ctx.bezierCurveTo(38, 82, 118, 48, 174, 72);
+        ctx.bezierCurveTo(122, 74, 86, 120, 112, 165);
+        ctx.lineTo(0, 240);
+        ctx.closePath(); ctx.fill();
+
+        // Wooden Oared Boat riding the wave trough
+        ctx.fillStyle = '#d97706';
+        ctx.beginPath();
+        ctx.moveTo(125, 168); ctx.quadraticCurveTo(165, 184, 214, 154);
+        ctx.quadraticCurveTo(165, 196, 125, 168);
+        ctx.fill();
+
+        // Iconic white sea-foam claw crests & spray droplets
+        ctx.fillStyle = '#f8fafc';
+        const foamClaws = [[85, 36, 26], [122, 32, 28], [156, 44, 24], [184, 66, 20], [52, 54, 24], [128, 155, 22], [175, 178, 25], [235, 188, 22]];
+        for (const [fx, fy, fr] of foamClaws) {
+          ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.fill();
+        }
+
+      } else if (famousId === 'persistence-memory') {
+        // 3. "The Persistence of Memory" (Salvador Dalí, 1931)
+        const sky = ctx.createLinearGradient(0, 0, 0, h * 0.45);
+        sky.addColorStop(0.0, '#1e293b');
+        sky.addColorStop(0.65, '#f59e0b');
+        sky.addColorStop(1.0, '#fef08a');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h * 0.45);
+
+        // Mirror-still Catalan bay & dark desert plain
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(140, 82, 180, 38);
+        ctx.fillStyle = '#451a03';
+        ctx.fillRect(0, 108, w, h - 108);
+
+        // Golden coastal cliffs top-right
+        ctx.fillStyle = '#d97706';
+        ctx.beginPath();
+        ctx.moveTo(215, 108); ctx.lineTo(242, 52); ctx.lineTo(286, 44); ctx.lineTo(320, 62); ctx.lineTo(320, 108);
+        ctx.closePath(); ctx.fill();
+
+        // Monolithic bronze pedestal block on the left + bare olive tree branch
+        ctx.fillStyle = '#92400e';
+        ctx.beginPath();
+        ctx.moveTo(0, 132); ctx.lineTo(124, 132); ctx.lineTo(148, 176); ctx.lineTo(0, 176);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(0, 176, 148, 64);
+
+        // Olive tree trunk & horizontal branch
+        ctx.strokeStyle = '#a16207';
+        ctx.lineWidth = 7;
+        ctx.beginPath();
+        ctx.moveTo(92, 136); ctx.lineTo(92, 56);
+        ctx.moveTo(92, 72); ctx.lineTo(156, 68);
+        ctx.stroke();
+
+        // 3 Iconic Melting Pocket Watches!
+        const drawMeltingWatch = (wx, wy, rx, ry, drapeY) => {
+          ctx.fillStyle = '#eab308';
+          ctx.beginPath(); ctx.ellipse(wx, wy, rx + 4, ry + 4, 0.15, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#e2e8f0';
+          ctx.beginPath(); ctx.ellipse(wx, wy, rx, ry, 0.15, 0, Math.PI * 2); ctx.fill();
+          if (drapeY > 0) {
+            ctx.fillStyle = '#cbd5e1';
+            ctx.beginPath(); ctx.ellipse(wx + 4, wy + drapeY, rx * 0.72, drapeY, 0, 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(wx + 8, wy - 7); ctx.moveTo(wx, wy); ctx.lineTo(wx - 4, wy + 10); ctx.stroke();
+        };
+        // Watch 1 draped over the olive branch
+        drawMeltingWatch(126, 74, 16, 12, 18);
+        // Watch 2 melting over the edge of the pedestal
+        drawMeltingWatch(112, 148, 28, 16, 24);
+        // Watch 3 draped over the biomorphic form in the center desert floor
+        ctx.fillStyle = '#d6d3d1';
+        ctx.beginPath(); ctx.ellipse(210, 186, 46, 22, -0.1, 0, Math.PI * 2); ctx.fill();
+        drawMeltingWatch(202, 176, 24, 15, 18);
+
+      } else {
+        // 4. "The Scream" (Edvard Munch, 1893)
+        // Undulating blood-red, tangerine & chrome-yellow sunset sky
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(0, 0, w, h);
+        const skyRibbons = ['#dc2626', '#ea580c', '#f97316', '#facc15', '#b91c1c', '#fb923c'];
+        for (let r = 0; r < 10; r++) {
+          ctx.strokeStyle = skyRibbons[r % skyRibbons.length];
+          ctx.lineWidth = 11;
+          ctx.beginPath();
+          const baseY = 12 + r * 9;
+          ctx.moveTo(0, baseY);
+          ctx.bezierCurveTo(100, baseY - 16, 210, baseY + 18, 320, baseY - 8);
+          ctx.stroke();
+        }
+
+        // Swirling dark blue-black fjord & peninsula on the right
+        ctx.fillStyle = '#172554';
+        ctx.beginPath();
+        ctx.moveTo(75, 95);
+        ctx.bezierCurveTo(185, 85, 220, 165, 320, 155);
+        ctx.lineTo(320, 240); ctx.lineTo(75, 240);
+        ctx.closePath(); ctx.fill();
+
+        ctx.fillStyle = '#3b82f6';
+        ctx.beginPath();
+        ctx.ellipse(215, 142, 48, 26, 0.25, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Diagonal wooden bridge & railing sweeping from top-left to bottom-right
+        ctx.fillStyle = '#451a03';
+        ctx.beginPath();
+        ctx.moveTo(0, 74); ctx.lineTo(105, 92); ctx.lineTo(320, 240); ctx.lineTo(0, 240);
+        ctx.closePath(); ctx.fill();
+
+        ctx.strokeStyle = '#d97706';
+        ctx.lineWidth = 5;
+        for (let rail = 0; rail < 3; rail++) {
+          ctx.beginPath();
+          ctx.moveTo(0, 66 + rail * 14);
+          ctx.lineTo(285, 240);
+          ctx.stroke();
+        }
+
+        // Iconic Screaming Figure in the foreground clutching their cheeks!
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.moveTo(126, 240);
+        ctx.bezierCurveTo(118, 195, 138, 175, 146, 156);
+        ctx.lineTo(182, 156);
+        ctx.bezierCurveTo(192, 178, 206, 200, 198, 240);
+        ctx.closePath(); ctx.fill();
+
+        // Pear-shaped pale ochre skull-like head & hands on cheeks
+        ctx.fillStyle = '#d6c79c';
+        ctx.beginPath();
+        ctx.ellipse(164, 136, 22, 28, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#e7d8b1';
+        ctx.lineWidth = 7;
+        ctx.beginPath();
+        ctx.moveTo(138, 175); ctx.quadraticCurveTo(136, 138, 144, 118);
+        ctx.moveTo(190, 175); ctx.quadraticCurveTo(192, 138, 184, 118);
+        ctx.stroke();
+
+        // Hollow eyes & open oval screaming mouth!
+        ctx.fillStyle = '#1c1917';
+        ctx.beginPath(); ctx.arc(155, 128, 4.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(173, 128, 4.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(164, 148, 6.5, 11, 0, 0, Math.PI * 2); ctx.fill();
+      }
+
+      ctx.restore();
+      const imgData = ctx.getImageData(0, 0, w, h);
+      for (let y = 0; y < h; y++) {
+        const srcRow = y * w * 4;
+        const dstRow = (h - 1 - y) * w * 4;
+        for (let x = 0; x < w * 4; x++) {
+          painterPixelBuf[dstRow + x] = imgData.data[srcRow + x];
+        }
+      }
+    }
+
+    // Mode 4 Generator: Totally Abstract New Painting Generated in 20 Seconds!
+    function drawAbstractPaintingReference(seedVal) {
+      const ctx = painterSnapshotCtx;
+      const w = 320;
+      const h = 240;
+      ctx.save();
+
+      const palettes = [
+        ['#0f172a', '#ef4444', '#facc15', '#38bdf8', '#f8fafc', '#f97316'],
+        ['#1e1b4b', '#ec4899', '#a855f7', '#2dd4bf', '#fef08a', '#fb7185'],
+        ['#14532d', '#10b981', '#f59e0b', '#0284c7', '#fef3c7', '#dc2626'],
+        ['#27272a', '#e11d48', '#fbbf24', '#06b6d4', '#fafafa', '#8b5cf6']
+      ];
+      const pal = palettes[Math.abs(seedVal) % palettes.length];
+      let rng = (seedVal * 16807 + 12345) % 2147483647;
+      const nextRand = () => {
+        rng = (rng * 16807) % 2147483647;
+        return (rng - 1) / 2147483646;
+      };
+
+      // 1. Dynamic diagonal color-field background
+      const bg = ctx.createLinearGradient(0, 0, w, h);
+      bg.addColorStop(0.0, pal[0]);
+      bg.addColorStop(0.55, pal[3]);
+      bg.addColorStop(1.0, pal[1]);
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      // 2. Rothko / Mondrian chromatic color-field blocks
+      for (let b = 0; b < 7; b++) {
+        ctx.fillStyle = pal[1 + (b % (pal.length - 1))];
+        ctx.globalAlpha = 0.55 + nextRand() * 0.35;
+        const bx = nextRand() * (w - 60);
+        const by = nextRand() * (h - 50);
+        const bw = 45 + nextRand() * 120;
+        const bh = 35 + nextRand() * 95;
+        ctx.save();
+        ctx.translate(bx + bw * 0.5, by + bh * 0.5);
+        ctx.rotate((nextRand() - 0.5) * 0.65);
+        ctx.fillRect(-bw * 0.5, -bh * 0.5, bw, bh);
+        ctx.restore();
+      }
+
+      // 3. Kandinsky concentric chromatic discs & geometric triangles
+      ctx.globalAlpha = 0.88;
+      for (let c = 0; c < 6; c++) {
+        const cx = 35 + nextRand() * (w - 70);
+        const cy = 35 + nextRand() * (h - 70);
+        const maxR = 18 + nextRand() * 42;
+        for (let ring = 3; ring >= 1; ring--) {
+          ctx.fillStyle = pal[(c + ring) % pal.length];
+          ctx.beginPath();
+          ctx.arc(cx, cy, maxR * (ring / 3), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // 4. Sweeping Pollock / Expressionist bezier ribbons & constructivist vectors
+      ctx.globalAlpha = 0.92;
+      for (let l = 0; l < 9; l++) {
+        ctx.strokeStyle = l % 3 === 0 ? '#111827' : pal[l % pal.length];
+        ctx.lineWidth = 3 + nextRand() * 7;
+        ctx.beginPath();
+        ctx.moveTo(nextRand() * w, nextRand() * h);
+        ctx.bezierCurveTo(
+          nextRand() * w, nextRand() * h,
+          nextRand() * w, nextRand() * h,
+          nextRand() * w, nextRand() * h
+        );
+        ctx.stroke();
+      }
+
+      // 5. Energetic action-painting paint splatters
+      for (let sp = 0; sp < 45; sp++) {
+        ctx.fillStyle = pal[sp % pal.length];
+        ctx.beginPath();
+        ctx.arc(nextRand() * w, nextRand() * h, 2 + nextRand() * 7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+      const imgData = ctx.getImageData(0, 0, w, h);
+      for (let y = 0; y < h; y++) {
+        const srcRow = y * w * 4;
+        const dstRow = (h - 1 - y) * w * 4;
+        for (let x = 0; x < w * 4; x++) {
+          painterPixelBuf[dstRow + x] = imgData.data[srcRow + x];
+        }
+      }
+    }
+
+    // Capture the 3D scene (for Mode 1 'landscape') or reference artwork (for Modes 2, 3, 4) and paint progressive oil brushstrokes onto easelWorkCanvas!
     function renderPainterViewToEaselCanvas(progressFrac, isFinalFinish = false) {
       if (!voxelHuman.active) return;
 
-      const fwdX = Math.sin(voxelHuman.heading);
-      const fwdZ = Math.cos(voxelHuman.heading);
-      const eyeX = voxelHuman.x + fwdX * 1.15;
-      const eyeY = voxelHuman.y + 1.56;
-      const eyeZ = voxelHuman.z + fwdZ * 1.15;
+      const mode = voxelHuman.paintingMode || 'landscape';
+      if (mode === 'landscape') {
+        const fwdX = Math.sin(voxelHuman.heading);
+        const fwdZ = Math.cos(voxelHuman.heading);
+        const eyeX = voxelHuman.x + fwdX * 1.15;
+        const eyeY = voxelHuman.y + 1.56;
+        const eyeZ = voxelHuman.z + fwdZ * 1.15;
 
-      painterPovCamera.position.set(eyeX, eyeY, eyeZ);
-      painterPovCamera.lookAt(eyeX + fwdX * 26.0, eyeY - 1.25, eyeZ + fwdZ * 26.0);
-      painterPovCamera.updateMatrixWorld();
+        painterPovCamera.position.set(eyeX, eyeY, eyeZ);
+        painterPovCamera.lookAt(eyeX + fwdX * 26.0, eyeY - 1.25, eyeZ + fwdZ * 26.0);
+        painterPovCamera.updateMatrixWorld();
 
-      // Hide cursor ring & voxel human rig during the offscreen eye capture
-      const wasRingVis = brushRing.visible;
-      const wasHumanVis = voxelHuman.rig.root.visible;
-      brushRing.visible = false;
-      voxelHuman.rig.root.visible = false;
+        // Hide cursor ring & voxel human rig during the offscreen eye capture
+        const wasRingVis = brushRing.visible;
+        const wasHumanVis = voxelHuman.rig.root.visible;
+        brushRing.visible = false;
+        voxelHuman.rig.root.visible = false;
 
-      const prevRenderTarget = renderer.getRenderTarget();
-      renderer.setRenderTarget(painterRenderTarget);
-      renderer.render(scene, painterPovCamera);
-      renderer.readRenderTargetPixels(painterRenderTarget, 0, 0, 320, 240, painterPixelBuf);
-      renderer.setRenderTarget(prevRenderTarget);
+        const prevRenderTarget = renderer.getRenderTarget();
+        renderer.setRenderTarget(painterRenderTarget);
+        renderer.render(scene, painterPovCamera);
+        renderer.readRenderTargetPixels(painterRenderTarget, 0, 0, 320, 240, painterPixelBuf);
+        renderer.setRenderTarget(prevRenderTarget);
 
-      brushRing.visible = wasRingVis;
-      voxelHuman.rig.root.visible = wasHumanVis;
+        brushRing.visible = wasRingVis;
+        voxelHuman.rig.root.visible = wasHumanVis;
 
-      // Flip WebGL bottom-up pixels into top-down 2D canvas ImageData with slight warm painterly color boost
-      const dst = painterImgData.data;
-      for (let y = 0; y < 240; y++) {
-        const srcRow = (239 - y) * 320 * 4;
-        const dstRow = y * 320 * 4;
-        for (let x = 0; x < 320; x++) {
-          const si = srcRow + x * 4;
-          const di = dstRow + x * 4;
-          dst[di]     = Math.min(255, Math.round(painterPixelBuf[si] * 1.06));
-          dst[di + 1] = Math.min(255, Math.round(painterPixelBuf[si + 1] * 1.04));
-          dst[di + 2] = painterPixelBuf[si + 2];
-          dst[di + 3] = 255;
+        // Flip WebGL bottom-up pixels into top-down 2D canvas ImageData with slight warm painterly color boost
+        const dst = painterImgData.data;
+        for (let y = 0; y < 240; y++) {
+          const srcRow = (239 - y) * 320 * 4;
+          const dstRow = y * 320 * 4;
+          for (let x = 0; x < 320; x++) {
+            const si = srcRow + x * 4;
+            const di = dstRow + x * 4;
+            dst[di]     = Math.min(255, Math.round(painterPixelBuf[si] * 1.06));
+            dst[di + 1] = Math.min(255, Math.round(painterPixelBuf[si + 1] * 1.04));
+            dst[di + 2] = painterPixelBuf[si + 2];
+            dst[di + 3] = 255;
+          }
         }
+        painterSnapshotCtx.putImageData(painterImgData, 0, 0);
       }
-      painterSnapshotCtx.putImageData(painterImgData, 0, 0);
 
       const cw = easelWorkCanvas.width;
       const ch = easelWorkCanvas.height;
@@ -9689,30 +10450,104 @@
       destroyVoxelHuman('kite-lightning');
     }
 
-    function startVoxelHumanPaintingRoutine() {
+    const ANIMAL_PORTRAIT_META = {
+      lion:     { emoji: '🦁', title: 'Portrait of the Royal Desert Lion', subjects: [{ emoji: '🦁', label: 'Royal Desert Lion' }, { emoji: '🌅', label: 'Savanna Sunset' }, { emoji: '👑', label: 'Golden Mane' }] },
+      flamingo: { emoji: '🦩', title: 'Coral Flamingo of the Lagoon',      subjects: [{ emoji: '🦩', label: 'Coral Flamingo' }, { emoji: '🌊', label: 'Turquoise Lagoon' }, { emoji: '🌴', label: 'Oasis Reflection' }] },
+      frog:     { emoji: '🐸', title: 'Coquí Frog on Lotus Pad',           subjects: [{ emoji: '🐸', label: 'Coquí Tree Frog' }, { emoji: '🪷', label: 'Floating Lily Pad' }, { emoji: '🌙', label: 'Nocturnal Pond' }] },
+      fennec:   { emoji: '🦊', title: 'Starlit Desert Fennec Fox',         subjects: [{ emoji: '🦊', label: 'Fennec Fox' }, { emoji: '🌙', label: 'Crescent Moon' }, { emoji: '🏜️', label: 'Midnight Dune' }] },
+      owl:      { emoji: '🦉', title: 'Red-Eyed Owl on Saguaro Crown',     subjects: [{ emoji: '🦉', label: 'Horned Night Owl' }, { emoji: '🌵', label: 'Giant Saguaro' }, { emoji: '🌕', label: 'Full Moon Halo' }] },
+      jaguar:   { emoji: '🐆', title: 'Emerald Canopy Jaguar',             subjects: [{ emoji: '🐆', label: 'Rainforest Jaguar' }, { emoji: '🌴', label: 'Jungle Canopy' }, { emoji: '✨', label: 'Emerald Eyes' }] },
+      camel:    { emoji: '🐪', title: 'Monarch of the Barchan Dunes',      subjects: [{ emoji: '🐪', label: 'Dromedary Camel' }, { emoji: '🏜️', label: 'Barchan Dunes' }, { emoji: '☀️', label: 'Golden Sun' }] }
+    };
+
+    function startVoxelHumanPaintingRoutine(forcedMode = null) {
       if (!voxelHuman.active) spawnOrRelocateVoxelHuman();
       const { groundY } = sampleHeightsAtWorld(voxelHuman.x, voxelHuman.z);
       voxelHuman.y = groundY;
       voxelHuman.heading = chooseBestVistaHeading(voxelHuman.x, voxelHuman.z);
       voxelHuman.targetHeading = voxelHuman.heading;
       voxelHuman.routine = 'LANDSCAPE_PAINTING';
-      // 1 to 3 minutes duration (60 to 180 seconds) as requested!
-      voxelHuman.routineDuration = 60.0 + Math.random() * 120.0;
       voxelHuman.routineTimer = 0.0;
       voxelHuman.routinesSinceLastPaint = 0;
-      voxelHuman.paintRenderStepTimer = 0.2;
-      voxelHuman.nextEmojiTimer = 1.8;
-      voxelHuman.detectedSubjects = scanPainterVisibleSubjects();
       voxelHuman.paintedSubjectHistory = [];
 
+      // Pick between the 4 requested painting modes:
+      // 1. 'landscape' — Plein-air 3D landscape (1 to 3 minutes = 60-180s)
+      // 2. 'animal'    — Single image portrait of an animal
+      // 3. 'famous'    — Recreation of 1 of 4 famous paintings
+      // 4. 'abstract'  — Totally abstract new painting generated in 20 seconds (20.0s)
+      const modes = ['landscape', 'animal', 'famous', 'abstract'];
+      const chosenMode = forcedMode || modes[Math.floor(Math.random() * modes.length)];
+      voxelHuman.paintingMode = chosenMode;
+      voxelHuman.customPaintTitle = '';
+
       clearEaselCanvasToLinen();
-      const firstSubj = voxelHuman.detectedSubjects[0] || { emoji: '🎨', label: 'Landscape' };
-      setVoxelHumanBubble(firstSubj.emoji, 4.2);
+
+      if (chosenMode === 'landscape') {
+        voxelHuman.routineDuration = 60.0 + Math.random() * 120.0; // 1 to 3 minutes
+        voxelHuman.paintRenderStepTimer = 0.2;
+        voxelHuman.nextEmojiTimer = 1.8;
+        voxelHuman.detectedSubjects = scanPainterVisibleSubjects();
+      } else if (chosenMode === 'animal') {
+        // Pick an animal currently alive on the map (or one of the 7 signature portrait species)
+        const portraitKeys = Object.keys(ANIMAL_PORTRAIT_META);
+        let chosenSpecies = portraitKeys[Math.floor(Math.random() * portraitKeys.length)];
+        const livingMatches = faunaAgents.filter((a) => a.state === 'alive' && ANIMAL_PORTRAIT_META[a.type]);
+        if (livingMatches.length > 0) {
+          const targetAnimal = livingMatches[Math.floor(Math.random() * livingMatches.length)];
+          chosenSpecies = targetAnimal.type;
+          voxelHuman.heading = Math.atan2(targetAnimal.x - voxelHuman.x, targetAnimal.z - voxelHuman.z);
+          voxelHuman.targetHeading = voxelHuman.heading;
+        }
+        const meta = ANIMAL_PORTRAIT_META[chosenSpecies] || ANIMAL_PORTRAIT_META.camel;
+        drawAnimalPortraitReference(chosenSpecies);
+        voxelHuman.customPaintTitle = meta.title;
+        voxelHuman.detectedSubjects = meta.subjects.slice();
+        voxelHuman.routineDuration = 45.0 + Math.random() * 45.0;
+        voxelHuman.paintRenderStepTimer = 0.2;
+        voxelHuman.nextEmojiTimer = 1.6;
+      } else if (chosenMode === 'famous') {
+        // Pick 1 of the 4 famous paintings (rotating through all 4 masterpieces)
+        const famousEntry = FAMOUS_PAINTINGS_CATALOG[famousPaintingCycleIdx % FAMOUS_PAINTINGS_CATALOG.length];
+        famousPaintingCycleIdx++;
+        drawFamousPaintingReference(famousEntry.id);
+        voxelHuman.customPaintTitle = famousEntry.title;
+        voxelHuman.detectedSubjects = famousEntry.emojis.map((em, idxE) => ({
+          emoji: em,
+          label: famousEntry.labels[idxE] || 'Masterpiece Detail'
+        }));
+        voxelHuman.routineDuration = 50.0 + Math.random() * 45.0;
+        voxelHuman.paintRenderStepTimer = 0.2;
+        voxelHuman.nextEmojiTimer = 1.6;
+      } else {
+        // Mode 4: Totally Abstract New Painting Generated in 20 Seconds!
+        const absSeed = Math.floor(Date.now() % 100000) + abstractPaintingCounter * 137;
+        drawAbstractPaintingReference(absSeed);
+        const absNouns = ['Synthesis', 'Improvisation', 'Composition', 'Chromatics', 'Convergence', 'Harmonics'];
+        const absAdj = ['Solar', 'Mirage', 'Aeolian', 'Prismatic', 'Kinetic', 'Astral'];
+        const absTitle = `${absAdj[absSeed % absAdj.length]} ${absNouns[(absSeed * 3) % absNouns.length]} No. ${abstractPaintingCounter++}`;
+        voxelHuman.customPaintTitle = absTitle;
+        voxelHuman.detectedSubjects = [
+          { emoji: '🎨', label: 'Chromatic Field' },
+          { emoji: '🌀', label: 'Dynamic Vectors' },
+          { emoji: '🔶', label: 'Geometric Forms' },
+          { emoji: '✨', label: 'Impasto Splatter' },
+          { emoji: '🎭', label: 'Abstract Expression' }
+        ];
+        voxelHuman.routineDuration = 20.0; // Exact 20-second abstract generation!
+        voxelHuman.paintRenderStepTimer = 0.15;
+        voxelHuman.nextEmojiTimer = 1.2;
+      }
+
+      const firstSubj = voxelHuman.detectedSubjects[0] || { emoji: '🎨', label: 'Artwork' };
+      setVoxelHumanBubble(firstSubj.emoji, 4.0);
       voxelHuman.paintedSubjectHistory.push(firstSubj);
     }
 
     function finishVoxelHumanPaintingRoutine() {
-      voxelHuman.detectedSubjects = scanPainterVisibleSubjects();
+      if ((voxelHuman.paintingMode || 'landscape') === 'landscape') {
+        voxelHuman.detectedSubjects = scanPainterVisibleSubjects();
+      }
       for (const s of voxelHuman.detectedSubjects) {
         if (!voxelHuman.paintedSubjectHistory.some((h) => h.emoji === s.emoji)) {
           voxelHuman.paintedSubjectHistory.push(s);
@@ -9720,7 +10555,7 @@
       }
       renderPainterViewToEaselCanvas(1.0, true);
 
-      const paintTitle = generateCartridgeTitle(true);
+      const paintTitle = voxelHuman.customPaintTitle || generateCartridgeTitle(true);
       voxelHuman.finishedPaintingTitle = paintTitle;
       voxelHuman.finishedPaintingFilename = `painting-${titleToCartridgeSlug(paintTitle)}.png`;
       voxelHuman.finishedPaintingDataUrl = easelWorkCanvas.toDataURL('image/png');
@@ -9730,7 +10565,7 @@
       voxelHuman.paintReadyTimer = 60.0;
       voxelHuman.bubbleEmoji = '🖼️';
       voxelHuman.bubbleTimer = 60.0;
-      showCartridgeToast(`🖼️ Voxel Artist finished painting "${paintTitle}"! Click 🖼️ bubble within 60s to view & download`);
+      showCartridgeToast(`🖼️ Oasis Artist finished "${paintTitle}"! Click 🖼️ bubble within 60s to view & download`);
     }
 
     function openVoxelHumanPaintingModal() {
@@ -9809,15 +10644,27 @@
     const btnTriggerHumanPaint = document.getElementById('btn-trigger-human-paint');
     if (btnTriggerHumanPaint) {
       btnTriggerHumanPaint.addEventListener('click', () => {
-        if (!voxelHuman.active) spawnOrRelocateVoxelHuman();
+        if (!voxelHuman.active) {
+          voxelHuman.respawnCooldown = 0.0;
+          spawnOrRelocateVoxelHuman();
+        }
         if (voxelHuman.routine === 'LANDSCAPE_PAINTING') {
           // If already painting, complete the painting immediately so the player can click 🖼️ right away!
           finishVoxelHumanPaintingRoutine();
         } else if (voxelHuman.routine === 'PAINTING_READY') {
           openVoxelHumanPaintingModal();
         } else {
-          startVoxelHumanPaintingRoutine();
-          showCartridgeToast(`🎨 Voxel Artist set up chair & easel to paint the landscape!`);
+          const modes = ['landscape', 'animal', 'famous', 'abstract'];
+          nextForcedPaintModeIdx = (nextForcedPaintModeIdx + 1) % modes.length;
+          const pickedMode = modes[nextForcedPaintModeIdx];
+          startVoxelHumanPaintingRoutine(pickedMode);
+          const modeLabels = {
+            landscape: 'Plein-Air 3D Landscape (1-3 min)',
+            animal:    `Animal Portrait: "${voxelHuman.customPaintTitle}"`,
+            famous:    `Famous Masterpiece: "${voxelHuman.customPaintTitle}"`,
+            abstract:  `20-Second Abstract: "${voxelHuman.customPaintTitle}"`
+          };
+          showCartridgeToast(`🎨 Oasis Artist started painting ${modeLabels[pickedMode]}!`);
         }
       });
     }
@@ -9990,19 +10837,22 @@
           Math.cos(time * 2.3) * 0.05
         );
 
+        const isAbstractFast = (voxelHuman.paintingMode === 'abstract');
         voxelHuman.paintRenderStepTimer -= dt;
         if (voxelHuman.paintRenderStepTimer <= 0.0) {
-          voxelHuman.paintRenderStepTimer = 1.45;
+          voxelHuman.paintRenderStepTimer = isAbstractFast ? 0.55 : 1.40;
           renderPainterViewToEaselCanvas(progress, false);
         }
 
         voxelHuman.nextEmojiTimer -= dt;
         if (voxelHuman.nextEmojiTimer <= 0.0) {
-          voxelHuman.nextEmojiTimer = 5.2 + Math.random() * 4.2;
-          voxelHuman.detectedSubjects = scanPainterVisibleSubjects();
+          voxelHuman.nextEmojiTimer = isAbstractFast ? (2.8 + Math.random() * 1.8) : (5.0 + Math.random() * 4.0);
+          if ((voxelHuman.paintingMode || 'landscape') === 'landscape') {
+            voxelHuman.detectedSubjects = scanPainterVisibleSubjects();
+          }
           if (voxelHuman.detectedSubjects.length > 0) {
             const pick = voxelHuman.detectedSubjects[Math.floor(Math.random() * voxelHuman.detectedSubjects.length)];
-            setVoxelHumanBubble(pick.emoji, 3.8);
+            setVoxelHumanBubble(pick.emoji, isAbstractFast ? 2.4 : 3.8);
             if (!voxelHuman.paintedSubjectHistory.some((h) => h.emoji === pick.emoji)) {
               voxelHuman.paintedSubjectHistory.push(pick);
             }
