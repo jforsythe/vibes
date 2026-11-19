@@ -2430,7 +2430,9 @@
           <button type="button" id="btn-trigger-human-kite" title="Have the Oasis Artist fly their 3D diamond kite in the desert wind">🪁 Fly Kite</button>
           <button type="button" id="btn-trigger-human-telescope" title="Switch to Night (if needed) &amp; have the Oasis Artist set up their 3D Telescope to stargaze">🔭 Stargaze (Night)</button>
           <button type="button" id="btn-trigger-human-birdwatch" title="Have the Oasis Artist take out their 3D Binoculars for birdwatching">🦜 Birdwatch</button>
-          <button type="button" id="btn-trigger-human-rest" title="Have the Oasis Artist unfold their camp chair and rest">🪑 Camp Rest</button>
+          <button type="button" id="btn-trigger-human-flowers" title="Have the Oasis Artist forage and gather colorful desert &amp; oasis wildflowers into a bouquet">💐 Gather Flowers</button>
+          <button type="button" id="btn-trigger-human-campsite" title="Find flat-ish ground and pitch a 3D A-frame Tent with a crackling Stone-Ring Campfire (warms by the fire or sleeps inside the tent)">⛺ Make Camp</button>
+          <button type="button" id="btn-trigger-human-rest" title="Have the Oasis Artist unfold their camp chair and rest">🪑 Chair Rest</button>
         </div>
       </div>
 
@@ -9543,6 +9545,156 @@
       binoBridge.position.set(0, 0.01, -0.02);
       binocularsGroup.add(binoBridge);
 
+      // 8. 3D Wildflower Bouquet held in Right Hand + Ground Wildflower Patch (`flowerBouquetGroup` & `groundFlowersGroup`) — Used during GATHER_FLOWERS!
+      const flowerBouquetGroup = new THREE.Group();
+      flowerBouquetGroup.position.set(0, -0.58, 0.16);
+      flowerBouquetGroup.visible = false;
+      armRPivot.add(flowerBouquetGroup);
+
+      const stemMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.72 });
+      const bloomColors = [0xf43f5e, 0xfacc15, 0xc084fc, 0x38bdf8, 0xfb923c];
+      const bouquetOffsets = [[0, 0], [-0.07, 0.05], [0.07, 0.04], [-0.05, -0.05], [0.06, -0.04]];
+      for (let bf = 0; bf < 5; bf++) {
+        const [bx, bz] = bouquetOffsets[bf];
+        const stem = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.24, 0.03), stemMat);
+        stem.position.set(bx * 0.6, 0.08, bz * 0.6);
+        stem.rotation.z = -bx * 1.4;
+        stem.rotation.x = bz * 1.4;
+        flowerBouquetGroup.add(stem);
+
+        const petals = new THREE.Mesh(
+          new THREE.BoxGeometry(0.11, 0.06, 0.11),
+          new THREE.MeshBasicMaterial({ color: bloomColors[bf % bloomColors.length] })
+        );
+        petals.position.set(bx, 0.22, bz);
+        flowerBouquetGroup.add(petals);
+      }
+
+      const groundFlowersGroup = new THREE.Group();
+      groundFlowersGroup.visible = false;
+      root.add(groundFlowersGroup);
+      const groundFlowerMeshes = [];
+      const patchAngles = [0.2, 0.9, 1.7, 2.5, 3.3, 4.1, 4.9, 5.7];
+      for (let gf = 0; gf < patchAngles.length; gf++) {
+        const fUnit = new THREE.Group();
+        const fDist = 0.75 + (gf % 3) * 0.45;
+        const fAng = patchAngles[gf];
+        fUnit.position.set(Math.sin(fAng) * fDist, 0, Math.cos(fAng) * fDist);
+        const gStem = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.26, 0.04), stemMat);
+        gStem.position.y = 0.13;
+        fUnit.add(gStem);
+        const gBloom = new THREE.Mesh(
+          new THREE.BoxGeometry(0.16, 0.08, 0.16),
+          new THREE.MeshBasicMaterial({ color: bloomColors[gf % bloomColors.length] })
+        );
+        gBloom.position.y = 0.28;
+        fUnit.add(gBloom);
+        const gCore = new THREE.Mesh(
+          new THREE.BoxGeometry(0.06, 0.10, 0.06),
+          new THREE.MeshBasicMaterial({ color: 0xfef08a })
+        );
+        gCore.position.y = 0.29;
+        fUnit.add(gCore);
+        groundFlowersGroup.add(fUnit);
+        groundFlowerMeshes.push(fUnit);
+      }
+
+      // 9. 3D Wilderness Campsite: A-Frame Canvas Tent & Stone-Ring Crackling Campfire (`campsiteGroup`) — Erected on flat-ish ground during MAKE_CAMP!
+      const campsiteGroup = new THREE.Group();
+      campsiteGroup.visible = false;
+      root.add(campsiteGroup);
+
+      // (A) A-Frame Explorer Canvas Tent pitched at (-1.35, 0, 0.25)
+      const tentGroup = new THREE.Group();
+      tentGroup.position.set(-1.35, 0, 0.25);
+      tentGroup.rotation.y = 0.32;
+      campsiteGroup.add(tentGroup);
+
+      const tentCanvasMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.82 });
+      const tentTrimMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.85 });
+      const tentFloorMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.90 });
+
+      const tentFloor = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.06, 1.92), tentFloorMat);
+      tentFloor.position.y = 0.03;
+      tentFloor.receiveShadow = true;
+      tentGroup.add(tentFloor);
+
+      // Left & Right sloped A-frame canvas roof panels
+      for (const side of [-1, 1]) {
+        const slopePanel = new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.07, 1.88), tentCanvasMat);
+        slopePanel.position.set(side * 0.36, 0.62, 0);
+        slopePanel.rotation.z = side * -0.92;
+        slopePanel.castShadow = true;
+        slopePanel.receiveShadow = true;
+        tentGroup.add(slopePanel);
+      }
+      // Wooden ridgepole & front/back upright poles
+      const ridgePole = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 2.04), darkWoodMat);
+      ridgePole.position.set(0, 1.18, 0);
+      tentGroup.add(ridgePole);
+      for (const endZ of [-0.96, 0.96]) {
+        const upPole = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.22, 0.07), darkWoodMat);
+        upPole.position.set(0, 0.61, endZ);
+        tentGroup.add(upPole);
+      }
+      // Back closed triangular gable wall & Cozy sleeping roll mat inside the tent
+      const backWall = new THREE.Mesh(new THREE.ConeGeometry(0.84, 1.16, 4), tentTrimMat);
+      backWall.rotation.y = Math.PI * 0.25;
+      backWall.scale.set(0.92, 1.0, 0.12);
+      backWall.position.set(0, 0.58, -0.88);
+      tentGroup.add(backWall);
+
+      const sleepBag = new THREE.Mesh(
+        new THREE.BoxGeometry(0.68, 0.14, 1.35),
+        new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.75 })
+      );
+      sleepBag.position.set(0, 0.10, -0.05);
+      tentGroup.add(sleepBag);
+      const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.16, 0.32), clothMat);
+      pillow.position.set(0, 0.16, -0.58);
+      tentGroup.add(pillow);
+
+      // (B) Stone-Ring Campfire with Crossed Logs, Animated Flickering Flames & Warm PointLight at (0.35, 0, 1.32)
+      const campfireGroup = new THREE.Group();
+      campfireGroup.position.set(0.35, 0, 1.32);
+      campsiteGroup.add(campfireGroup);
+
+      const stoneRingMat = new THREE.MeshStandardMaterial({ color: 0x78716c, roughness: 0.92 });
+      for (let st = 0; st < 8; st++) {
+        const sAng = (st / 8) * Math.PI * 2;
+        const stone = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.16), stoneRingMat);
+        stone.position.set(Math.cos(sAng) * 0.42, 0.07, Math.sin(sAng) * 0.42);
+        stone.rotation.y = -sAng;
+        stone.castShadow = true;
+        campfireGroup.add(stone);
+      }
+      for (let lg = 0; lg < 3; lg++) {
+        const lAng = (lg / 3) * Math.PI + 0.25;
+        const logMesh = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.11, 0.66), darkWoodMat);
+        logMesh.position.set(0, 0.11 + (lg % 2) * 0.04, 0);
+        logMesh.rotation.y = lAng;
+        logMesh.rotation.x = 0.18;
+        campfireGroup.add(logMesh);
+      }
+
+      const campfireFlameOuter = new THREE.Mesh(
+        new THREE.ConeGeometry(0.24, 0.56, 6),
+        new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.92 })
+      );
+      campfireFlameOuter.position.y = 0.36;
+      campfireGroup.add(campfireFlameOuter);
+
+      const campfireFlameInner = new THREE.Mesh(
+        new THREE.ConeGeometry(0.14, 0.38, 5),
+        new THREE.MeshBasicMaterial({ color: 0xfef08a })
+      );
+      campfireFlameInner.position.y = 0.30;
+      campfireGroup.add(campfireFlameInner);
+
+      const campfireLight = new THREE.PointLight(0xff7b1a, 0.0, 22.0, 1.4);
+      campfireLight.position.set(0, 0.65, 0);
+      campfireGroup.add(campfireLight);
+
       scene.add(root);
       return {
         root,
@@ -9567,7 +9719,16 @@
         kiteStrGeo,
         telescopeGroup,
         telescopeTubePivot,
-        binocularsGroup
+        binocularsGroup,
+        flowerBouquetGroup,
+        groundFlowersGroup,
+        groundFlowerMeshes,
+        campsiteGroup,
+        tentGroup,
+        campfireGroup,
+        campfireFlameOuter,
+        campfireFlameInner,
+        campfireLight
       };
     }
 
@@ -12121,6 +12282,135 @@
       clock.getDelta();
     }
 
+    // Evaluate whether a candidate world position (tx, tz) is on flat-ish dry ground suitable for pitching a Tent & Campfire!
+    function measureCampGroundFlatness(tx, tz) {
+      const ev = evaluateVoxelHumanSpawnLocation(tx, tz, true);
+      if (!ev.compatible) {
+        return { flatEnough: false, maxDiff: 999.0, score: -1e9 };
+      }
+      const centerH = sampleHeightsAtWorld(tx, tz);
+      if (centerH.waterDepth > 0.02 || centerH.localLava > 0.04) {
+        return { flatEnough: false, maxDiff: 999.0, score: -1e9 };
+      }
+      // Sample 8 points around a 2.3m radius footprint (covering the A-frame tent, chair, and campfire ring)
+      let maxDiff = 0.0;
+      const sampleRadii = [1.2, 2.3];
+      for (const r of sampleRadii) {
+        for (let d = 0; d < 8; d++) {
+          const ang = (d / 8) * Math.PI * 2;
+          const sx = tx + Math.cos(ang) * r;
+          const sz = tz + Math.sin(ang) * r;
+          const sh = sampleHeightsAtWorld(sx, sz);
+          if (sh.waterDepth > 0.025 || sh.localLava > 0.05) {
+            return { flatEnough: false, maxDiff: 999.0, score: -1e9 };
+          }
+          const diff = Math.abs(sh.groundY - centerH.groundY);
+          if (diff > maxDiff) maxDiff = diff;
+        }
+      }
+      // Require flat-ish ground (max height variation across the 4.6m campsite footprint <= 0.72m)
+      const flatEnough = (maxDiff <= 0.72);
+      const flatnessBonus = Math.max(0.0, (0.95 - maxDiff) * 55.0);
+      return {
+        flatEnough,
+        maxDiff,
+        score: ev.score + flatnessBonus
+      };
+    }
+
+    // Start the Wilderness Campsite Routine (pitches A-Frame Tent & Stone-Ring Campfire on flat-ish ground, warms by the fire or sleeps in the tent!)
+    function startVoxelHumanCampsiteRoutine(forceSleep = null) {
+      if (!voxelHuman.active) {
+        if (!spawnOrRelocateVoxelHuman()) return false;
+      }
+
+      // Check if current spot is flat-ish; if not, search nearby first, then across the map for a flat-ish campsite clearing!
+      let campX = voxelHuman.x;
+      let campZ = voxelHuman.z;
+      let curFlat = measureCampGroundFlatness(campX, campZ);
+
+      if (!curFlat.flatEnough) {
+        let bestSpot = null;
+        let bestScore = -1e9;
+        // 1. Search within 6..38m around the human's current position
+        for (let r = 6; r <= 38; r += 4) {
+          for (let a = 0; a < 16; a++) {
+            const ang = (a / 16) * Math.PI * 2;
+            const tx = voxelHuman.x + Math.cos(ang) * r;
+            const tz = voxelHuman.z + Math.sin(ang) * r;
+            const mf = measureCampGroundFlatness(tx, tz);
+            if (mf.flatEnough && mf.score - r * 0.4 > bestScore) {
+              bestScore = mf.score - r * 0.4;
+              bestSpot = { x: tx, z: tz };
+            }
+          }
+        }
+        // 2. Fallback: scan across the map grid for the flattest dry spot
+        if (!bestSpot) {
+          let minSlopeFound = 999.0;
+          for (let gz = 8; gz < GRID - 8; gz += 3) {
+            for (let gx = 8; gx < GRID - 8; gx += 3) {
+              const tx = ((gx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+              const tz = ((gz / (GRID - 1)) - 0.5) * WORLD_SIZE;
+              const mf = measureCampGroundFlatness(tx, tz);
+              if (mf.flatEnough && mf.score > bestScore) {
+                bestScore = mf.score;
+                bestSpot = { x: tx, z: tz };
+              } else if (mf.maxDiff < minSlopeFound && mf.score > -1e8) {
+                minSlopeFound = mf.maxDiff;
+                if (!bestSpot) bestSpot = { x: tx, z: tz };
+              }
+            }
+          }
+        }
+        if (bestSpot) {
+          campX = bestSpot.x;
+          campZ = bestSpot.z;
+        }
+      }
+
+      const { groundY } = sampleHeightsAtWorld(campX, campZ);
+      voxelHuman.x = campX;
+      voxelHuman.y = groundY;
+      voxelHuman.z = campZ;
+      voxelHuman.routine = 'MAKE_CAMP';
+      voxelHuman.routineDuration = 28.0 + Math.random() * 18.0; // 28–46 seconds at camp
+      voxelHuman.routineTimer = 0.0;
+      voxelHuman.campFireSparkTimer = 0.0;
+
+      // Decide whether to start by warming by the campfire or sleeping inside the tent (at night, higher chance to sleep in tent; also transitions mid-camp!)
+      const hr = ((params.timeOfDay % 24) + 24) % 24;
+      const isNight = (hr >= 18.8 || hr < 6.0) || ((skyUniforms.uNightFactor.value || 0) > 0.45);
+      const shouldSleepNow = forceSleep !== null ? forceSleep : (isNight ? (Math.random() < 0.65) : (Math.random() < 0.42));
+      voxelHuman.campSubState = shouldSleepNow ? 'SLEEP_IN_TENT' : 'WARM_BY_FIRE';
+      voxelHuman.campSwitchTimer = 11.0 + Math.random() * 7.0;
+
+      setVoxelHumanBubble(shouldSleepNow ? '💤' : '⛺', 4.5);
+      return true;
+    }
+
+    // Start the Flower Gathering Routine (forages & kneels to gather colorful wildflowers into a hand bouquet!)
+    function startVoxelHumanFlowerGatheringRoutine() {
+      if (!voxelHuman.active) {
+        if (!spawnOrRelocateVoxelHuman()) return false;
+      }
+      // Reset all 8 ground flowers around the patch to visible so the human picks them one by one
+      const rig = voxelHuman.rig;
+      if (rig && rig.groundFlowerMeshes) {
+        for (const fm of rig.groundFlowerMeshes) {
+          fm.visible = true;
+          fm.scale.setScalar(1.0);
+        }
+      }
+      voxelHuman.routine = 'GATHER_FLOWERS';
+      voxelHuman.routineDuration = 18.0 + Math.random() * 10.0;
+      voxelHuman.routineTimer = 0.0;
+      voxelHuman.flowerPickStepTimer = 2.0;
+      voxelHuman.flowersPickedCount = 0;
+      setVoxelHumanBubble('🌸', 4.0);
+      return true;
+    }
+
     // Destroy the Voxel Human AND anything he is currently working on (chair, easel, painting, fishing rod, kite), starting a 25s respawn cooldown!
     function destroyVoxelHuman(cause = 'destroyed') {
       if (!voxelHuman.active) return;
@@ -12163,6 +12453,11 @@
         spawnSteamPuffAtWorld(scopeWx, hy + 1.1, scopeWz, 6);
       } else if (voxelHuman.routine === 'BIRDWATCHING') {
         spawnExplosionShards(hx + fwdX * 0.35, hy + 1.55, hz + fwdZ * 0.35, 10, [0x1e293b, 0xf59e0b, 0x38bdf8]);
+      } else if (voxelHuman.routine === 'GATHER_FLOWERS') {
+        spawnExplosionShards(hx + fwdX * 0.4, hy + 0.65, hz + fwdZ * 0.4, 12, [0x16a34a, 0xf43f5e, 0xfacc15, 0xc084fc]);
+      } else if (voxelHuman.routine === 'MAKE_CAMP') {
+        spawnExplosionShards(hx - fwdZ * 1.2, hy + 0.75, hz + fwdX * 1.2, 16, [0xd97706, 0x92400e, 0x5c3a1d, 0xf97316, 0x78716c]);
+        spawnSteamPuffAtWorld(hx + fwdX * 1.2, hy + 0.4, hz + fwdZ * 1.2, 8);
       } else if (voxelHuman.routine === 'POND_FISHING' || voxelHuman.routine === 'CAMP_REST') {
         spawnExplosionShards(hx - fwdX * 0.2, hy + 0.55, hz - fwdZ * 0.2, 10, [0x5c3a1d, 0xfef3c7, 0xef4444]);
       } else if (voxelHuman.routine === 'FLY_KITE') {
@@ -12197,6 +12492,10 @@
       rig.kiteGroup.visible = false;
       rig.telescopeGroup.visible = false;
       rig.binocularsGroup.visible = false;
+      rig.flowerBouquetGroup.visible = false;
+      rig.groundFlowersGroup.visible = false;
+      rig.campsiteGroup.visible = false;
+      rig.campfireLight.intensity = 0.0;
       if (voxelHumanBubbleEl) {
         voxelHumanBubbleEl.style.display = 'none';
         voxelHumanBubbleEl.classList.remove('painting-ready');
@@ -12666,6 +12965,32 @@
       });
     }
 
+    const btnTriggerHumanFlowers = document.getElementById('btn-trigger-human-flowers');
+    if (btnTriggerHumanFlowers) {
+      btnTriggerHumanFlowers.addEventListener('click', () => {
+        if (!ensureVoxelHumanActiveForAdminTask()) return;
+        startVoxelHumanFlowerGatheringRoutine();
+        showCartridgeToast(`💐 Oasis Artist started foraging & gathering wildflowers!`);
+      });
+    }
+
+    const btnTriggerHumanCampsite = document.getElementById('btn-trigger-human-campsite');
+    if (btnTriggerHumanCampsite) {
+      btnTriggerHumanCampsite.addEventListener('click', () => {
+        if (!ensureVoxelHumanActiveForAdminTask()) return;
+        // If already at camp, toggle between warming by the fire and sleeping inside the tent!
+        if (voxelHuman.routine === 'MAKE_CAMP') {
+          const nextSleep = voxelHuman.campSubState !== 'SLEEP_IN_TENT';
+          voxelHuman.campSubState = nextSleep ? 'SLEEP_IN_TENT' : 'WARM_BY_FIRE';
+          setVoxelHumanBubble(nextSleep ? '💤' : '🔥', 4.5);
+          showCartridgeToast(nextSleep ? `💤 Oasis Artist crawled into their tent to sleep!` : `🔥 Oasis Artist sat by the crackling campfire!`);
+        } else {
+          startVoxelHumanCampsiteRoutine();
+          showCartridgeToast(`⛺ Oasis Artist pitched a tent & lit a campfire on flat ground!`);
+        }
+      });
+    }
+
     const btnTriggerHumanRest = document.getElementById('btn-trigger-human-rest');
     if (btnTriggerHumanRest) {
       btnTriggerHumanRest.addEventListener('click', () => {
@@ -12794,7 +13119,7 @@
 
       voxelHuman.y = groundY;
 
-      // Reset all optional prop visibility by default; each routine turns on what it uses
+      // Reset all optional prop visibility & body transforms by default; each routine turns on what it uses
       rig.chairGroup.visible = false;
       rig.easelGroup.visible = false;
       rig.paletteGroup.visible = false;
@@ -12804,6 +13129,12 @@
       rig.kiteGroup.visible = false;
       rig.telescopeGroup.visible = false;
       rig.binocularsGroup.visible = false;
+      rig.flowerBouquetGroup.visible = false;
+      rig.groundFlowersGroup.visible = false;
+      rig.campsiteGroup.visible = false;
+      rig.campfireLight.intensity = 0.0;
+      rig.bodyGroup.position.set(0, 0, 0);
+      rig.bodyGroup.rotation.set(0, 0, 0);
 
       // 4. Advance active routine state machine
       if (voxelHuman.routine === 'PAINTING_READY') {
@@ -13113,6 +13444,126 @@
           voxelHuman.routineTimer = 0.0;
           voxelHuman.routineDuration = 12.0 + Math.random() * 10.0;
         }
+      } else if (voxelHuman.routine === 'GATHER_FLOWERS') {
+        // Flower Gathering Routine (18–28s): walks around a blooming wildflower patch, kneels to pick flowers one by one, and holds a bouquet!
+        voxelHuman.routineTimer += dt;
+        rig.groundFlowersGroup.visible = true;
+        rig.flowerBouquetGroup.visible = true;
+
+        // Alternate between stepping around the flower patch and kneeling down to pluck a flower
+        const cyclePhase = (voxelHuman.routineTimer % 3.2) / 3.2; // 0..1 every 3.2 seconds
+        if (cyclePhase < 0.45) {
+          // Stepping slowly to the next flower in the patch
+          voxelHuman.heading += dt * 0.65;
+          const swing = Math.sin(time * 5.2) * 0.42;
+          rig.bodyGroup.position.y = Math.abs(Math.sin(time * 5.2)) * 0.03;
+          rig.legLPivot.rotation.x = swing;
+          rig.legRPivot.rotation.x = -swing;
+          rig.armLPivot.rotation.set(-0.35, 0.1, 0.1);
+          rig.armRPivot.rotation.set(-0.85, -0.2, -0.1);
+          rig.headPivot.rotation.set(0.28, Math.sin(time * 2.0) * 0.25, 0);
+        } else {
+          // Kneeling & reaching down with right hand to pick a wildflower!
+          const kneelBend = Math.sin(((cyclePhase - 0.45) / 0.55) * Math.PI);
+          rig.bodyGroup.position.y = -0.26 * kneelBend;
+          rig.bodyGroup.rotation.x = 0.32 * kneelBend;
+          rig.legLPivot.rotation.x = -0.85 * kneelBend;
+          rig.legRPivot.rotation.x = 0.45 * kneelBend;
+          rig.armLPivot.rotation.set(-0.45, 0.15, 0.12);
+          rig.armRPivot.rotation.set(-1.35 - 0.35 * kneelBend, -0.15, -0.10);
+          rig.headPivot.rotation.set(0.35 * kneelBend, Math.sin(time * 3.0) * 0.15, 0);
+        }
+
+        voxelHuman.flowerPickStepTimer = (voxelHuman.flowerPickStepTimer || 2.2) - dt;
+        if (voxelHuman.flowerPickStepTimer <= 0.0) {
+          voxelHuman.flowerPickStepTimer = 2.8 + Math.random() * 1.2;
+          const fList = rig.groundFlowerMeshes || [];
+          const pickedIdx = voxelHuman.flowersPickedCount || 0;
+          if (pickedIdx < fList.length && fList[pickedIdx]) {
+            fList[pickedIdx].visible = false;
+          }
+          voxelHuman.flowersPickedCount = pickedIdx + 1;
+          const flowerEmojis = ['🌸', '🌺', '🌻', '🌼', '🌷', '💐'];
+          setVoxelHumanBubble(flowerEmojis[pickedIdx % flowerEmojis.length], 2.6);
+        }
+
+        if (voxelHuman.routineTimer >= voxelHuman.routineDuration) {
+          setVoxelHumanBubble('💐', 3.5);
+          voxelHuman.routine = 'WANDER';
+          voxelHuman.routineTimer = 0.0;
+          voxelHuman.routineDuration = 12.0 + Math.random() * 10.0;
+        }
+      } else if (voxelHuman.routine === 'MAKE_CAMP') {
+        // Wilderness Campsite Routine (28–46s): pitches a 3D A-Frame Tent & Stone-Ring Campfire on flat-ish ground!
+        // Sometimes sits in the camp chair warming by the crackling fire, and sometimes crawls inside the tent to sleep!
+        voxelHuman.routineTimer += dt;
+        rig.campsiteGroup.visible = true;
+
+        // Animate crackling campfire flames, warm PointLight & rising embers/smoke
+        const flicker = 0.88 + 0.24 * Math.sin(time * 14.0) + 0.12 * Math.cos(time * 23.0);
+        rig.campfireFlameOuter.scale.set(1.0 + Math.sin(time * 11.0) * 0.12, flicker, 1.0 + Math.cos(time * 13.0) * 0.12);
+        rig.campfireFlameInner.scale.set(1.0, 0.9 + 0.2 * Math.cos(time * 17.0), 1.0);
+        const hrNow = ((params.timeOfDay % 24) + 24) % 24;
+        const isNightCamp = (hrNow >= 18.2 || hrNow < 6.2) || ((skyUniforms.uNightFactor.value || 0) > 0.30);
+        rig.campfireLight.intensity = (isNightCamp ? 3.8 : 1.4) * flicker;
+
+        voxelHuman.campFireSparkTimer = (voxelHuman.campFireSparkTimer || 0.0) - dt;
+        if (voxelHuman.campFireSparkTimer <= 0.0) {
+          voxelHuman.campFireSparkTimer = 0.45 + Math.random() * 0.35;
+          const fireWorldPos = new THREE.Vector3();
+          rig.campfireGroup.getWorldPosition(fireWorldPos);
+          if (typeof spawnFireFlameAtWorld === 'function') {
+            spawnFireFlameAtWorld(fireWorldPos.x, fireWorldPos.y + 0.25, fireWorldPos.z, 0.38, 1);
+          }
+        }
+
+        // Switch between WARM_BY_FIRE and SLEEP_IN_TENT mid-camp so the player sees both behaviors
+        voxelHuman.campSwitchTimer = (voxelHuman.campSwitchTimer || 12.0) - dt;
+        if (voxelHuman.campSwitchTimer <= 0.0) {
+          voxelHuman.campSwitchTimer = 12.0 + Math.random() * 8.0;
+          voxelHuman.campSubState = (voxelHuman.campSubState === 'SLEEP_IN_TENT') ? 'WARM_BY_FIRE' : 'SLEEP_IN_TENT';
+          setVoxelHumanBubble(voxelHuman.campSubState === 'SLEEP_IN_TENT' ? '💤' : '🔥', 4.0);
+        }
+
+        if (voxelHuman.campSubState === 'SLEEP_IN_TENT') {
+          // Sleeping Cozy Inside the A-Frame Tent!
+          rig.chairGroup.visible = false;
+          // Position body lying down on the sleeping bag inside tentGroup (-1.35, 0, 0.25)
+          const breathe = Math.sin(time * 2.1) * 0.025;
+          rig.bodyGroup.position.set(-1.35, 0.24 + breathe, 0.42);
+          rig.bodyGroup.rotation.set(-Math.PI * 0.48, 0.32, 0);
+          rig.legLPivot.rotation.x = 0.05;
+          rig.legRPivot.rotation.x = -0.05;
+          rig.armLPivot.rotation.set(-0.25, 0.35, 0.22);
+          rig.armRPivot.rotation.set(-0.25, -0.35, -0.22);
+          rig.headPivot.rotation.set(0.15, Math.sin(time * 1.1) * 0.08, 0);
+
+          if (voxelHuman.bubbleTimer <= 0.2) {
+            setVoxelHumanBubble(Math.random() < 0.65 ? '💤' : '😴', 3.4);
+          }
+        } else {
+          // Sitting on the Folding Camp Chair warming hands by the crackling Stone-Ring Campfire!
+          rig.chairGroup.visible = true;
+          rig.bodyGroup.position.set(0, -0.22, 0);
+          rig.bodyGroup.rotation.set(0, 0, 0);
+          rig.legLPivot.rotation.x = -Math.PI * 0.46;
+          rig.legRPivot.rotation.x = -Math.PI * 0.46;
+          // Hold hands out toward the warm campfire flames
+          const warmSway = Math.sin(time * 2.6) * 0.08;
+          rig.armLPivot.rotation.set(-0.95 + warmSway, 0.22, 0.10);
+          rig.armRPivot.rotation.set(-0.95 - warmSway, -0.22, -0.10);
+          rig.headPivot.rotation.set(0.06, Math.sin(time * 1.1) * 0.18, 0);
+
+          if (voxelHuman.bubbleTimer <= 0.2) {
+            setVoxelHumanBubble(Math.random() < 0.55 ? '🔥' : '⛺', 3.4);
+          }
+        }
+
+        if (voxelHuman.routineTimer >= voxelHuman.routineDuration) {
+          voxelHuman.routine = 'WANDER';
+          voxelHuman.routineTimer = 0.0;
+          voxelHuman.routineDuration = 12.0 + Math.random() * 10.0;
+        }
       } else {
         // Non-painting routines: WANDER, SURVEY_HORIZON, CAMP_REST, NATURE_OBSERVE
         voxelHuman.routineTimer += dt;
@@ -13220,34 +13671,30 @@
             const pickR = Math.random();
 
             if (isNight) {
-              // At night: frequently set up the 3D Astronomical Telescope to stargaze (or birdwatch nocturnal Owls, fly a night kite, or rest)!
-              if (pickR < 0.48) {
+              // At night: frequently set up the 3D Astronomical Telescope to stargaze, make a tent & campfire camp, birdwatch nocturnal Owls, or rest!
+              if (pickR < 0.38) {
                 startVoxelHumanTelescopeRoutine();
-              } else if (pickR < 0.74) {
-                startVoxelHumanBirdwatchingRoutine();
+              } else if (pickR < 0.72) {
+                startVoxelHumanCampsiteRoutine();
               } else if (pickR < 0.88) {
-                voxelHuman.routine = 'CAMP_REST';
-                voxelHuman.routineDuration = 8.0 + Math.random() * 6.0;
-                setVoxelHumanBubble('🌙', 3.8);
+                startVoxelHumanBirdwatchingRoutine();
               } else {
                 startVoxelHumanKiteRoutine();
               }
             } else {
-              // During the day: birdwatch with 3D field binoculars, fly a kite, rest, or observe nature (never set up the star telescope in daylight!)
-              if (pickR < 0.36) {
+              // During the day: gather wildflowers, make a tent & campfire camp, birdwatch with 3D field binoculars, fly a kite, or rest!
+              if (pickR < 0.25) {
+                startVoxelHumanFlowerGatheringRoutine();
+              } else if (pickR < 0.46) {
+                startVoxelHumanCampsiteRoutine();
+              } else if (pickR < 0.70) {
                 startVoxelHumanBirdwatchingRoutine();
-              } else if (pickR < 0.68) {
+              } else if (pickR < 0.90) {
                 startVoxelHumanKiteRoutine();
-              } else if (pickR < 0.85) {
+              } else {
                 voxelHuman.routine = 'CAMP_REST';
                 voxelHuman.routineDuration = 8.0 + Math.random() * 6.0;
                 setVoxelHumanBubble('💧', 3.8);
-              } else {
-                voxelHuman.routine = 'NATURE_OBSERVE';
-                voxelHuman.routineDuration = 7.0 + Math.random() * 5.0;
-                const subjs = scanPainterVisibleSubjects();
-                const pick = subjs[Math.floor(Math.random() * subjs.length)] || { emoji: '🌵' };
-                setVoxelHumanBubble(pick.emoji, 3.8);
               }
             }
           }
@@ -13273,6 +13720,10 @@
           const remB = Math.max(1, Math.ceil(voxelHuman.routineDuration - voxelHuman.routineTimer));
           const bIcon = (BIRDWATCH_SPECIES_CATALOG[voxelHuman.birdwatchSpecies] || BIRDWATCH_SPECIES_CATALOG.macaw).emoji;
           valVoxelHumanStatusEl.textContent = `${bIcon} Birdwatching (${remB}s)`;
+        } else if (voxelHuman.routine === 'GATHER_FLOWERS') {
+          valVoxelHumanStatusEl.textContent = `💐 Gathering Flowers`;
+        } else if (voxelHuman.routine === 'MAKE_CAMP') {
+          valVoxelHumanStatusEl.textContent = voxelHuman.campSubState === 'SLEEP_IN_TENT' ? `💤 Sleeping in Tent` : `⛺ Campfire Rest`;
         } else if (voxelHuman.routine === 'POND_FISHING') {
           valVoxelHumanStatusEl.textContent = voxelHuman.fishCaughtDisplayTimer > 0 ? '🐟 Caught Fish!' : '🎣 Fishing';
         } else if (voxelHuman.routine === 'FLY_KITE') {
@@ -13304,15 +13755,23 @@
           voxelHumanBubbleEl.style.display = 'none';
           voxelHumanBubbleEl.classList.remove('painting-ready');
         } else {
-          // Account for seated vs. standing posture so the bubble hovers directly above the hat crown
+          // Account for seated vs. standing vs. sleeping-in-tent posture so the bubble hovers directly above the person/tent
+          const isSleepingInTent = (voxelHuman.routine === 'MAKE_CAMP' && voxelHuman.campSubState === 'SLEEP_IN_TENT');
           const isSeatedRoutine = (
             voxelHuman.routine === 'LANDSCAPE_PAINTING' ||
             voxelHuman.routine === 'PAINTING_READY' ||
             voxelHuman.routine === 'POND_FISHING' ||
-            voxelHuman.routine === 'CAMP_REST'
+            voxelHuman.routine === 'CAMP_REST' ||
+            (voxelHuman.routine === 'MAKE_CAMP' && voxelHuman.campSubState !== 'SLEEP_IN_TENT')
           );
-          const headAnchorWorldY = voxelHuman.y + (isSeatedRoutine ? 2.18 : 2.52);
-          _bubbleProjVec.set(voxelHuman.x, headAnchorWorldY, voxelHuman.z);
+          if (isSleepingInTent) {
+            const tentWorldPos = new THREE.Vector3();
+            rig.tentGroup.getWorldPosition(tentWorldPos);
+            _bubbleProjVec.set(tentWorldPos.x, tentWorldPos.y + 1.65, tentWorldPos.z);
+          } else {
+            const headAnchorWorldY = voxelHuman.y + (isSeatedRoutine ? 2.18 : 2.52);
+            _bubbleProjVec.set(voxelHuman.x, headAnchorWorldY, voxelHuman.z);
+          }
           _bubbleProjVec.project(camera);
 
           // Scale the chat bubble with 3D camera distance:
