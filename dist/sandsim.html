@@ -1820,10 +1820,21 @@
 
   <!-- Bottom Brush / Interaction Dock -->
   <div class="bottom-dock" id="bottom-dock">
-    <button id="btn-touch-mode" class="touch-mode-btn" title="Toggle 1-Finger Touch between Sculpting Terrain and Rotating Camera (2 fingers always pinch-zoom/orbit)">✋ Touch: Sculpt</button>
-    <button class="tool-btn active" data-tool="water" title="Pour water that sheds down slopes and collects in the lowest basins">💧 Pour Water</button>
-    <button class="tool-btn" data-tool="lava" title="Pour glowing molten lava that flows down valleys, incinerates flora, melts snow & ice, and glows brightly at night">🔥 Pour Lava</button>
-    <button id="btn-tool-volcano" class="tool-btn" data-tool="volcano" title="Single-use cataclysmic Volcano (10-minute actual cooldown): Click terrain to raise a massive volcano that erupts lava, brimstone, smoke & ash for 30 seconds!">🌋 Volcano</button>
+    <button class="tool-btn active" data-tool="none" title="Pan &amp; Navigate Mode (No Sculpt Tool): Drag across the landscape to pan around">✋</button>
+
+    <!-- Elements Popup Menu (Pour Water & Pour Lava) -->
+    <div class="dock-popup-wrap" id="popup-wrap-elements">
+      <button type="button" class="dock-popup-trigger" id="btn-popup-elements" title="Choose element to pour (Water or Lava)">
+        <span id="label-popup-elements">🌊 Elements</span> <span>▴</span>
+      </button>
+      <div class="dock-popup-menu" id="popup-menu-elements">
+        <div class="dock-popup-title">🌊 Pour Elements</div>
+        <button class="tool-btn" data-tool="water" data-popup-group="elements" data-short-label="💧 Water" title="Pour water that sheds down slopes and collects in the lowest basins">💧 Water</button>
+        <button class="tool-btn" data-tool="lava" data-popup-group="elements" data-short-label="🔥 Lava" title="Pour glowing molten lava that flows down valleys, incinerates flora, melts snow &amp; ice, and glows brightly at night">🔥 Lava</button>
+      </div>
+    </div>
+
+    <button id="btn-tool-volcano" class="tool-btn" data-tool="volcano" title="Single-use cataclysmic Volcano (10-minute actual cooldown): Click terrain to raise a massive volcano that erupts lava, brimstone, smoke &amp; ash for 30 seconds!">🌋 Volcano</button>
     <button class="tool-btn" data-tool="fireworks" title="Launch 3D aerial fireworks shells from where you click or drag — rockets streak into the sky and burst into glowing multi-colored star patterns!">🎆 Fireworks</button>
 
     <!-- Materials Popup Menu (Replaces Pour Sand with Brick Road, Paved Road, Dirt, Sand) -->
@@ -1863,7 +1874,7 @@
     <button class="tool-btn" data-tool="erase" title="Clear obstacles, roads, flora & placed items in brush radius">🧹 Erase</button>
     <button id="btn-dock-reset-water-plants" class="danger" title="Remove all water, plants, and aquatic/jungle animals from the current map">🔄 Reset Water & Life</button>
     <span class="dock-hint">
-      <kbd>L-Drag</kbd> Sculpt · <kbd>R-Drag</kbd> Orbit · <kbd>V</kbd> Walk Mode
+      <kbd>✋ L-Drag</kbd> Pan · <kbd>R-Drag</kbd> Orbit · <kbd>V</kbd> Walk Mode
     </span>
   </div>
 
@@ -2460,7 +2471,7 @@
       timeOfDay: 10.5,        // 0..24 hours (6:00 sunrise, 12:00 solar noon, 18:00 sunset, 0:00 midnight)
       autoDayNight: true,
       dayCycleSpeed: 0.085,   // Slowed down ~4x (~4.7 minutes per full 24h day/night cycle so day and night linger naturally)
-      tool: 'water',
+      tool: 'none',
       weatherMode: 'oasis',
       autoWeather: true,
       weatherTimer: 36.0,     // Seconds remaining in current weather regime (Good weather lasts 34-54s; Bad weather lasts 11-18s)
@@ -2582,16 +2593,17 @@
     controls.target.set(0, 4, 0);
 
     controls.mouseButtons = {
-      LEFT: null,
+      LEFT: THREE.MOUSE.PAN,
       MIDDLE: THREE.MOUSE.DOLLY,
       RIGHT: THREE.MOUSE.ROTATE
     };
 
-    // Default Touch Configuration: 1-finger touch sculpts terrain (or orbits when toggled), 2-finger pinch/drag always zooms & rotates camera!
+    // Default Touch Configuration: in default 'none' (✋ Pan) mode, 1-finger touch pans around the landscape, 2-finger pinch/drag zooms & rotates camera!
     controls.touches = {
-      ONE: null,
+      ONE: THREE.TOUCH.PAN,
       TWO: THREE.TOUCH.DOLLY_ROTATE
     };
+    controls.screenSpacePanning = false;
     let touchOneFingerMode = 'sculpt'; // 'sculpt' | 'orbit'
 
     const hemiLight = new THREE.HemisphereLight(0xffebd1, 0x4f4335, 0.72);
@@ -12241,11 +12253,15 @@
       isPointerDown = false;
 
       // Switch active sculpt tool back to 'lava' so dragging doesn't re-click the single-use volcano tool
-      params.tool = 'lava';
-      document.querySelectorAll('.tool-btn').forEach((b) => {
-        b.classList.toggle('active', b.dataset.tool === 'lava');
-      });
-      brushRingMat.color.setHex(0xff4500);
+      if (typeof syncActiveToolUI === 'function') {
+        syncActiveToolUI('lava');
+      } else {
+        params.tool = 'lava';
+        document.querySelectorAll('.tool-btn').forEach((b) => {
+          b.classList.toggle('active', b.dataset.tool === 'lava');
+        });
+        brushRingMat.color.setHex(0xff4500);
+      }
 
       // 2. Clamp volcano center slightly inside map borders so the massive 68m-diameter cone fits cleanly
       const margin = WORLD_SIZE * 0.33;
@@ -17808,6 +17824,9 @@
     let isPointerDown = false;
 
     function applyBrushAtWorld(wx, wz) {
+      if (!params.tool || params.tool === 'none') {
+        return;
+      }
       if (params.tool === 'volcano') {
         triggerVolcanoEruptionAtWorld(wx, wz);
         return;
@@ -18033,7 +18052,7 @@
     let fpvLookLastY = 0;
 
     function updatePointerRay(e) {
-      if (params.driveMode || (params.fpvMode && params.fpvEquip !== 'sculpt')) {
+      if (params.driveMode || (params.fpvMode && params.fpvEquip !== 'sculpt') || (!params.tool || params.tool === 'none')) {
         brushRing.visible = false;
         return null;
       }
@@ -18098,8 +18117,9 @@
         return;
       }
 
-      // In Orbit Mode: if touch is set to 'orbit' mode, let OrbitControls handle 1-finger camera rotation
-      if (e.pointerType === 'touch' && touchOneFingerMode === 'orbit') {
+      // In Omniscient Observer Mode: if tool is 'none' (✋ Pan) or touch is set to 'orbit', let OrbitControls handle panning / camera movement
+      if (!params.tool || params.tool === 'none' || (e.pointerType === 'touch' && touchOneFingerMode === 'orbit')) {
+        brushRing.visible = false;
         return;
       }
 
@@ -18127,6 +18147,11 @@
       }
 
       if (e.pointerType === 'touch' && (activeTouchPointers.size >= 2 || (touchOneFingerMode === 'orbit' && !params.fpvMode))) {
+        return;
+      }
+
+      if (!params.fpvMode && (!params.tool || params.tool === 'none')) {
+        brushRing.visible = false;
         return;
       }
 
@@ -18682,7 +18707,11 @@
       draggingCompass = false;
     });
 
-    // Popup Menu Controllers for Bottom Sculpt Dock ("🧱 Materials ▴" & "📦 Items ▴")
+    // Popup Menu Controllers for Bottom Sculpt Dock ("🌊 Elements ▴", "🧱 Materials ▴" & "📦 Items ▴")
+    const popupWrapElements = document.getElementById('popup-wrap-elements');
+    const btnPopupElements = document.getElementById('btn-popup-elements');
+    const labelPopupElements = document.getElementById('label-popup-elements');
+    const popupMenuElements = document.getElementById('popup-menu-elements');
     const popupWrapMaterials = document.getElementById('popup-wrap-materials');
     const btnPopupMaterials = document.getElementById('btn-popup-materials');
     const labelPopupMaterials = document.getElementById('label-popup-materials');
@@ -18694,6 +18723,9 @@
     const bottomDockEl = document.getElementById('bottom-dock');
 
     // Portal popup menus to document.body so mobile .bottom-dock (overflow-x: auto + backdrop-filter) never clips them!
+    if (popupMenuElements && popupMenuElements.parentElement !== document.body) {
+      document.body.appendChild(popupMenuElements);
+    }
     if (popupMenuMaterials && popupMenuMaterials.parentElement !== document.body) {
       document.body.appendChild(popupMenuMaterials);
     }
@@ -18713,6 +18745,8 @@
     }
 
     function closeAllDockPopups() {
+      if (popupWrapElements) popupWrapElements.classList.remove('open');
+      if (popupMenuElements) popupMenuElements.classList.remove('open');
       if (popupWrapMaterials) popupWrapMaterials.classList.remove('open');
       if (popupMenuMaterials) popupMenuMaterials.classList.remove('open');
       if (popupWrapItems) popupWrapItems.classList.remove('open');
@@ -18728,6 +18762,13 @@
         menuEl.classList.add('open');
         positionDockPopupMenu(triggerBtn, menuEl);
       }
+    }
+
+    if (btnPopupElements && popupWrapElements && popupMenuElements) {
+      btnPopupElements.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleDockPopup(popupWrapElements, btnPopupElements, popupMenuElements);
+      });
     }
 
     if (btnPopupMaterials && popupWrapMaterials && popupMenuMaterials) {
@@ -18746,6 +18787,9 @@
 
     if (bottomDockEl) {
       bottomDockEl.addEventListener('scroll', () => {
+        if (popupMenuElements && popupMenuElements.classList.contains('open')) {
+          positionDockPopupMenu(btnPopupElements, popupMenuElements);
+        }
         if (popupMenuMaterials && popupMenuMaterials.classList.contains('open')) {
           positionDockPopupMenu(btnPopupMaterials, popupMenuMaterials);
         }
@@ -18756,6 +18800,9 @@
     }
 
     window.addEventListener('resize', () => {
+      if (popupMenuElements && popupMenuElements.classList.contains('open')) {
+        positionDockPopupMenu(btnPopupElements, popupMenuElements);
+      }
       if (popupMenuMaterials && popupMenuMaterials.classList.contains('open')) {
         positionDockPopupMenu(btnPopupMaterials, popupMenuMaterials);
       }
@@ -18770,6 +18817,82 @@
       }
     });
 
+    function syncActiveToolUI(toolName) {
+      params.tool = toolName || 'none';
+      const isPanMode = (!params.tool || params.tool === 'none');
+
+      // Update OrbitControls mouse & touch bindings:
+      // In 'none' (✋ Pan) mode, left-click drag and 1-finger touch pan across the landscape!
+      // When any sculpt tool is active, left-click drag and 1-finger touch apply the sculpt tool!
+      controls.mouseButtons.LEFT = isPanMode ? THREE.MOUSE.PAN : null;
+      if (touchOneFingerMode !== 'orbit') {
+        controls.touches.ONE = isPanMode ? THREE.TOUCH.PAN : null;
+      }
+      if (isPanMode) {
+        isPointerDown = false;
+        brushRing.visible = false;
+      }
+
+      document.querySelectorAll('.tool-btn').forEach((b) => {
+        b.classList.toggle('active', b.dataset.tool === params.tool);
+      });
+
+      const isElementTool = ['water', 'lava'].includes(params.tool);
+      const isMaterialTool = ['pour', 'mat-dirt', 'mat-paved', 'mat-brick'].includes(params.tool);
+      const isItemTool = ['item-tap', 'item-feeder', 'item-lantern', 'item-truck'].includes(params.tool);
+
+      if (btnPopupElements) {
+        btnPopupElements.classList.toggle('has-active-child', isElementTool);
+        if (labelPopupElements) {
+          const matchBtn = document.querySelector(`.dock-popup-menu .tool-btn[data-tool="${params.tool}"][data-popup-group="elements"]`);
+          labelPopupElements.textContent = (isElementTool && matchBtn && matchBtn.dataset.shortLabel)
+            ? matchBtn.dataset.shortLabel
+            : '🌊 Elements';
+        }
+      }
+      if (btnPopupMaterials) {
+        btnPopupMaterials.classList.toggle('has-active-child', isMaterialTool);
+        if (labelPopupMaterials) {
+          const matchBtn = document.querySelector(`.dock-popup-menu .tool-btn[data-tool="${params.tool}"][data-popup-group="materials"]`);
+          labelPopupMaterials.textContent = (isMaterialTool && matchBtn && matchBtn.dataset.shortLabel)
+            ? matchBtn.dataset.shortLabel
+            : '🧱 Materials';
+        }
+      }
+      if (btnPopupItems) {
+        btnPopupItems.classList.toggle('has-active-child', isItemTool);
+        if (labelPopupItems) {
+          const matchBtn = document.querySelector(`.dock-popup-menu .tool-btn[data-tool="${params.tool}"][data-popup-group="items"]`);
+          labelPopupItems.textContent = (isItemTool && matchBtn && matchBtn.dataset.shortLabel)
+            ? matchBtn.dataset.shortLabel
+            : '📦 Items';
+        }
+      }
+      closeAllDockPopups();
+
+      const ringColors = {
+        water: 0x38bdf8,
+        lava: 0xff4500,
+        volcano: 0xdc2626,
+        fireworks: 0xe879f9,
+        pour: 0xffc56d,
+        'mat-dirt': 0x92400e,
+        'mat-paved': 0x64748b,
+        'mat-brick': 0xc2410c,
+        seed: 0x4ade80,
+        fauna: 0xf472b6,
+        dig: 0xf97316,
+        rock: 0xa8a29e,
+        wall: 0xe7e5e4,
+        'item-tap': 0x06b6d4,
+        'item-feeder': 0xeab308,
+        'item-lantern': 0xf59e0b,
+        'item-truck': 0xdc2626,
+        erase: 0xef4444
+      };
+      brushRingMat.color.setHex(ringColors[params.tool] || 0xffc56d);
+    }
+
     document.querySelectorAll('.tool-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -18777,57 +18900,12 @@
           updateVolcanoButtonUI();
           return;
         }
-        document.querySelectorAll('.tool-btn').forEach((b) => {
-          b.classList.toggle('active', b.dataset.tool === btn.dataset.tool);
-        });
-        params.tool = btn.dataset.tool;
-
-        // Update Materials & Items popup trigger button active states & labels
-        const isMaterialTool = ['pour', 'mat-dirt', 'mat-paved', 'mat-brick'].includes(params.tool);
-        const isItemTool = ['item-tap', 'item-feeder', 'item-lantern', 'item-truck'].includes(params.tool);
-        if (btnPopupMaterials) {
-          btnPopupMaterials.classList.toggle('has-active-child', isMaterialTool);
-          if (labelPopupMaterials) {
-            const matchBtn = document.querySelector(`.dock-popup-menu .tool-btn[data-tool="${params.tool}"][data-popup-group="materials"]`);
-            labelPopupMaterials.textContent = (isMaterialTool && matchBtn && matchBtn.dataset.shortLabel)
-              ? matchBtn.dataset.shortLabel
-              : '🧱 Materials';
-          }
-        }
-        if (btnPopupItems) {
-          btnPopupItems.classList.toggle('has-active-child', isItemTool);
-          if (labelPopupItems) {
-            const matchBtn = document.querySelector(`.dock-popup-menu .tool-btn[data-tool="${params.tool}"][data-popup-group="items"]`);
-            labelPopupItems.textContent = (isItemTool && matchBtn && matchBtn.dataset.shortLabel)
-              ? matchBtn.dataset.shortLabel
-              : '📦 Items';
-          }
-        }
-        closeAllDockPopups();
-
-        const ringColors = {
-          water: 0x38bdf8,
-          lava: 0xff4500,
-          volcano: 0xdc2626,
-          fireworks: 0xe879f9,
-          pour: 0xffc56d,
-          'mat-dirt': 0x92400e,
-          'mat-paved': 0x64748b,
-          'mat-brick': 0xc2410c,
-          seed: 0x4ade80,
-          fauna: 0xf472b6,
-          dig: 0xf97316,
-          rock: 0xa8a29e,
-          wall: 0xe7e5e4,
-          'item-tap': 0x06b6d4,
-          'item-feeder': 0xeab308,
-          'item-lantern': 0xf59e0b,
-          'item-truck': 0xdc2626,
-          erase: 0xef4444
-        };
-        brushRingMat.color.setHex(ringColors[params.tool] || 0xffc56d);
+        syncActiveToolUI(btn.dataset.tool);
       });
     });
+
+    // Ensure initial Omniscient Observer state starts in 'none' (✋ Pan) mode
+    syncActiveToolUI(params.tool);
 
     document.querySelectorAll('.terrain-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -19782,6 +19860,9 @@
 
       // 2. Restore simulation parameters & camera/FPV state
       Object.assign(params, snap.paramsCopy);
+      if (typeof syncActiveToolUI === 'function') {
+        syncActiveToolUI(params.tool || 'none');
+      }
       setGlobalAudioEnabled(params.audioEnabled);
       simTick = snap.simTick || 0;
       uniforms.uTime.value = snap.timeVal || 0;
