@@ -9610,6 +9610,8 @@
 
     let isOpticsGameplayPaused = false;
     let activeOpticsMode = ''; // 'telescope' | 'binoculars' | ''
+    let opticsElapsedSec = 0.0;
+    let opticsLastPerfMs = 0.0;
 
     const voxelHumanBubbleEl = document.getElementById('voxel-human-bubble');
     const voxelHumanBubbleEmojiEl = document.getElementById('voxel-human-bubble-emoji');
@@ -10862,43 +10864,43 @@
     const TELESCOPE_SPACE_CATALOG = [
       {
         id: 'andromeda',
-        title: '🔭 Andromeda Spiral Galaxy (M31)',
-        sub: 'RA 00h 42m 44s · Dec +41° 16′ 9″ · Distance: 2.54 Million Light-Years · Mag 3.44'
+        title: '🔭 Andromeda Spiral Galaxy (M31 & M110)',
+        sub: 'RA 00h 42m 44s · Dec +41° 16′ 9″ · Differential Keplerian Rotation · 2.54 Million ly'
       },
       {
         id: 'orion',
         title: '🔭 Great Orion Emission Nebula (M42)',
-        sub: 'RA 05h 35m 17s · Dec −05° 23′ 28″ · Trapezium Star Nursery · Distance: 1,344 Light-Years'
+        sub: 'RA 05h 35m 17s · Dec −05° 23′ 28″ · Translucent H-II Ionized Gas & Trapezium Cluster · 1,344 ly'
+      },
+      {
+        id: 'saturn',
+        title: '🔭 Ringed Gas Giant & Swirling Storm Bands',
+        sub: 'Apparent Dia 18.8″ · Tilt +23.7° · Polar Hexagon, Atmospheric Limb Glow & Cassini Rings · 8.9 AU'
       },
       {
         id: 'pillars',
         title: '🔭 Eagle Nebula: Pillars of Creation (M16)',
-        sub: 'RA 18h 18m 48s · Dec −13° 49′ 0″ · Molecular Hydrogen Spires · Distance: 5,700 Light-Years'
+        sub: 'RA 18h 18m 48s · Dec −13° 49′ 0″ · Volumetric Photoevaporating Molecular Spires · 5,700 ly'
+      },
+      {
+        id: 'jupiter',
+        title: '🔭 Jovian Super-Storm Giant & Great Red Vortex',
+        sub: 'Apparent Dia 46.9″ · Counter-Rotating Zonal Jet Streams, Cyclone Vortex & Galilean Moons · 4.2 AU'
       },
       {
         id: 'ring',
         title: '🔭 Lyra Ring Planetary Nebula (M57)',
-        sub: 'RA 18h 53m 35s · Dec +33° 01′ 45″ · White Dwarf Ionized Shell · Distance: 2,567 Light-Years'
+        sub: 'RA 18h 53m 35s · Dec +33° 01′ 45″ · 3D Ionized Bipolar Shell & Central White Dwarf · 2,567 ly'
       },
       {
-        id: 'saturn',
-        title: '🔭 Ringed Gas Giant & Moons (Cassini Division)',
-        sub: 'Apparent Dia 18.8″ · Tilt +23.7° · Titan, Enceladus & Rhea in Quadrature · 8.9 AU'
-      },
-      {
-        id: 'crab',
-        title: '🔭 Crab Supernova Remnant & Pulsar (M1)',
-        sub: 'RA 05h 34m 31s · Dec +22° 00′ 52″ · SN 1054 Synchrotron Filaments · Distance: 6,500 Light-Years'
+        id: 'lensing',
+        title: '🔭 Einstein Ring & Relativistic Black Hole Lensing',
+        sub: 'Schwarzschild Photon Sphere · Gravitational Lensing of Background Quasar & Relativistic Doppler Disk'
       },
       {
         id: 'whirlpool',
         title: '🔭 Whirlpool Interacting Galaxies (M51a & M51b)',
-        sub: 'RA 13h 29m 52s · Dec +47° 11′ 43″ · Grand-Design Spiral Bridge · Distance: 31 Million Light-Years'
-      },
-      {
-        id: 'pleiades',
-        title: '🔭 Pleiades Seven Sisters Reflection Cluster (M45)',
-        sub: 'RA 03h 47m 24s · Dec +24° 07′ 0″ · Merope Blue Dust Veils · Distance: 444 Light-Years'
+        sub: 'RA 13h 29m 52s · Dec +47° 11′ 43″ · 3D Tidal Stellar Bridge & H-alpha Starburst Knots · 31 Million ly'
       }
     ];
 
@@ -10906,25 +10908,25 @@
       macaw: {
         emoji: '🦜',
         title: '🔭 Scarlet Oasis Macaw (Ara macao)',
-        sub: '8×42 Field Binoculars · Canopy Flight & Plumage Study · Wingspan 96 cm',
+        sub: '8×42 Field Binoculars · Live 3D Canopy Perch & Plumage Study · Wingspan 96 cm',
         biome: 'jungle'
       },
       flamingo: {
         emoji: '🦩',
         title: '🔭 Coral Lagoon Flamingo (Phoenicopterus roseus)',
-        sub: '8×42 Field Binoculars · Shallow Shoreline Wading Study · Height 135 cm',
+        sub: '8×42 Field Binoculars · Live 3D Shallow Shoreline Wading Study · Height 135 cm',
         biome: 'lagoon'
       },
       hawk: {
         emoji: '🦅',
         title: '🔭 Desert Red-Tailed Hawk (Buteo jamaicensis)',
-        sub: '8×42 Field Binoculars · High Thermal Soaring Study · Wingspan 128 cm',
+        sub: '8×42 Field Binoculars · Live 3D High Thermal Soaring Study · Wingspan 128 cm',
         biome: 'desert'
       },
       owl: {
         emoji: '🦉',
         title: '🔭 Saguaro Horned Night Owl (Bubo virginianus)',
-        sub: '8×42 Field Binoculars · Cactus Crown Perch Study · Nocturnal Predator',
+        sub: '8×42 Field Binoculars · Live 3D Cactus Crown Perch Study · Nocturnal Predator',
         biome: 'cactus'
       }
     };
@@ -10984,624 +10986,1084 @@
       voxelHuman.bubbleTimer = voxelHuman.routineDuration;
     }
 
-    function renderTelescopeDeepSpaceCanvas(targetIdx) {
-      if (!humanOpticsCtx || !humanOpticsCanvasEl) return;
-      const ctx = humanOpticsCtx;
-      const w = humanOpticsCanvasEl.width;
-      const h = humanOpticsCanvasEl.height;
-      const cx = w * 0.5;
-      const cy = h * 0.5;
-      const lensR = Math.min(w, h) * 0.455;
-      const spec = TELESCOPE_SPACE_CATALOG[targetIdx % TELESCOPE_SPACE_CATALOG.length];
+    // ============================================================================
+    // 10B-OPTICS. REALTIME 3D WEBGL ASTROPHYSICS TELESCOPE & 3D BINOCULARS ENGINE
+    //             - Parallax 3D Skybox Starfield with Twinkling & Diffraction Spikes
+    //             - 3D Differential-Rotating Spiral Galaxies (Andromeda M31, Whirlpool M51)
+    //             - Multi-Layer Translucent Volumetric Gassy 3D Nebulae (Orion M42, Eagle Pillars M16, Ring M57)
+    //             - 3D Swirling Atmospheric Gas Giant Shaders with Fresnel Limb Glow & 3D Rings (Saturn, Jupiter)
+    //             - Relativistic Gravitational Lensing & Einstein Ring Shader
+    //             - High-Fidelity 3D Articulated Bird Dioramas for Binoculars View
+    // ============================================================================
+    const opticsRenderTarget = new THREE.WebGLRenderTarget(640, 480, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat
+    });
+    const opticsPixelBuf = new Uint8Array(640 * 480 * 4);
+    const opticsImgData = humanOpticsCtx ? humanOpticsCtx.createImageData(640, 480) : null;
 
-      ctx.save();
-      ctx.fillStyle = '#010206';
-      ctx.fillRect(0, 0, w, h);
+    const opticsScene = new THREE.Scene();
+    opticsScene.background = new THREE.Color(0x010207);
+    const opticsCamera = new THREE.PerspectiveCamera(34, 640 / 480, 0.1, 900);
+    opticsCamera.position.set(0, 0, 12.5);
 
-      // Clip inside circular telescope eyepiece aperture
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, lensR, 0, Math.PI * 2);
-      ctx.clip();
+    const opticsUniforms = {
+      uTime: { value: 0.0 }
+    };
 
-      // Deep cosmos radial background
-      const spaceBg = ctx.createRadialGradient(cx, cy, 12, cx, cy, lensR);
-      spaceBg.addColorStop(0.0, '#090d24');
-      spaceBg.addColorStop(0.65, '#040613');
-      spaceBg.addColorStop(1.0, '#010208');
-      ctx.fillStyle = spaceBg;
-      ctx.fillRect(0, 0, w, h);
-
-      // Deterministic starfield with multi-colored stars & diffraction spikes
-      let seed = (targetIdx + 1) * 9187;
-      const rand = () => {
-        seed = (seed * 16807) % 2147483647;
-        return (seed - 1) / 2147483646;
-      };
-      const starColors = ['#ffffff', '#bae6fd', '#fde68a', '#fed7aa', '#e0e7ff', '#fbcfe8'];
-      for (let s = 0; s < 320; s++) {
-        const sx = cx + (rand() - 0.5) * lensR * 2.0;
-        const sy = cy + (rand() - 0.5) * lensR * 2.0;
-        const sr = 0.5 + Math.pow(rand(), 3.2) * 2.3;
-        ctx.fillStyle = starColors[s % starColors.length];
-        ctx.globalAlpha = 0.35 + rand() * 0.65;
-        ctx.beginPath();
-        ctx.arc(sx, sy, sr, 0, Math.PI * 2);
-        ctx.fill();
-        if (sr > 1.85) {
-          ctx.strokeStyle = ctx.fillStyle;
-          ctx.lineWidth = 0.8;
-          ctx.beginPath();
-          ctx.moveTo(sx - sr * 4.5, sy); ctx.lineTo(sx + sr * 4.5, sy);
-          ctx.moveTo(sx, sy - sr * 4.5); ctx.lineTo(sx, sy + sr * 4.5);
-          ctx.stroke();
-        }
+    // Shared GLSL 3D Simplex/Value Noise & FBM for translucent gassy nebulae & swirling planetary atmospheres
+    const OPTICS_NOISE_GLSL = `
+      float optHash(vec3 p) {
+        p = fract(p * vec3(0.1031, 0.1030, 0.0973));
+        p += dot(p, p.yxz + 33.33);
+        return fract((p.x + p.y) * p.z);
       }
-      ctx.globalAlpha = 1.0;
-
-      if (spec.id === 'andromeda') {
-        // Andromeda Spiral Galaxy (M31): tilted luminous galactic disc, dust lanes, glowing core & satellite galaxy M110
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(-0.42);
-        ctx.scale(1.0, 0.42);
-
-        for (let arm = 0; arm < 2; arm++) {
-          const baseAng = arm * Math.PI;
-          for (let k = 0; k < 210; k++) {
-            const t = k / 210;
-            const r = 14 + t * 215;
-            const ang = baseAng + t * 4.4;
-            const gx = Math.cos(ang) * r + (rand() - 0.5) * 24;
-            const gy = Math.sin(ang) * r + (rand() - 0.5) * 24;
-            const glow = ctx.createRadialGradient(gx, gy, 1, gx, gy, 16 + (1 - t) * 20);
-            glow.addColorStop(0.0, t < 0.3 ? 'rgba(254, 240, 138, 0.36)' : 'rgba(125, 211, 252, 0.24)');
-            glow.addColorStop(0.5, 'rgba(168, 85, 247, 0.11)');
-            glow.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = glow;
-            ctx.beginPath();
-            ctx.arc(gx, gy, 24, 0, Math.PI * 2);
-            ctx.fill();
-          }
+      float optNoise3(vec3 x) {
+        vec3 i = floor(x);
+        vec3 f = fract(x);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(
+          mix(mix(optHash(i + vec3(0,0,0)), optHash(i + vec3(1,0,0)), f.x),
+              mix(optHash(i + vec3(0,1,0)), optHash(i + vec3(1,1,0)), f.x), f.y),
+          mix(mix(optHash(i + vec3(0,0,1)), optHash(i + vec3(1,0,1)), f.x),
+              mix(optHash(i + vec3(0,1,1)), optHash(i + vec3(1,1,1)), f.x), f.y),
+          f.z
+        );
+      }
+      float optFbm3(vec3 p) {
+        float v = 0.0;
+        float a = 0.5;
+        for (int i = 0; i < 5; i++) {
+          v += a * optNoise3(p);
+          p = p * 2.04 + vec3(13.7, 7.1, 19.3);
+          a *= 0.5;
         }
-        const coreGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, 92);
-        coreGrad.addColorStop(0.0, '#ffffff');
-        coreGrad.addColorStop(0.22, '#fef08a');
-        coreGrad.addColorStop(0.55, 'rgba(251, 191, 36, 0.45)');
-        coreGrad.addColorStop(1.0, 'rgba(56, 189, 248, 0.0)');
-        ctx.fillStyle = coreGrad;
-        ctx.beginPath();
-        ctx.arc(0, 0, 92, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        return v;
+      }
+    `;
 
-        // Companion dwarf galaxy M110
-        const satGrad = ctx.createRadialGradient(cx - 115, cy - 82, 1, cx - 115, cy - 82, 34);
-        satGrad.addColorStop(0.0, '#fef9c3');
-        satGrad.addColorStop(0.45, 'rgba(186, 230, 253, 0.38)');
-        satGrad.addColorStop(1.0, 'rgba(0,0,0,0)');
-        ctx.fillStyle = satGrad;
-        ctx.beginPath();
-        ctx.arc(cx - 115, cy - 82, 34, 0, Math.PI * 2);
-        ctx.fill();
+    // 1. Deep-Space 3D Starfield (Matches the main skybox starfield shader with 3D depth parallax, spectral colors, twinkling & Airy diffraction spikes!)
+    const telescopeRootGroup = new THREE.Group();
+    opticsScene.add(telescopeRootGroup);
 
-      } else if (spec.id === 'orion') {
-        // Great Orion Nebula (M42): glowing magenta/crimson/teal ionized gas cavern + 4 bright Trapezium stars
-        const clouds = [
-          { x: cx - 25, y: cy + 10, r: 165, c0: 'rgba(236, 72, 153, 0.52)', c1: 'rgba(126, 34, 206, 0.18)' },
-          { x: cx + 45, y: cy - 28, r: 145, c0: 'rgba(56, 189, 248, 0.48)', c1: 'rgba(16, 185, 129, 0.15)' },
-          { x: cx - 5,  y: cy - 8,  r: 110, c0: 'rgba(253, 224, 71, 0.55)', c1: 'rgba(244, 63, 94, 0.25)' },
-          { x: cx - 75, y: cy - 45, r: 120, c0: 'rgba(192, 132, 252, 0.42)', c1: 'rgba(0, 0, 0, 0)' }
-        ];
-        for (const cl of clouds) {
-          const g = ctx.createRadialGradient(cl.x, cl.y, 6, cl.x, cl.y, cl.r);
-          g.addColorStop(0.0, cl.c0);
-          g.addColorStop(0.55, cl.c1);
-          g.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          ctx.arc(cl.x, cl.y, cl.r, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        // Filaments & dark dust bay
-        ctx.fillStyle = 'rgba(4, 6, 16, 0.72)';
-        ctx.beginPath();
-        ctx.ellipse(cx + 55, cy + 48, 75, 34, -0.5, 0, Math.PI * 2);
-        ctx.fill();
-        // 4 Trapezium cluster stars in the bright heart
-        const trapCoords = [[-10, -8], [11, -12], [-6, 10], [9, 8]];
-        for (const [tx, ty] of trapCoords) {
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(cx + tx, cy + ty, 3.2, 0, Math.PI * 2);
-          ctx.fill();
-        }
+    const OPTICS_STAR_COUNT = 3200;
+    const optStarGeo = new THREE.BufferGeometry();
+    const optStarPos = new Float32Array(OPTICS_STAR_COUNT * 3);
+    const optStarCol = new Float32Array(OPTICS_STAR_COUNT * 3);
+    const optStarSize = new Float32Array(OPTICS_STAR_COUNT);
+    const optStarPhase = new Float32Array(OPTICS_STAR_COUNT);
 
-      } else if (spec.id === 'pillars') {
-        // Eagle Nebula: Pillars of Creation (M16)
-        const bgNeb = ctx.createRadialGradient(cx, cy - 30, 15, cx, cy, 195);
-        bgNeb.addColorStop(0.0, 'rgba(56, 189, 248, 0.46)');
-        bgNeb.addColorStop(0.55, 'rgba(16, 185, 129, 0.24)');
-        bgNeb.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = bgNeb;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 195, 0, Math.PI * 2);
-        ctx.fill();
+    for (let i = 0; i < OPTICS_STAR_COUNT; i++) {
+      // 3D volumetric distribution across deep space so telescope micro-drift creates true 3D depth parallax!
+      const rad = 18.0 + Math.random() * 95.0;
+      const theta = Math.random() * Math.PI * 2;
+      const u = (Math.random() - 0.5) * 1.35;
+      const rXY = Math.sqrt(Math.max(0.01, 1.0 - u * u)) * rad;
+      optStarPos[i * 3]     = Math.cos(theta) * rXY;
+      optStarPos[i * 3 + 1] = u * rad * 0.78;
+      optStarPos[i * 3 + 2] = -12.0 - Math.random() * 85.0;
 
-        const pillarSpecs = [
-          { x: cx - 58, topY: cy - 95, w: 46 },
-          { x: cx + 4,  topY: cy - 55, w: 38 },
-          { x: cx + 62, topY: cy - 18, w: 32 }
-        ];
-        for (const p of pillarSpecs) {
-          const pGrad = ctx.createLinearGradient(p.x, p.topY, p.x, cy + 165);
-          pGrad.addColorStop(0.0, '#fde047');
-          pGrad.addColorStop(0.18, '#ea580c');
-          pGrad.addColorStop(0.55, '#451a03');
-          pGrad.addColorStop(1.0, '#09060a');
-          ctx.fillStyle = pGrad;
-          ctx.beginPath();
-          ctx.moveTo(p.x - p.w * 0.65, cy + 165);
-          ctx.bezierCurveTo(p.x - p.w * 0.55, cy + 40, p.x - p.w * 0.4, p.topY + 25, p.x, p.topY);
-          ctx.bezierCurveTo(p.x + p.w * 0.45, p.topY + 25, p.x + p.w * 0.5, cy + 45, p.x + p.w * 0.65, cy + 165);
-          ctx.closePath();
-          ctx.fill();
-        }
-
-      } else if (spec.id === 'ring') {
-        // Lyra Ring Planetary Nebula (M57)
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(0.28);
-        ctx.scale(1.18, 0.86);
-        const ringG = ctx.createRadialGradient(0, 0, 24, 0, 0, 128);
-        ringG.addColorStop(0.0, 'rgba(56, 189, 248, 0.25)');
-        ringG.addColorStop(0.38, 'rgba(45, 212, 191, 0.72)');
-        ringG.addColorStop(0.58, 'rgba(250, 204, 21, 0.85)');
-        ringG.addColorStop(0.76, 'rgba(239, 68, 68, 0.75)');
-        ringG.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = ringG;
-        ctx.beginPath();
-        ctx.arc(0, 0, 128, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-
-        // Central White Dwarf star
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(cx, cy, 3.6, 0, Math.PI * 2);
-        ctx.fill();
-
-      } else if (spec.id === 'saturn') {
-        // Ringed Gas Giant (Saturn) & 3 Moons
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(-0.34);
-
-        // Back half of concentric icy rings
-        for (let r = 0; r < 3; r++) {
-          ctx.strokeStyle = r === 0 ? 'rgba(253, 230, 138, 0.82)' : (r === 1 ? 'rgba(217, 119, 6, 0.72)' : 'rgba(254, 243, 199, 0.52)');
-          ctx.lineWidth = r === 0 ? 15 : (r === 1 ? 12 : 8);
-          ctx.beginPath();
-          ctx.ellipse(0, 0, 125 + r * 22, 38 + r * 6.5, 0, Math.PI, Math.PI * 2);
-          ctx.stroke();
-        }
-
-        // Banded golden gas giant sphere
-        const planetG = ctx.createRadialGradient(-18, -16, 8, 0, 0, 68);
-        planetG.addColorStop(0.0, '#fef3c7');
-        planetG.addColorStop(0.55, '#eab308');
-        planetG.addColorStop(1.0, '#78350f');
-        ctx.fillStyle = planetG;
-        ctx.beginPath();
-        ctx.arc(0, 0, 66, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Front half of concentric rings crossing in front of planet
-        for (let r = 0; r < 3; r++) {
-          ctx.strokeStyle = r === 0 ? 'rgba(253, 230, 138, 0.90)' : (r === 1 ? 'rgba(217, 119, 6, 0.78)' : 'rgba(254, 243, 199, 0.58)');
-          ctx.lineWidth = r === 0 ? 15 : (r === 1 ? 12 : 8);
-          ctx.beginPath();
-          ctx.ellipse(0, 0, 125 + r * 22, 38 + r * 6.5, 0, 0, Math.PI);
-          ctx.stroke();
-        }
-        ctx.restore();
-
-        // Moons: Titan, Rhea, Enceladus
-        ctx.fillStyle = '#fbbf24';
-        ctx.beginPath(); ctx.arc(cx - 165, cy + 54, 6.5, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#e2e8f0';
-        ctx.beginPath(); ctx.arc(cx + 148, cy - 62, 4.0, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(cx + 112, cy + 32, 3.0, 0, Math.PI * 2); ctx.fill();
-
-      } else if (spec.id === 'crab') {
-        // Crab Supernova Remnant (M1): glowing blue synchrotron core + web of orange/crimson filaments
-        const coreG = ctx.createRadialGradient(cx, cy, 4, cx, cy, 135);
-        coreG.addColorStop(0.0, 'rgba(186, 230, 253, 0.85)');
-        coreG.addColorStop(0.45, 'rgba(56, 189, 248, 0.45)');
-        coreG.addColorStop(0.8, 'rgba(168, 85, 247, 0.22)');
-        coreG.addColorStop(1.0, 'rgba(0,0,0,0)');
-        ctx.fillStyle = coreG;
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, 145, 105, -0.3, 0, Math.PI * 2);
-        ctx.fill();
-
-        for (let f = 0; f < 42; f++) {
-          const ang = (f / 42) * Math.PI * 2;
-          const len = 65 + rand() * 80;
-          ctx.strokeStyle = f % 2 === 0 ? 'rgba(249, 115, 22, 0.72)' : 'rgba(239, 68, 68, 0.65)';
-          ctx.lineWidth = 1.6 + rand() * 2.2;
-          ctx.beginPath();
-          ctx.moveTo(cx + Math.cos(ang) * 14, cy + Math.sin(ang) * 14);
-          ctx.quadraticCurveTo(
-            cx + Math.cos(ang + 0.25) * (len * 0.55),
-            cy + Math.sin(ang + 0.25) * (len * 0.55),
-            cx + Math.cos(ang) * len,
-            cy + Math.sin(ang) * (len * 0.78)
-          );
-          ctx.stroke();
-        }
-
-      } else if (spec.id === 'whirlpool') {
-        // Whirlpool Interacting Galaxies (M51a & companion M51b)
-        const drawSpiral = (gx, gy, maxR) => {
-          for (let arm = 0; arm < 2; arm++) {
-            const bA = arm * Math.PI;
-            for (let k = 0; k < 140; k++) {
-              const t = k / 140;
-              const r = 8 + t * maxR;
-              const a = bA + t * 5.2;
-              const px = gx + Math.cos(a) * r;
-              const py = gy + Math.sin(a) * r;
-              ctx.fillStyle = t < 0.25 ? 'rgba(254, 240, 138, 0.35)' : (k % 5 === 0 ? 'rgba(244, 114, 182, 0.45)' : 'rgba(125, 211, 252, 0.25)');
-              ctx.beginPath();
-              ctx.arc(px, py, 6 + (1 - t) * 8, 0, Math.PI * 2);
-              ctx.fill();
-            }
-          }
-          const cg = ctx.createRadialGradient(gx, gy, 2, gx, gy, 38);
-          cg.addColorStop(0.0, '#ffffff');
-          cg.addColorStop(0.4, '#fef08a');
-          cg.addColorStop(1.0, 'rgba(0,0,0,0)');
-          ctx.fillStyle = cg;
-          ctx.beginPath(); ctx.arc(gx, gy, 38, 0, Math.PI * 2); ctx.fill();
-        };
-        drawSpiral(cx - 24, cy + 14, 118);
-        drawSpiral(cx + 105, cy - 72, 42);
-
+      const tint = Math.random();
+      if (tint < 0.34) {
+        optStarCol[i * 3] = 0.74; optStarCol[i * 3 + 1] = 0.89; optStarCol[i * 3 + 2] = 1.00;
+      } else if (tint < 0.72) {
+        optStarCol[i * 3] = 0.99; optStarCol[i * 3 + 1] = 0.98; optStarCol[i * 3 + 2] = 0.96;
+      } else if (tint < 0.90) {
+        optStarCol[i * 3] = 1.00; optStarCol[i * 3 + 1] = 0.86; optStarCol[i * 3 + 2] = 0.64;
       } else {
-        // Pleiades Seven Sisters Reflection Cluster (M45)
-        const sisters = [
-          [-55, -25, 11], [-15, -45, 9.5], [32, -28, 10.5],
-          [-28, 22, 10], [24, 18, 11.5], [72, 8, 8.5], [64, -14, 8]
-        ];
-        for (const [ox, oy, sr] of sisters) {
-          const sx = cx + ox;
-          const sy = cy + oy;
-          const halo = ctx.createRadialGradient(sx, sy, 2, sx, sy, sr * 5.5);
-          halo.addColorStop(0.0, '#ffffff');
-          halo.addColorStop(0.25, 'rgba(125, 211, 252, 0.78)');
-          halo.addColorStop(0.65, 'rgba(56, 189, 248, 0.22)');
-          halo.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-          ctx.fillStyle = halo;
-          ctx.beginPath(); ctx.arc(sx, sy, sr * 5.5, 0, Math.PI * 2); ctx.fill();
+        optStarCol[i * 3] = 1.00; optStarCol[i * 3 + 1] = 0.68; optStarCol[i * 3 + 2] = 0.78;
+      }
+      const isHeroStar = Math.random() > 0.935;
+      optStarSize[i] = isHeroStar ? (9.0 + Math.random() * 9.5) : (2.2 + Math.random() * 3.8);
+      optStarPhase[i] = Math.random() * Math.PI * 2;
+    }
+    optStarGeo.setAttribute('position', new THREE.BufferAttribute(optStarPos, 3));
+    optStarGeo.setAttribute('color', new THREE.BufferAttribute(optStarCol, 3));
+    optStarGeo.setAttribute('aSize', new THREE.BufferAttribute(optStarSize, 1));
+    optStarGeo.setAttribute('aPhase', new THREE.BufferAttribute(optStarPhase, 1));
 
-          // Long blue diffraction spikes
-          ctx.strokeStyle = 'rgba(186, 230, 253, 0.85)';
-          ctx.lineWidth = 1.6;
-          ctx.beginPath();
-          ctx.moveTo(sx - sr * 3.8, sy); ctx.lineTo(sx + sr * 3.8, sy);
-          ctx.moveTo(sx, sy - sr * 3.8); ctx.lineTo(sx, sy + sr * 3.8);
-          ctx.stroke();
+    const optStarMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: { uTime: opticsUniforms.uTime },
+      vertexShader: `
+        attribute float aSize;
+        attribute float aPhase;
+        attribute vec3 color;
+        uniform float uTime;
+        varying vec3 vColor;
+        varying float vTwinkle;
+        varying float vIsBright;
+        void main() {
+          vColor = color;
+          float tw = 0.74 + 0.26 * sin(uTime * 2.8 + aPhase);
+          vTwinkle = tw;
+          vIsBright = step(8.5, aSize);
+          vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = aSize * (28.0 / max(10.0, -mvPos.z)) * (0.86 + 0.28 * tw);
+          gl_Position = projectionMatrix * mvPos;
         }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying float vTwinkle;
+        varying float vIsBright;
+        void main() {
+          vec2 uv = gl_PointCoord - vec2(0.5);
+          float d = length(uv);
+          if (d > 0.5) discard;
+          float core = exp(-d * d * 28.0);
+          float halo = smoothstep(0.5, 0.04, d) * 0.48;
+          // 4-point telescope diffraction spikes on bright stars
+          float spikes = 0.0;
+          if (vIsBright > 0.5) {
+            float sx = exp(-abs(uv.y) * 42.0) * smoothstep(0.5, 0.0, abs(uv.x));
+            float sy = exp(-abs(uv.x) * 42.0) * smoothstep(0.5, 0.0, abs(uv.y));
+            spikes = (sx + sy) * 0.72;
+          }
+          float alpha = clamp((core + halo + spikes) * vTwinkle, 0.0, 1.0);
+          gl_FragColor = vec4(vColor * (1.0 + core * 0.65), alpha);
+        }
+      `
+    });
+    const opticsStarFieldMesh = new THREE.Points(optStarGeo, optStarMat);
+    telescopeRootGroup.add(opticsStarFieldMesh);
+
+    // 2. Helper to build a 3D Differential-Rotating Particle Spiral Galaxy + Volumetric Glowing Dust/Gas Planes
+    function create3DGalacticSpiralSystem(numStars, numArms, maxRadius, armTightness, coreColorHex, armColorHex, hAlphaHex) {
+      const galGroup = new THREE.Group();
+
+      const gGeo = new THREE.BufferGeometry();
+      const gPos = new Float32Array(numStars * 3);
+      const gCol = new Float32Array(numStars * 3);
+      const gSize = new Float32Array(numStars);
+      const gOrbit = new Float32Array(numStars * 3); // (radius, baseAngle, yOffset)
+
+      const cCore = new THREE.Color(coreColorHex);
+      const cArm = new THREE.Color(armColorHex);
+      const cHII = new THREE.Color(hAlphaHex);
+      const tmpC = new THREE.Color();
+
+      for (let i = 0; i < numStars; i++) {
+        const isBulge = i < numStars * 0.22;
+        const rFrac = isBulge ? Math.pow(Math.random(), 2.2) * 0.28 : Math.pow(Math.random(), 1.25);
+        const r = 0.08 + rFrac * maxRadius;
+        const armIdx = i % numArms;
+        const armBase = (armIdx / numArms) * Math.PI * 2;
+        const scatter = isBulge
+          ? (Math.random() - 0.5) * Math.PI * 2
+          : (Math.random() - 0.5) * (0.48 + rFrac * 0.55);
+        const angle = armBase + r * armTightness + scatter;
+        const thickness = isBulge ? (0.45 * (1.0 - rFrac * 1.8)) : (0.16 * (1.0 - rFrac * 0.65));
+        const yOff = (Math.random() - 0.5) * thickness;
+
+        gPos[i * 3]     = Math.cos(angle) * r;
+        gPos[i * 3 + 1] = yOff;
+        gPos[i * 3 + 2] = Math.sin(angle) * r;
+
+        gOrbit[i * 3]     = r;
+        gOrbit[i * 3 + 1] = angle;
+        gOrbit[i * 3 + 2] = yOff;
+
+        const isStarburstKnot = (!isBulge && Math.random() > 0.86);
+        if (isStarburstKnot) {
+          tmpC.copy(cHII);
+          gSize[i] = 4.6 + Math.random() * 4.5;
+        } else {
+          tmpC.copy(cCore).lerp(cArm, clamp(rFrac * 1.25, 0.0, 1.0));
+          gSize[i] = isBulge ? (3.5 + Math.random() * 4.0) : (1.8 + Math.random() * 3.2);
+        }
+        gCol[i * 3]     = tmpC.r;
+        gCol[i * 3 + 1] = tmpC.g;
+        gCol[i * 3 + 2] = tmpC.b;
       }
 
-      // Eyepiece optical reticle crosshairs & degree ticks
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.36)';
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 42, 0, Math.PI * 2);
-      ctx.arc(cx, cy, 115, 0, Math.PI * 2);
-      ctx.moveTo(cx - lensR, cy); ctx.lineTo(cx - 18, cy);
-      ctx.moveTo(cx + 18, cy); ctx.lineTo(cx + lensR, cy);
-      ctx.moveTo(cx, cy - lensR); ctx.lineTo(cx, cy - 18);
-      ctx.moveTo(cx, cy + 18); ctx.lineTo(cx, cy + lensR);
-      ctx.stroke();
+      gGeo.setAttribute('position', new THREE.BufferAttribute(gPos, 3));
+      gGeo.setAttribute('color', new THREE.BufferAttribute(gCol, 3));
+      gGeo.setAttribute('aSize', new THREE.BufferAttribute(gSize, 1));
+      gGeo.setAttribute('aOrbit', new THREE.BufferAttribute(gOrbit, 3));
 
-      ctx.restore(); // End circular lens clip
+      const gMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: { uTime: opticsUniforms.uTime },
+        vertexShader: `
+          attribute float aSize;
+          attribute vec3 aOrbit;
+          attribute vec3 color;
+          uniform float uTime;
+          varying vec3 vColor;
+          void main() {
+            vColor = color;
+            float r = aOrbit.x;
+            // Differential Keplerian galactic rotation: inner core orbits faster than outer spiral arms!
+            float angularVel = 0.24 / (0.45 + pow(r, 0.85));
+            float theta = aOrbit.y - uTime * angularVel;
+            vec3 animatedPos = vec3(cos(theta) * r, aOrbit.z, sin(theta) * r);
+            vec4 mvPos = modelViewMatrix * vec4(animatedPos, 1.0);
+            gl_PointSize = aSize * (13.0 / max(3.0, -mvPos.z));
+            gl_Position = projectionMatrix * mvPos;
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vColor;
+          void main() {
+            vec2 uv = gl_PointCoord - vec2(0.5);
+            float d = length(uv);
+            if (d > 0.5) discard;
+            float glow = exp(-d * d * 14.0);
+            gl_FragColor = vec4(vColor, glow * 0.86);
+          }
+        `
+      });
+      galGroup.add(new THREE.Points(gGeo, gMat));
 
-      // Brass & blackened steel telescope eyepiece bezel rim
-      ctx.strokeStyle = '#d97706';
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.arc(cx, cy, lensR + 2, 0, Math.PI * 2);
-      ctx.stroke();
+      // Translucent Gassy Galactic Disc Shader Plane (volumetric dust lanes & glowing core bulge)
+      const discGeo = new THREE.PlaneGeometry(maxRadius * 2.3, maxRadius * 2.3, 1, 1);
+      discGeo.rotateX(-Math.PI * 0.5);
+      const discMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        uniforms: {
+          uTime: opticsUniforms.uTime,
+          uCoreCol: { value: new THREE.Color(coreColorHex) },
+          uArmCol: { value: new THREE.Color(armColorHex) },
+          uHIICol: { value: new THREE.Color(hAlphaHex) },
+          uTightness: { value: armTightness },
+          uMaxR: { value: maxRadius }
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          varying vec3 vLocalPos;
+          void main() {
+            vUv = uv;
+            vLocalPos = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform float uTime;
+          uniform vec3 uCoreCol;
+          uniform vec3 uArmCol;
+          uniform vec3 uHIICol;
+          uniform float uTightness;
+          uniform float uMaxR;
+          varying vec3 vLocalPos;
+          ${OPTICS_NOISE_GLSL}
+          void main() {
+            vec2 p = vLocalPos.xz;
+            float r = length(p);
+            if (r > uMaxR * 1.1) discard;
+            float rNorm = r / uMaxR;
+            float ang = atan(p.y, p.x) + uTime * (0.22 / (0.48 + pow(r, 0.85)));
+            float spiralWave = 0.5 + 0.5 * cos(ang * 2.0 - r * uTightness);
+            float gasFbm = optFbm3(vec3(p * 1.35, uTime * 0.08));
+            float coreGlow = exp(-rNorm * rNorm * 14.0);
+            float armGas = pow(spiralWave, 2.2) * smoothstep(1.05, 0.12, rNorm) * (0.45 + 0.85 * gasFbm);
+            vec3 col = uCoreCol * coreGlow * 1.45 + mix(uArmCol, uHIICol, gasFbm) * armGas * 0.65;
+            float alpha = clamp(coreGlow * 0.75 + armGas * 0.42, 0.0, 0.88);
+            gl_FragColor = vec4(col, alpha);
+          }
+        `
+      });
+      galGroup.add(new THREE.Mesh(discGeo, discMat));
 
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 10;
-      ctx.beginPath();
-      ctx.arc(cx, cy, lensR + 9, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.restore();
+      return galGroup;
     }
 
-    function renderBinocularsBirdCanvas(speciesKey) {
-      if (!humanOpticsCtx || !humanOpticsCanvasEl) return;
-      const ctx = humanOpticsCtx;
+    // 3. Helper to build a Multi-Layer Translucent Volumetric 3D Nebula + Glowing Embedded Young Stars
+    function create3DVolumetricNebulaGroup(presetId) {
+      const nebGroup = new THREE.Group();
+
+      // 8 stacked translucent 3D volumetric gas shells at staggered Z depths and tilts for true 3D depth & glow
+      const layerCount = 8;
+      for (let l = 0; l < layerCount; l++) {
+        const zOff = (l - (layerCount - 1) * 0.5) * 0.52;
+        const planeGeo = new THREE.PlaneGeometry(8.6, 7.2, 24, 24);
+        // Gently curve each 3D gas sheet into a 3D billowing shell
+        const posAttr = planeGeo.attributes.position;
+        for (let vi = 0; vi < posAttr.count; vi++) {
+          const vx = posAttr.getX(vi);
+          const vy = posAttr.getY(vi);
+          const r2 = (vx * vx + vy * vy) * 0.04;
+          posAttr.setZ(vi, Math.sin(vx * 0.9 + l) * 0.25 - r2 * 0.4);
+        }
+        planeGeo.computeVertexNormals();
+
+        const nebMat = new THREE.ShaderMaterial({
+          transparent: true,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          blending: THREE.AdditiveBlending,
+          uniforms: {
+            uTime: opticsUniforms.uTime,
+            uLayer: { value: l / layerCount },
+            uMode: { value: presetId === 'orion' ? 0.0 : (presetId === 'pillars' ? 1.0 : 2.0) }
+          },
+          vertexShader: `
+            varying vec2 vUv;
+            varying vec3 vPos;
+            void main() {
+              vUv = uv;
+              vPos = position;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform float uTime;
+            uniform float uLayer;
+            uniform float uMode;
+            varying vec2 vUv;
+            varying vec3 vPos;
+            ${OPTICS_NOISE_GLSL}
+            void main() {
+              vec2 p = (vUv - 0.5) * 2.2;
+              float r = length(p);
+              if (r > 1.15) discard;
+
+              // Domain-warped 3D turbulent astrophysical gas
+              vec3 q = vec3(p * 1.65, uLayer * 2.8 + uTime * 0.07);
+              float n1 = optFbm3(q);
+              float n2 = optFbm3(q * 1.85 + vec3(n1 * 1.4, -uTime * 0.05, uLayer * 1.7));
+              float gas = smoothstep(0.24, 0.86, n1 * 0.55 + n2 * 0.62);
+
+              vec3 col = vec3(0.0);
+              float alpha = 0.0;
+
+              if (uMode < 0.5) {
+                // Great Orion Emission Nebula (M42): translucent H-alpha magenta/crimson cavern + O-III teal/cyan core + golden ionization rim
+                float cavern = smoothstep(0.12, 0.58, r);
+                vec3 hAlphaCol = vec3(0.96, 0.24, 0.58);
+                vec3 oIIICol   = vec3(0.18, 0.82, 0.96);
+                vec3 sulfurCol = vec3(1.00, 0.72, 0.22);
+                col = mix(oIIICol, hAlphaCol, smoothstep(0.18, 0.72, r + (n2 - 0.5) * 0.45));
+                col = mix(col, sulfurCol, pow(n2, 2.6) * 0.65);
+                floatradialFade = smoothstep(1.08, 0.22, r);
+                alpha = gas * floatradialFade * (0.16 + 0.14 * (1.0 - abs(uLayer - 0.5) * 2.0)) * (0.65 + 0.35 * cavern);
+              } else if (uMode < 1.5) {
+                // Eagle Nebula: Pillars of Creation (M16): 3 towering molecular hydrogen spires with bright photoevaporating golden rims
+                float p1 = exp(-pow((p.x + 0.42 - sin(p.y * 1.8) * 0.06) * 5.8, 2.0)) * smoothstep(0.25, -0.75, p.y);
+                float p2 = exp(-pow((p.x - 0.02 + cos(p.y * 2.1) * 0.05) * 6.8, 2.0)) * smoothstep(0.45, -0.75, p.y);
+                float p3 = exp(-pow((p.x - 0.44 - sin(p.y * 2.4) * 0.05) * 7.8, 2.0)) * smoothstep(0.65, -0.75, p.y);
+                float spires = clamp((p1 + p2 * 0.9 + p3 * 0.8) * (0.55 + 0.85 * n2), 0.0, 1.0);
+                float ambientLagoon = smoothstep(1.05, 0.15, r) * gas * 0.22;
+                vec3 bgCyan = vec3(0.14, 0.68, 0.92);
+                vec3 spireRust = vec3(0.75, 0.32, 0.12);
+                vec3 rimGold = vec3(1.0, 0.92, 0.46);
+                float ionizationRim = smoothstep(0.32, 0.75, spires) * pow(n2, 1.5);
+                col = bgCyan * ambientLagoon * 1.4 + mix(spireRust, rimGold, ionizationRim) * spires * 1.25;
+                alpha = clamp(ambientLagoon + spires * 0.32, 0.0, 0.65);
+              } else {
+                // Lyra Ring Planetary Nebula (M57): 3D bipolar ionized torus shell (blue He-II inner core -> teal O-III -> golden-crimson N-II outer filaments)
+                vec2 ep = vec2(p.x * 0.86, p.y * 1.12);
+                float er = length(ep);
+                float ringShell = exp(-pow((er - 0.52 + (n2 - 0.5) * 0.14) * 5.6, 2.0));
+                float innerVapor = smoothstep(0.55, 0.0, er) * 0.35;
+                vec3 innerBlue = vec3(0.28, 0.72, 1.0);
+                vec3 midTeal   = vec3(0.16, 0.94, 0.78);
+                vec3 outerRed  = vec3(0.98, 0.28, 0.18);
+                col = innerBlue * innerVapor + mix(midTeal, outerRed, smoothstep(0.38, 0.68, er)) * ringShell * (0.7 + 0.8 * n1);
+                alpha = clamp((ringShell * 0.34 + innerVapor * 0.16) * (0.65 + 0.6 * gas), 0.0, 0.72);
+              }
+
+              gl_FragColor = vec4(col, alpha);
+            }
+          `
+        });
+
+        const layerMesh = new THREE.Mesh(planeGeo, nebMat);
+        layerMesh.position.z = zOff;
+        layerMesh.rotation.z = l * 0.38;
+        nebGroup.add(layerMesh);
+      }
+
+      // Embedded glowing star nursery cluster inside the 3D nebula
+      const nStars = presetId === 'ring' ? 1 : 28;
+      const sGeo = new THREE.BufferGeometry();
+      const sPos = new Float32Array(nStars * 3);
+      const sCol = new Float32Array(nStars * 3);
+      const sSize = new Float32Array(nStars);
+      const sPhase = new Float32Array(nStars);
+      for (let i = 0; i < nStars; i++) {
+        if (presetId === 'ring') {
+          // Central Hot White Dwarf Star of M57
+          sPos[0] = 0; sPos[1] = 0; sPos[2] = 0;
+          sCol[0] = 0.85; sCol[1] = 0.96; sCol[2] = 1.0;
+          sSize[0] = 14.0;
+          sPhase[0] = 0.0;
+        } else {
+          const isTrapezium = i < 4 && presetId === 'orion';
+          sPos[i * 3]     = isTrapezium ? ((i % 2 - 0.5) * 0.42) : ((Math.random() - 0.5) * 4.5);
+          sPos[i * 3 + 1] = isTrapezium ? ((Math.floor(i / 2) - 0.5) * 0.42) : ((Math.random() - 0.5) * 3.8);
+          sPos[i * 3 + 2] = (Math.random() - 0.5) * 1.8;
+          sCol[i * 3] = 0.92; sCol[i * 3 + 1] = 0.96; sCol[i * 3 + 2] = 1.0;
+          sSize[i] = isTrapezium ? 13.5 : (5.5 + Math.random() * 6.5);
+          sPhase[i] = Math.random() * Math.PI * 2;
+        }
+      }
+      sGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+      sGeo.setAttribute('color', new THREE.BufferAttribute(sCol, 3));
+      sGeo.setAttribute('aSize', new THREE.BufferAttribute(sSize, 1));
+      sGeo.setAttribute('aPhase', new THREE.BufferAttribute(sPhase, 1));
+      nebGroup.add(new THREE.Points(sGeo, optStarMat));
+
+      return nebGroup;
+    }
+
+    // 4. Helper to build a 3D Swirling Atmospheric Gas Giant Planet (Saturn or Jupiter) with Fresnel Limb Glow, Ring System & Orbiting 3D Moons
+    function create3DSwirlingPlanetGroup(planetType) {
+      const pGroup = new THREE.Group();
+      const isSaturn = (planetType === 'saturn');
+      const radius = isSaturn ? 1.85 : 2.35;
+
+      // 3D Planet Sphere with Swirling Atmospheric Zonal Jet Streams, Vortices & Rayleigh Limb Scattering
+      const sphereGeo = new THREE.SphereGeometry(radius, 64, 48);
+      const planetMat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: opticsUniforms.uTime,
+          uIsSaturn: { value: isSaturn ? 1.0 : 0.0 },
+          uLightDir: { value: new THREE.Vector3(0.78, 0.32, 0.54).normalize() }
+        },
+        vertexShader: `
+          varying vec3 vNormalWorld;
+          varying vec3 vNormalLocal;
+          varying vec3 vPosLocal;
+          varying vec3 vViewDir;
+          void main() {
+            vNormalLocal = normalize(normal);
+            vPosLocal = normalize(position);
+            vec4 worldPos = modelMatrix * vec4(position, 1.0);
+            vNormalWorld = normalize(mat3(modelMatrix) * normal);
+            vViewDir = normalize(cameraPosition - worldPos.xyz);
+            gl_Position = projectionMatrix * viewMatrix * worldPos;
+          }
+        `,
+        fragmentShader: `
+          uniform float uTime;
+          uniform float uIsSaturn;
+          uniform vec3 uLightDir;
+          varying vec3 vNormalWorld;
+          varying vec3 vNormalLocal;
+          varying vec3 vPosLocal;
+          varying vec3 vViewDir;
+          ${OPTICS_NOISE_GLSL}
+          void main() {
+            vec3 nW = normalize(vNormalWorld);
+            vec3 vD = normalize(vViewDir);
+            float lat = vPosLocal.y; // -1 (south pole) .. +1 (north pole)
+            float lon = atan(vPosLocal.x, vPosLocal.z);
+
+            // Counter-rotating zonal jet streams at different latitudes!
+            float jetSpeed = sin(lat * 18.0) * 0.24 + cos(lat * 9.0) * 0.14;
+            float rotLon = lon + uTime * (0.16 + jetSpeed * 0.45);
+            vec3 sampleP = vec3(cos(rotLon) * cos(asin(lat)), lat * 3.2, sin(rotLon) * cos(asin(lat)));
+
+            float turb1 = optFbm3(sampleP * 2.8 + vec3(0.0, uTime * 0.06, 0.0));
+            float turb2 = optFbm3(sampleP * 5.6 + vec3(turb1 * 1.8, -uTime * 0.08, turb1));
+            float bandCoord = lat * (uIsSaturn > 0.5 ? 14.0 : 19.0) + (turb1 - 0.5) * 1.35 + (turb2 - 0.5) * 0.65;
+            float bandWave = 0.5 + 0.5 * sin(bandCoord * 3.14159);
+
+            vec3 col;
+            if (uIsSaturn > 0.5) {
+              // Saturn: creamy butter-gold equatorial zone, warm amber-ochre belts, and turquoise-slate polar hexagon storm!
+              vec3 zoneCream = vec3(0.98, 0.91, 0.72);
+              vec3 beltAmber = vec3(0.78, 0.56, 0.32);
+              vec3 deepBand  = vec3(0.54, 0.36, 0.20);
+              col = mix(beltAmber, zoneCream, smoothstep(0.18, 0.82, bandWave));
+              col = mix(col, deepBand, smoothstep(0.65, 0.95, turb2) * 0.55);
+              float polarVortex = smoothstep(0.72, 0.96, abs(lat));
+              col = mix(col, vec3(0.28, 0.56, 0.68), polarVortex * 0.78);
+            } else {
+              // Jupiter: rich terracotta belts, ivory ammonia zones, blue-grey festoons, and the swirling Great Red Spot anticyclone!
+              vec3 zoneIvory = vec3(0.96, 0.92, 0.84);
+              vec3 beltRust  = vec3(0.76, 0.34, 0.16);
+              vec3 beltOchre = vec3(0.88, 0.64, 0.36);
+              col = mix(beltRust, zoneIvory, smoothstep(0.15, 0.85, bandWave));
+              col = mix(col, beltOchre, turb2 * 0.55);
+
+              // Great Red Spot Swirling Anticyclone at southern tropical latitude (lat ~ -0.28)
+              float grsLon = mod(lon + uTime * 0.22 + 3.14159, 6.28318) - 3.14159;
+              vec2 grsD = vec2(grsLon * 2.1, (lat + 0.28) * 5.2);
+              float grsR = length(grsD);
+              if (grsR < 1.0) {
+                float swirlAng = atan(grsD.y, grsD.x) + (1.0 - grsR) * 4.5 - uTime * 0.9;
+                float swirlBands = 0.5 + 0.5 * sin(swirlAng * 3.0 + grsR * 10.0);
+                vec3 grsCore = mix(vec3(0.88, 0.18, 0.08), vec3(0.98, 0.52, 0.24), swirlBands);
+                col = mix(col, grsCore, smoothstep(1.0, 0.18, grsR));
+              }
+            }
+
+            // 3D Spherical Lighting + Terminator Softness + Atmospheric Fresnel Limb Glow!
+            float ndl = clamp(dot(nW, normalize(uLightDir)) * 0.88 + 0.15, 0.03, 1.0);
+            float ndv = clamp(dot(nW, vD), 0.0, 1.0);
+            float fresnel = pow(1.0 - ndv, 3.2);
+            vec3 atmoColor = uIsSaturn > 0.5 ? vec3(0.55, 0.82, 1.0) : vec3(0.98, 0.72, 0.42);
+
+            vec3 finalRGB = col * ndl + atmoColor * fresnel * (0.45 + 0.55 * ndl);
+            gl_FragColor = vec4(finalRGB, 1.0);
+          }
+        `
+      });
+      const planetMesh = new THREE.Mesh(sphereGeo, planetMat);
+      pGroup.add(planetMesh);
+
+      // Outer Atmospheric Scattering Halo Sphere
+      const atmoGeo = new THREE.SphereGeometry(radius * 1.075, 48, 36);
+      const atmoMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        side: THREE.BackSide,
+        blending: THREE.AdditiveBlending,
+        uniforms: {
+          uAtmoCol: { value: new THREE.Color(isSaturn ? 0x7dd3fc : 0xfbbf24) }
+        },
+        vertexShader: `
+          varying vec3 vNormal;
+          varying vec3 vViewDir;
+          void main() {
+            vec4 worldPos = modelMatrix * vec4(position, 1.0);
+            vNormal = normalize(mat3(modelMatrix) * normal);
+            vViewDir = normalize(cameraPosition - worldPos.xyz);
+            gl_Position = projectionMatrix * viewMatrix * worldPos;
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 uAtmoCol;
+          varying vec3 vNormal;
+          varying vec3 vViewDir;
+          void main() {
+            float ndv = clamp(dot(-normalize(vNormal), normalize(vViewDir)), 0.0, 1.0);
+            float rim = pow(ndv, 3.4);
+            gl_FragColor = vec4(uAtmoCol, rim * 0.55);
+          }
+        `
+      });
+      pGroup.add(new THREE.Mesh(atmoGeo, atmoMat));
+
+      // 3D Concentric Ring System for Saturn (with Cassini Division, Encke Gap & Planet Umbra Shadow!)
+      if (isSaturn) {
+        const ringGeo = new THREE.RingGeometry(radius * 1.28, radius * 2.55, 96, 4);
+        ringGeo.rotateX(Math.PI * 0.5);
+        const ringMat = new THREE.ShaderMaterial({
+          transparent: true,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          uniforms: {
+            uTime: opticsUniforms.uTime,
+            uInnerR: { value: radius * 1.28 },
+            uOuterR: { value: radius * 2.55 }
+          },
+          vertexShader: `
+            varying vec3 vLocalPos;
+            void main() {
+              vLocalPos = position;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform float uTime;
+            uniform float uInnerR;
+            uniform float uOuterR;
+            varying vec3 vLocalPos;
+            void main() {
+              float r = length(vLocalPos.xz);
+              float t = clamp((r - uInnerR) / (uOuterR - uInnerR), 0.0, 1.0);
+              // Fine concentric icy ringlets
+              float ringlets = 0.72 + 0.28 * sin(t * 145.0) * cos(t * 53.0);
+              // Cassini Division gap around t = 0.64 & Encke gap around t = 0.88
+              float cassiniGap = smoothstep(0.015, 0.055, abs(t - 0.64));
+              float enckeGap = smoothstep(0.005, 0.022, abs(t - 0.88));
+              float cRingFade = smoothstep(0.0, 0.18, t);
+              float outerFade = smoothstep(1.0, 0.92, t);
+              // Planet shadow cast onto rear ring quadrant
+              float shadowMask = (vLocalPos.z < -0.2 && abs(vLocalPos.x) < uInnerR * 0.72) ? 0.22 : 1.0;
+
+              vec3 colA = vec3(0.96, 0.88, 0.68);
+              vec3 colB = vec3(0.76, 0.60, 0.42);
+              vec3 col = mix(colB, colA, ringlets) * shadowMask;
+              float alpha = ringlets * cassiniGap * (0.4 + 0.6 * enckeGap) * cRingFade * outerFade * 0.86;
+              gl_FragColor = vec4(col, alpha);
+            }
+          `
+        });
+        pGroup.add(new THREE.Mesh(ringGeo, ringMat));
+      }
+
+      // 3 Orbiting 3D Moons (Titan/Rhea/Enceladus for Saturn; Io/Europa/Ganymede for Jupiter)
+      const moons = [];
+      const moonSpecs = isSaturn
+        ? [
+            { r: 0.16, dist: 5.2, speed: 0.35, phase: 0.4, col: 0xf59e0b }, // Titan (golden haze)
+            { r: 0.10, dist: 3.9, speed: 0.55, phase: 2.3, col: 0xe2e8f0 }, // Rhea
+            { r: 0.08, dist: 3.2, speed: 0.82, phase: 4.1, col: 0xbae6fd }  // Enceladus
+          ]
+        : [
+            { r: 0.14, dist: 3.6, speed: 0.75, phase: 0.8, col: 0xfacc15 }, // Io (volcanic sulfur)
+            { r: 0.13, dist: 4.5, speed: 0.48, phase: 2.7, col: 0xe0f2fe }, // Europa (icy ocean)
+            { r: 0.18, dist: 5.6, speed: 0.30, phase: 4.5, col: 0xd6d3d1 }  // Ganymede
+          ];
+      for (const ms of moonSpecs) {
+        const mMesh = new THREE.Mesh(
+          new THREE.SphereGeometry(ms.r, 16, 12),
+          new THREE.MeshStandardMaterial({ color: ms.col, roughness: 0.55 })
+        );
+        pGroup.add(mMesh);
+        moons.push({ mesh: mMesh, ...ms });
+      }
+
+      pGroup.rotation.z = isSaturn ? -0.38 : -0.12;
+      pGroup.rotation.x = isSaturn ? 0.36 : 0.18;
+      pGroup.userData.moons = moons;
+      pGroup.userData.planetMesh = planetMesh;
+      return pGroup;
+    }
+
+    // 5. Relativistic Black Hole Gravitational Lensing & Einstein Ring 3D Shader System
+    function create3DGravitationalLensingGroup() {
+      const lensGroup = new THREE.Group();
+      const planeGeo = new THREE.PlaneGeometry(9.6, 7.6, 1, 1);
+      const lensMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: { uTime: opticsUniforms.uTime },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform float uTime;
+          varying vec2 vUv;
+          ${OPTICS_NOISE_GLSL}
+          void main() {
+            vec2 p = (vUv - 0.5) * vec2(2.4, 1.85);
+            float r = length(p);
+            float rS = 0.24; // Schwarzschild event horizon shadow radius
+
+            // Gravitational deflection angle: alpha ~ r_E^2 / r (Einstein Ring at r = 0.56)
+            float rE = 0.56;
+            vec2 beta = p * (1.0 - (rE * rE) / max(0.06, r * r));
+            float lensedDist = length(beta - vec2(0.04 * cos(uTime * 0.35), 0.03 * sin(uTime * 0.28)));
+            float einsteinRing = exp(-lensedDist * lensedDist * 48.0) * smoothstep(rS * 0.9, rS * 1.35, r);
+
+            // Relativistic Accretion Disk (tilted view + Doppler beaming on approaching left side!)
+            vec2 diskP = vec2(p.x, p.y * 3.4);
+            float diskR = length(diskP);
+            float diskAng = atan(diskP.y, diskP.x) - uTime * (1.4 / max(0.25, diskR));
+            float diskSwirl = optFbm3(vec3(cos(diskAng) * diskR * 3.5, sin(diskAng) * diskR * 3.5, uTime * 0.3));
+            float diskMask = smoothstep(rS * 1.15, rS * 1.6, diskR) * smoothstep(1.25, 0.42, diskR);
+            float dopplerBoost = 1.0 + 0.55 * clamp(-p.x / max(0.2, diskR), -0.8, 1.0);
+
+            // Photon sphere razor-thin bright ring right at r = rS * 1.08
+            float photonRing = exp(-pow((r - rS * 1.08) * 32.0, 2.0));
+
+            vec3 ringCol = mix(vec3(0.38, 0.78, 1.0), vec3(0.88, 0.96, 1.0), einsteinRing);
+            vec3 diskCol = mix(vec3(0.95, 0.32, 0.08), vec3(1.0, 0.92, 0.55), diskSwirl * dopplerBoost * 0.75);
+
+            vec3 col = ringCol * einsteinRing * 1.35 + diskCol * diskMask * dopplerBoost * (0.65 + 0.7 * diskSwirl) + vec3(1.0, 0.95, 0.8) * photonRing * 1.4;
+            // Pitch-black Event Horizon shadow at the center (except foreground tilted accretion arc crossing in front)
+            float frontArc = (p.y < 0.0) ? diskMask : 0.0;
+            float eventHorizonMask = smoothstep(rS * 0.96, rS * 1.06, r);
+            col *= max(eventHorizonMask, frontArc);
+
+            float alpha = clamp((einsteinRing + diskMask * 0.85 + photonRing) * smoothstep(1.35, 0.65, r), 0.0, 0.95);
+            gl_FragColor = vec4(col, alpha);
+          }
+        `
+      });
+      lensGroup.add(new THREE.Mesh(planeGeo, lensMat));
+      return lensGroup;
+    }
+
+    // Build all 8 3D Telescope Astrophysical Targets
+    const telescopeTargets3D = {};
+
+    // (1) Andromeda M31 + Companion M110
+    const andromedaGroup = new THREE.Group();
+    const m31Main = create3DGalacticSpiralSystem(2400, 2, 4.4, 2.15, 0xfff3c4, 0x7dd3fc, 0xf472b6);
+    m31Main.rotation.x = 0.98;
+    m31Main.rotation.z = -0.42;
+    andromedaGroup.add(m31Main);
+    const m110Dwarf = create3DGalacticSpiralSystem(380, 2, 0.95, 1.5, 0xfef08a, 0xbae6fd, 0xc084fc);
+    m110Dwarf.position.set(-2.6, 1.65, -0.8);
+    m110Dwarf.rotation.x = 0.65;
+    andromedaGroup.add(m110Dwarf);
+    telescopeTargets3D.andromeda = andromedaGroup;
+    telescopeRootGroup.add(andromedaGroup);
+
+    // (2) Great Orion Nebula M42
+    telescopeTargets3D.orion = create3DVolumetricNebulaGroup('orion');
+    telescopeRootGroup.add(telescopeTargets3D.orion);
+
+    // (3) Saturn Ringed Gas Giant & Moons
+    telescopeTargets3D.saturn = create3DSwirlingPlanetGroup('saturn');
+    telescopeRootGroup.add(telescopeTargets3D.saturn);
+
+    // (4) Eagle Nebula: Pillars of Creation M16
+    telescopeTargets3D.pillars = create3DVolumetricNebulaGroup('pillars');
+    telescopeRootGroup.add(telescopeTargets3D.pillars);
+
+    // (5) Jupiter Super-Storm Gas Giant & Great Red Vortex
+    telescopeTargets3D.jupiter = create3DSwirlingPlanetGroup('jupiter');
+    telescopeRootGroup.add(telescopeTargets3D.jupiter);
+
+    // (6) Lyra Ring Planetary Nebula M57
+    telescopeTargets3D.ring = create3DVolumetricNebulaGroup('ring');
+    telescopeRootGroup.add(telescopeTargets3D.ring);
+
+    // (7) Einstein Ring & Relativistic Black Hole Lensing
+    telescopeTargets3D.lensing = create3DGravitationalLensingGroup();
+    telescopeRootGroup.add(telescopeTargets3D.lensing);
+
+    // (8) Whirlpool Interacting Galaxies M51a & M51b
+    const whirlpoolGroup = new THREE.Group();
+    const m51a = create3DGalacticSpiralSystem(2100, 2, 3.4, 2.75, 0xfef08a, 0x38bdf8, 0xf43f5e);
+    m51a.position.set(-0.65, -0.25, 0);
+    m51a.rotation.x = 0.28;
+    whirlpoolGroup.add(m51a);
+    const m51b = create3DGalacticSpiralSystem(520, 2, 1.25, 1.8, 0xfde047, 0x93c5fd, 0xfb7185);
+    m51b.position.set(2.45, 1.55, -0.4);
+    m51b.rotation.x = 0.45;
+    whirlpoolGroup.add(m51b);
+    telescopeTargets3D.whirlpool = whirlpoolGroup;
+    telescopeRootGroup.add(whirlpoolGroup);
+
+    // Lighting for 3D Planets, Moons & 3D Binocular Bird Dioramas
+    const opticsAmbientLight = new THREE.AmbientLight(0xdbeafe, 0.72);
+    opticsScene.add(opticsAmbientLight);
+    const opticsKeyLight = new THREE.DirectionalLight(0xfffbeb, 2.25);
+    opticsKeyLight.position.set(8, 7, 10);
+    opticsScene.add(opticsKeyLight);
+    const opticsRimLight = new THREE.DirectionalLight(0x38bdf8, 1.05);
+    opticsRimLight.position.set(-8, -4, -6);
+    opticsScene.add(opticsRimLight);
+
+    // 6. 3D Binoculars Birdwatching Diorama Stage (Real 3D Articulated Bird Models with Flapping Wings, Head Turns & Habitat Props!)
+    const binocularsRootGroup = new THREE.Group();
+    binocularsRootGroup.visible = false;
+    opticsScene.add(binocularsRootGroup);
+
+    const birdDioramas3D = {};
+    {
+      // (A) 3D Scarlet Macaw Diorama
+      const macawStage = new THREE.Group();
+      const macawPivot = new THREE.Group();
+      macawPivot.scale.setScalar(2.65);
+      macawPivot.rotation.y = 0.58;
+      macawStage.add(macawPivot);
+
+      const mBodyMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.48 });
+      const mWingMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.50 });
+      const mTipMat  = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.50 });
+      const mBeakMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.35 });
+
+      const mBody = new THREE.Mesh(createMacawBodyGeometry(), mBodyMat);
+      macawPivot.add(mBody);
+      const mHead = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), mBodyMat);
+      mHead.position.set(0, 0.08, 0.36);
+      macawPivot.add(mHead);
+      const mBeak = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.22, 8), mBeakMat);
+      mBeak.rotation.x = Math.PI * 0.62;
+      mBeak.position.set(0, 0.04, 0.52);
+      macawPivot.add(mBeak);
+
+      const mWingL = new THREE.Mesh(createBirdWingGeometry(0.78, 0.32, 1), mWingMat);
+      const mWingR = new THREE.Mesh(createBirdWingGeometry(0.78, 0.32, -1), mWingMat);
+      const mTipL = new THREE.Mesh(createBirdWingGeometry(0.42, 0.24, 1), mTipMat);
+      mTipL.position.x = 0.42;
+      mWingL.add(mTipL);
+      const mTipR = new THREE.Mesh(createBirdWingGeometry(0.42, 0.24, -1), mTipMat);
+      mTipR.position.x = -0.42;
+      mWingR.add(mTipR);
+      macawPivot.add(mWingL, mWingR);
+
+      // 3D Tropical Jungle Branch & Palm Fronds
+      const branchMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.14, 0.18, 6.5, 10),
+        new THREE.MeshStandardMaterial({ color: 0x5c3a1d, roughness: 0.85 })
+      );
+      branchMesh.rotation.z = Math.PI * 0.47;
+      branchMesh.position.set(0, -1.35, -0.3);
+      macawStage.add(branchMesh);
+
+      macawStage.userData = { pivot: macawPivot, wingL: mWingL, wingR: mWingR, head: mHead };
+      birdDioramas3D.macaw = macawStage;
+      binocularsRootGroup.add(macawStage);
+
+      // (B) 3D Coral Flamingo Diorama
+      const flamStage = new THREE.Group();
+      const flamPivot = new THREE.Group();
+      flamPivot.scale.setScalar(1.95);
+      flamPivot.position.y = -1.65;
+      flamPivot.rotation.y = 0.65;
+      flamStage.add(flamPivot);
+      const fMesh = new THREE.Mesh(
+        createFlamingoGeometry(),
+        new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.52 })
+      );
+      flamPivot.add(fMesh);
+      const waterDisc = new THREE.Mesh(
+        new THREE.CylinderGeometry(4.2, 4.2, 0.12, 32),
+        new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.18, metalness: 0.25 })
+      );
+      waterDisc.position.y = -1.55;
+      flamStage.add(waterDisc);
+      flamStage.userData = { pivot: flamPivot, waterDisc };
+      birdDioramas3D.flamingo = flamStage;
+      binocularsRootGroup.add(flamStage);
+
+      // (C) 3D Desert Red-Tailed Hawk Diorama
+      const hawkStage = new THREE.Group();
+      const hawkPivot = new THREE.Group();
+      hawkPivot.scale.setScalar(2.35);
+      hawkPivot.rotation.set(0.22, 0.48, -0.18);
+      hawkStage.add(hawkPivot);
+      const hMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.58 });
+      const hWingMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.62 });
+      const hBody = new THREE.Mesh(createHawkBodyGeometry(), hMat);
+      const hWingL = new THREE.Mesh(createBirdWingGeometry(1.15, 0.38, 1), hWingMat);
+      const hWingR = new THREE.Mesh(createBirdWingGeometry(1.15, 0.38, -1), hWingMat);
+      hawkPivot.add(hBody, hWingL, hWingR);
+      hawkStage.userData = { pivot: hawkPivot, wingL: hWingL, wingR: hWingR };
+      birdDioramas3D.hawk = hawkStage;
+      binocularsRootGroup.add(hawkStage);
+
+      // (D) 3D Horned Night Owl Perched on a 3D Saguaro Cactus Crown
+      const owlStage = new THREE.Group();
+      const owlPivot = new THREE.Group();
+      owlPivot.scale.setScalar(2.65);
+      owlPivot.position.y = 0.25;
+      owlPivot.rotation.y = 0.25;
+      owlStage.add(owlPivot);
+
+      const oMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.68 });
+      const oBody = new THREE.Mesh(createOwlBodyGeometry(), oMat);
+      const oWingL = new THREE.Mesh(createBirdWingGeometry(0.65, 0.30, 1), oMat);
+      const oWingR = new THREE.Mesh(createBirdWingGeometry(0.65, 0.30, -1), oMat);
+      oWingL.rotation.z = -0.82;
+      oWingR.rotation.z = 0.82;
+      const oEyes = new THREE.Mesh(
+        createOwlGlowingEyesGeometry(),
+        new THREE.MeshBasicMaterial({ color: 0xef4444 })
+      );
+      owlPivot.add(oBody, oWingL, oWingR, oEyes);
+
+      const cactusCrown = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.95, 1.05, 3.2, 14),
+        new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.78 })
+      );
+      cactusCrown.position.y = -1.95;
+      owlStage.add(cactusCrown);
+      owlStage.userData = { pivot: owlPivot, wingL: oWingL, wingR: oWingR, eyes: oEyes };
+      birdDioramas3D.owl = owlStage;
+      binocularsRootGroup.add(owlStage);
+    }
+
+    function renderLive3DOpticsFrame(dtOptics) {
+      if (!humanOpticsCtx || !humanOpticsCanvasEl || !opticsImgData) return;
+      opticsElapsedSec += dtOptics;
+      opticsUniforms.uTime.value = opticsElapsedSec;
+
       const w = humanOpticsCanvasEl.width;
       const h = humanOpticsCanvasEl.height;
       const cx = w * 0.5;
       const cy = h * 0.5;
-      const rLens = h * 0.43;
+      const ctx = humanOpticsCtx;
 
-      ctx.save();
-      ctx.fillStyle = '#050705';
-      ctx.fillRect(0, 0, w, h);
+      if (activeOpticsMode === 'telescope') {
+        telescopeRootGroup.visible = true;
+        binocularsRootGroup.visible = false;
+        opticsScene.background.setHex(0x010207);
 
-      // Dual-lens overlapping binocular figure-8 aperture mask
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx - 108, cy, rLens, 0, Math.PI * 2);
-      ctx.arc(cx + 108, cy, rLens, 0, Math.PI * 2);
-      ctx.clip();
+        const targetIdx = voxelHuman.telescopeSpaceTargetIdx || 0;
+        const spec = TELESCOPE_SPACE_CATALOG[targetIdx % TELESCOPE_SPACE_CATALOG.length];
 
-      if (speciesKey === 'macaw') {
-        // Scarlet Oasis Macaw perched/soaring against lush emerald jungle palm fronds
-        const skyG = ctx.createLinearGradient(0, 0, 0, h);
-        skyG.addColorStop(0.0, '#0284c7');
-        skyG.addColorStop(0.6, '#38bdf8');
-        skyG.addColorStop(1.0, '#065f46');
-        ctx.fillStyle = skyG;
-        ctx.fillRect(0, 0, w, h);
-
-        // Soft out-of-focus jungle palm foliage bokeh
-        ctx.fillStyle = 'rgba(4, 120, 87, 0.55)';
-        for (let f = 0; f < 8; f++) {
-          ctx.beginPath();
-          ctx.ellipse(90 + f * 75, h - 55 + (f % 2) * 30, 85, 38, (f - 3) * 0.25, 0, Math.PI * 2);
-          ctx.fill();
+        for (const key of Object.keys(telescopeTargets3D)) {
+          telescopeTargets3D[key].visible = (key === spec.id);
         }
 
-        // Branch perch
-        ctx.strokeStyle = '#5c3a1d';
-        ctx.lineWidth = 18;
-        ctx.beginPath();
-        ctx.moveTo(80, cy + 95);
-        ctx.quadraticCurveTo(cx, cy + 72, w - 70, cy + 115);
-        ctx.stroke();
+        // Subtle 3D telescope sidereal tracking & atmospheric seeing micro-drift (gives true 3D depth parallax against the background starfield!)
+        opticsCamera.position.x = Math.sin(opticsElapsedSec * 0.42) * 0.28 + Math.cos(opticsElapsedSec * 1.1) * 0.05;
+        opticsCamera.position.y = Math.cos(opticsElapsedSec * 0.35) * 0.22 + Math.sin(opticsElapsedSec * 0.9) * 0.05;
+        opticsCamera.position.z = 11.2;
+        opticsCamera.lookAt(0, 0, 0);
 
-        // Scarlet Macaw body, yellow/blue wings, curved beak & long tail feathers
-        ctx.fillStyle = '#dc2626';
-        ctx.beginPath();
-        ctx.moveTo(cx - 15, cy + 75);
-        ctx.lineTo(cx - 55, cy + 205);
-        ctx.lineTo(cx + 8, cy + 205);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.ellipse(cx, cy + 12, 52, 74, -0.15, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Wing bands: golden yellow -> royal blue
-        ctx.fillStyle = '#facc15';
-        ctx.beginPath();
-        ctx.ellipse(cx + 18, cy + 8, 34, 48, 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#0284c7';
-        ctx.beginPath();
-        ctx.ellipse(cx + 28, cy + 28, 28, 44, 0.28, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Head, white facial patch, eye & curved hooked beak
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.arc(cx - 14, cy - 68, 34, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.arc(cx - 26, cy - 72, 16, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#111827';
-        ctx.beginPath();
-        ctx.arc(cx - 28, cy - 73, 5, 0, Math.PI * 2);
-        ctx.fill();
-        // Upper & lower beak
-        ctx.fillStyle = '#fef3c7';
-        ctx.beginPath();
-        ctx.moveTo(cx - 42, cy - 82);
-        ctx.quadraticCurveTo(cx - 76, cy - 78, cx - 64, cy - 52);
-        ctx.lineTo(cx - 38, cy - 64);
-        ctx.closePath();
-        ctx.fill();
-
-      } else if (speciesKey === 'flamingo') {
-        // Coral Flamingo wading in turquoise oasis lagoon
-        const bg = ctx.createLinearGradient(0, 0, 0, h);
-        bg.addColorStop(0.0, '#7dd3fc');
-        bg.addColorStop(0.55, '#fef3c7');
-        bg.addColorStop(0.56, '#0284c7');
-        bg.addColorStop(1.0, '#0369a1');
-        ctx.fillStyle = bg;
-        ctx.fillRect(0, 0, w, h);
-
-        // Water ripples
-        ctx.strokeStyle = 'rgba(224, 242, 254, 0.55)';
-        ctx.lineWidth = 3;
-        for (let r = 0; r < 5; r++) {
-          ctx.beginPath();
-          ctx.ellipse(cx, cy + 125 + r * 14, 70 + r * 24, 7, 0, 0, Math.PI * 2);
-          ctx.stroke();
+        const activeObj = telescopeTargets3D[spec.id];
+        if (activeObj) {
+          if (spec.id === 'saturn' || spec.id === 'jupiter') {
+            // Slowly tilt & wobble planet in 3D while its moons orbit in 3D space!
+            activeObj.rotation.y = Math.sin(opticsElapsedSec * 0.25) * 0.16;
+            const moons = activeObj.userData.moons || [];
+            for (const m of moons) {
+              const ang = m.phase + opticsElapsedSec * m.speed;
+              m.mesh.position.set(Math.cos(ang) * m.dist, Math.sin(ang * 0.7) * 0.22, Math.sin(ang) * m.dist);
+            }
+          } else if (spec.id === 'orion' || spec.id === 'pillars' || spec.id === 'ring') {
+            // Subtle 3D parallax rotation of the multi-layer volumetric nebula shells
+            activeObj.rotation.y = Math.sin(opticsElapsedSec * 0.22) * 0.14;
+            activeObj.rotation.x = Math.cos(opticsElapsedSec * 0.18) * 0.09;
+          } else if (spec.id === 'whirlpool') {
+            activeObj.rotation.z = opticsElapsedSec * 0.04;
+          }
         }
-
-        // Long slender legs
-        ctx.strokeStyle = '#f43f5e';
-        ctx.lineWidth = 6;
-        ctx.beginPath();
-        ctx.moveTo(cx - 8, cy + 32); ctx.lineTo(cx - 8, cy + 145);
-        ctx.moveTo(cx + 12, cy + 32); ctx.lineTo(cx + 28, cy + 92); ctx.lineTo(cx + 4, cy + 110);
-        ctx.stroke();
-
-        // Flamingo plumage body & S-curved neck
-        ctx.fillStyle = '#f472b6';
-        ctx.beginPath();
-        ctx.ellipse(cx + 10, cy + 16, 62, 36, -0.12, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fb7185';
-        ctx.beginPath();
-        ctx.ellipse(cx + 18, cy + 12, 44, 22, -0.2, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = '#f472b6';
-        ctx.lineWidth = 17;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(cx - 38, cy + 10);
-        ctx.bezierCurveTo(cx - 72, cy - 35, cx - 22, cy - 75, cx - 44, cy - 112);
-        ctx.stroke();
-
-        // Head & black-tipped curved bill
-        ctx.fillStyle = '#f472b6';
-        ctx.beginPath();
-        ctx.arc(cx - 48, cy - 114, 18, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#111827';
-        ctx.beginPath();
-        ctx.moveTo(cx - 64, cy - 114);
-        ctx.quadraticCurveTo(cx - 88, cy - 106, cx - 80, cy - 86);
-        ctx.lineTo(cx - 60, cy - 102);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = '#fde047';
-        ctx.beginPath();
-        ctx.arc(cx - 52, cy - 116, 4, 0, Math.PI * 2);
-        ctx.fill();
-
-      } else if (speciesKey === 'owl') {
-        // Horned Night Owl perched on a giant Saguaro Cactus crown with glowing red/amber eyes
-        const nightG = ctx.createLinearGradient(0, 0, 0, h);
-        nightG.addColorStop(0.0, '#090d1e');
-        nightG.addColorStop(1.0, '#1e1b4b');
-        ctx.fillStyle = nightG;
-        ctx.fillRect(0, 0, w, h);
-
-        // Full moon halo behind the owl
-        const moonG = ctx.createRadialGradient(cx + 85, cy - 85, 10, cx + 85, cy - 85, 78);
-        moonG.addColorStop(0.0, '#fef9c3');
-        moonG.addColorStop(0.55, 'rgba(254, 240, 138, 0.35)');
-        moonG.addColorStop(1.0, 'rgba(0,0,0,0)');
-        ctx.fillStyle = moonG;
-        ctx.beginPath(); ctx.arc(cx + 85, cy - 85, 78, 0, Math.PI * 2); ctx.fill();
-
-        // Saguaro cactus crown ribbed top
-        ctx.fillStyle = '#15803d';
-        ctx.beginPath();
-        ctx.roundRect(cx - 68, cy + 68, 136, 160, 48);
-        ctx.fill();
-
-        // Owl body & mottled feathers
-        ctx.fillStyle = '#78350f';
-        ctx.beginPath();
-        ctx.ellipse(cx, cy + 12, 58, 74, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#d6d3d1';
-        ctx.beginPath();
-        ctx.ellipse(cx, cy + 22, 38, 52, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Owl head & ear tufts
-        ctx.fillStyle = '#78350f';
-        ctx.beginPath();
-        ctx.arc(cx, cy - 58, 46, 0, Math.PI * 2);
-        ctx.moveTo(cx - 42, cy - 82); ctx.lineTo(cx - 56, cy - 118); ctx.lineTo(cx - 18, cy - 96);
-        ctx.moveTo(cx + 42, cy - 82); ctx.lineTo(cx + 56, cy - 118); ctx.lineTo(cx + 18, cy - 96);
-        ctx.fill();
-
-        // Glowing red-amber nocturnal eyes
-        for (const side of [-1, 1]) {
-          ctx.fillStyle = '#ef4444';
-          ctx.beginPath();
-          ctx.arc(cx + side * 19, cy - 58, 14, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#111827';
-          ctx.beginPath();
-          ctx.arc(cx + side * 19, cy - 58, 6.5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(cx + side * 16, cy - 62, 2.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
       } else {
-        // Desert Red-Tailed Hawk soaring on an updraft over golden barchan dunes
-        const skyG = ctx.createLinearGradient(0, 0, 0, h);
-        skyG.addColorStop(0.0, '#0284c7');
-        skyG.addColorStop(0.7, '#bae6fd');
-        skyG.addColorStop(1.0, '#f59e0b');
-        ctx.fillStyle = skyG;
-        ctx.fillRect(0, 0, w, h);
+        // 3D Binoculars Birdwatching View!
+        telescopeRootGroup.visible = false;
+        binocularsRootGroup.visible = true;
 
-        // Outspread soaring wings, fanned rust-red tail & hooked raptor beak
-        ctx.fillStyle = '#b45309';
-        ctx.beginPath();
-        ctx.moveTo(cx, cy + 28);
-        ctx.lineTo(cx - 46, cy + 102);
-        ctx.quadraticCurveTo(cx, cy + 118, cx + 46, cy + 102);
-        ctx.closePath();
-        ctx.fill();
+        const spKey = voxelHuman.birdwatchSpecies || 'macaw';
+        const bgColors = {
+          macaw:    0x075985,
+          flamingo: 0x0284c7,
+          hawk:     0x38bdf8,
+          owl:      0x090d1e
+        };
+        opticsScene.background.setHex(bgColors[spKey] || 0x075985);
 
-        ctx.fillStyle = '#78350f';
-        ctx.beginPath();
-        ctx.moveTo(cx, cy - 22);
-        ctx.bezierCurveTo(cx - 95, cy - 68, cx - 185, cy - 42, cx - 235, cy + 12);
-        ctx.bezierCurveTo(cx - 155, cy + 34, cx - 75, cy + 28, cx, cy + 32);
-        ctx.bezierCurveTo(cx + 75, cy + 28, cx + 155, cy + 34, cx + 235, cy + 12);
-        ctx.bezierCurveTo(cx + 185, cy - 42, cx + 95, cy - 68, cx, cy - 22);
-        ctx.fill();
+        for (const key of Object.keys(birdDioramas3D)) {
+          birdDioramas3D[key].visible = (key === spKey);
+        }
 
-        ctx.fillStyle = '#fef3c7';
-        ctx.beginPath();
-        ctx.ellipse(cx, cy + 6, 28, 42, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Gentle handheld binocular breathing sway
+        opticsCamera.position.x = Math.sin(opticsElapsedSec * 0.85) * 0.18;
+        opticsCamera.position.y = 0.15 + Math.cos(opticsElapsedSec * 0.72) * 0.12;
+        opticsCamera.position.z = 8.4;
+        opticsCamera.lookAt(0, -0.15, 0);
 
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.arc(cx, cy - 44, 22, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#facc15';
-        ctx.beginPath();
-        ctx.moveTo(cx, cy - 46);
-        ctx.lineTo(cx - 18, cy - 38);
-        ctx.lineTo(cx, cy - 30);
-        ctx.closePath();
-        ctx.fill();
+        const stage = birdDioramas3D[spKey];
+        if (stage && stage.userData) {
+          const ud = stage.userData;
+          if (spKey === 'macaw') {
+            ud.pivot.rotation.y = 0.55 + Math.sin(opticsElapsedSec * 0.8) * 0.28;
+            ud.pivot.position.y = Math.sin(opticsElapsedSec * 2.2) * 0.08;
+            const flap = Math.sin(opticsElapsedSec * 4.5) * 0.35;
+            ud.wingL.rotation.z = flap;
+            ud.wingR.rotation.z = -flap;
+          } else if (spKey === 'flamingo') {
+            ud.pivot.rotation.y = 0.62 + Math.sin(opticsElapsedSec * 0.65) * 0.35;
+            ud.pivot.rotation.x = Math.sin(opticsElapsedSec * 1.4) * 0.08;
+          } else if (spKey === 'hawk') {
+            ud.pivot.rotation.y = 0.45 + Math.sin(opticsElapsedSec * 0.7) * 0.42;
+            ud.pivot.rotation.z = -0.15 + Math.cos(opticsElapsedSec * 0.9) * 0.14;
+            const flap = Math.sin(opticsElapsedSec * 6.5) * 0.45;
+            ud.wingL.rotation.z = flap;
+            ud.wingR.rotation.z = -flap;
+          } else if (spKey === 'owl') {
+            // Owl swivels its head/body & pulses its glowing nocturnal eyes
+            ud.pivot.rotation.y = 0.22 + Math.sin(opticsElapsedSec * 0.9) * 0.48;
+          }
+        }
       }
 
-      // Binocular rangefinder mil-dot reticle markings
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(cx - 85, cy); ctx.lineTo(cx - 16, cy);
-      ctx.moveTo(cx + 16, cy); ctx.lineTo(cx + 85, cy);
-      ctx.moveTo(cx, cy - 65); ctx.lineTo(cx, cy - 16);
-      ctx.moveTo(cx, cy + 16); ctx.lineTo(cx, cy + 65);
-      ctx.stroke();
+      // Render the 3D optics scene into opticsRenderTarget and transfer to the 2D HUD canvas with optical lensing & reticle overlay!
+      const prevTarget = renderer.getRenderTarget();
+      const prevShadowAuto = renderer.shadowMap.autoUpdate;
+      renderer.shadowMap.autoUpdate = false;
+      renderer.setRenderTarget(opticsRenderTarget);
+      renderer.clear();
+      renderer.render(opticsScene, opticsCamera);
+      renderer.readRenderTargetPixels(opticsRenderTarget, 0, 0, w, h, opticsPixelBuf);
+      renderer.setRenderTarget(prevTarget);
+      renderer.shadowMap.autoUpdate = prevShadowAuto;
 
-      ctx.restore(); // End dual-lens clip
+      // Flip WebGL bottom-up rows into top-down 2D Canvas ImageData
+      const dst = opticsImgData.data;
+      const rowBytes = w * 4;
+      for (let y = 0; y < h; y++) {
+        const srcOff = (h - 1 - y) * rowBytes;
+        const dstOff = y * rowBytes;
+        dst.set(opticsPixelBuf.subarray(srcOff, srcOff + rowBytes), dstOff);
+      }
+      ctx.putImageData(opticsImgData, 0, 0);
 
-      // Dual-lens binocular rim outline
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.arc(cx - 108, cy, rLens, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(cx + 108, cy, rLens, 0, Math.PI * 2);
-      ctx.stroke();
+      // Apply Telescope Circular Eyepiece Lensing Mask or Binoculars Dual-Lens Mask + Reticle HUD
+      ctx.save();
+      if (activeOpticsMode === 'telescope') {
+        const lensR = Math.min(w, h) * 0.455;
+        // Darken outside circular telescope aperture
+        ctx.fillStyle = '#010206';
+        ctx.beginPath();
+        ctx.rect(0, 0, w, h);
+        ctx.arc(cx, cy, lensR, 0, Math.PI * 2, true);
+        ctx.fill();
 
+        // Subtle curved glass edge vignette & chromatic refraction glow
+        const vig = ctx.createRadialGradient(cx, cy, lensR * 0.72, cx, cy, lensR);
+        vig.addColorStop(0.0, 'rgba(0, 0, 0, 0)');
+        vig.addColorStop(0.82, 'rgba(14, 116, 144, 0.12)');
+        vig.addColorStop(1.0, 'rgba(1, 2, 8, 0.85)');
+        ctx.fillStyle = vig;
+        ctx.beginPath();
+        ctx.arc(cx, cy, lensR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Illuminated Astrometric Reticle Crosshairs
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.34)';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 44, 0, Math.PI * 2);
+        ctx.arc(cx, cy, 118, 0, Math.PI * 2);
+        ctx.moveTo(cx - lensR, cy); ctx.lineTo(cx - 20, cy);
+        ctx.moveTo(cx + 20, cy); ctx.lineTo(cx + lensR, cy);
+        ctx.moveTo(cx, cy - lensR); ctx.lineTo(cx, cy - 20);
+        ctx.moveTo(cx, cy + 20); ctx.lineTo(cx, cy + lensR);
+        ctx.stroke();
+
+        // Brass & blackened steel telescope eyepiece bezel rim
+        ctx.strokeStyle = '#d97706';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, lensR + 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.arc(cx, cy, lensR + 9, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        // Dual-lens overlapping binocular figure-8 mask
+        const rLens = h * 0.43;
+        const offCanvas = painterSnapshotCanvas;
+        // Draw dark mask outside the two overlapping binocular circles
+        ctx.fillStyle = '#040604';
+        ctx.beginPath();
+        ctx.rect(0, 0, w, h);
+        ctx.fill();
+        // Re-stamp the 3D rendered image clipped inside the dual figure-8 lenses
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx - 108, cy, rLens, 0, Math.PI * 2);
+        ctx.arc(cx + 108, cy, rLens, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.putImageData(opticsImgData, 0, 0);
+        // Binocular rangefinder mil-dot reticle
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 85, cy); ctx.lineTo(cx - 16, cy);
+        ctx.moveTo(cx + 16, cy); ctx.lineTo(cx + 85, cy);
+        ctx.moveTo(cx, cy - 65); ctx.lineTo(cx, cy - 16);
+        ctx.moveTo(cx, cy + 16); ctx.lineTo(cx, cy + 65);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(cx - 108, cy, rLens, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx + 108, cy, rLens, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.restore();
     }
 
@@ -11610,6 +12072,7 @@
       activeOpticsMode = mode;
       isOpticsGameplayPaused = true;
       isPointerDown = false;
+      opticsLastPerfMs = performance.now();
       clock.stop();
 
       // Suspend audio engine hum while gameplay is paused in optics view
@@ -11621,19 +12084,18 @@
       if (mode === 'telescope') {
         const idxT = voxelHuman.telescopeSpaceTargetIdx || 0;
         const spec = TELESCOPE_SPACE_CATALOG[idxT % TELESCOPE_SPACE_CATALOG.length];
-        if (humanOpticsPauseBadgeEl) humanOpticsPauseBadgeEl.textContent = '⏸️ Gameplay Paused · Looking Through Astronomical Telescope';
+        if (humanOpticsPauseBadgeEl) humanOpticsPauseBadgeEl.textContent = '⏸️ Gameplay Paused · Live 3D Astronomical Telescope View';
         if (humanOpticsTitleEl) humanOpticsTitleEl.textContent = spec.title;
         if (humanOpticsSubEl) humanOpticsSubEl.textContent = spec.sub;
-        renderTelescopeDeepSpaceCanvas(idxT);
       } else {
         const spKey = voxelHuman.birdwatchSpecies || 'macaw';
         const bMeta = BIRDWATCH_SPECIES_CATALOG[spKey] || BIRDWATCH_SPECIES_CATALOG.macaw;
-        if (humanOpticsPauseBadgeEl) humanOpticsPauseBadgeEl.textContent = '⏸️ Gameplay Paused · Looking Through Birdwatching Binoculars';
+        if (humanOpticsPauseBadgeEl) humanOpticsPauseBadgeEl.textContent = '⏸️ Gameplay Paused · Live 3D Birdwatching Binoculars View';
         if (humanOpticsTitleEl) humanOpticsTitleEl.textContent = bMeta.title;
         if (humanOpticsSubEl) humanOpticsSubEl.textContent = bMeta.sub;
-        renderBinocularsBirdCanvas(spKey);
       }
 
+      renderLive3DOpticsFrame(0.016);
       humanOpticsModalEl.classList.add('open');
     }
 
@@ -21844,8 +22306,13 @@
       if (isBackgroundSuspended) return;
       animFrameId = requestAnimationFrame(animate);
 
-      // While the player is looking through the Oasis Artist's Telescope or Binoculars, all gameplay & simulation is paused until they exit!
+      // While the player is looking through the Oasis Artist's Telescope or Binoculars, all gameplay & simulation is paused until they exit,
+      // while the live 3D WebGL Telescope/Binoculars eyepiece scene continues rendering its gentle 3D astrophysical motion!
       if (isOpticsGameplayPaused) {
+        const nowPerf = performance.now();
+        const dtOptics = Math.min(0.05, Math.max(0.004, (nowPerf - (opticsLastPerfMs || nowPerf)) * 0.001));
+        opticsLastPerfMs = nowPerf;
+        renderLive3DOpticsFrame(dtOptics);
         return;
       }
 
