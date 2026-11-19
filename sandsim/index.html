@@ -146,6 +146,18 @@
       border-radius: 14px;
       z-index: 16;
       box-shadow: 0 10px 32px rgba(0, 0, 0, 0.65);
+      transition: bottom 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    /* When the bottom sculpt menu is hidden (e.g. No Tool, Bow & Arrow, or Torch selected in FPV), slide the FPV menu down into its place! */
+    body.sculpt-dock-hidden #fpv-equip-bar {
+      bottom: 14px;
+    }
+
+    body.sculpt-dock-hidden .bottom-dock {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(18px);
     }
 
     .fpv-slot-btn {
@@ -745,10 +757,11 @@
       border: 1px solid var(--border);
       padding: 8px 12px;
       border-radius: 14px;
-      z-index: 10;
+      z-index: 15;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
       width: fit-content;
       max-width: calc(100vw - 365px);
+      transition: opacity 0.20s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     .dock-hint {
@@ -758,26 +771,68 @@
       border-left: 1px solid rgba(255,255,255,0.1);
     }
 
-    /* Sculpt "Items" Section inside Bottom Dock & Sidebar */
-    .dock-section-group {
+    /* Popup Menus in Bottom Sculpt Dock ("🧱 Materials ▴" & "📦 Items ▴") */
+    .dock-popup-wrap {
+      position: relative;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      padding: 3px 7px;
-      border-radius: 10px;
-      background: rgba(232, 168, 76, 0.08);
-      border: 1px solid rgba(255, 197, 109, 0.28);
     }
 
-    .dock-section-label {
+    .dock-popup-trigger {
+      background: rgba(232, 168, 76, 0.12);
+      border: 1px solid rgba(255, 197, 109, 0.40);
+      color: var(--accent-bright);
+      font-weight: 700;
+    }
+
+    .dock-popup-trigger.has-active-child {
+      background: linear-gradient(135deg, #e8a84c, #c97b28);
+      color: #16110b;
+      border-color: var(--accent-bright);
+      box-shadow: 0 0 12px rgba(232, 168, 76, 0.45);
+    }
+
+    .dock-popup-menu {
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: 50%;
+      transform: translateX(-50%) translateY(6px);
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      min-width: 156px;
+      background: rgba(18, 15, 12, 0.96);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 197, 109, 0.48);
+      border-radius: 12px;
+      padding: 8px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.78);
+      z-index: 40;
+    }
+
+    .dock-popup-wrap.open .dock-popup-menu {
+      display: flex;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .dock-popup-title {
       font-size: 9.5px;
       font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: 0.07em;
+      letter-spacing: 0.08em;
       color: var(--accent-bright);
-      padding: 0 3px;
-      white-space: nowrap;
+      padding: 2px 6px 5px 6px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+      text-align: left;
       user-select: none;
+    }
+
+    .dock-popup-menu .tool-btn {
+      width: 100%;
+      justify-content: flex-start;
+      padding: 7px 10px;
+      font-size: 11.5px;
+      white-space: nowrap;
     }
 
     button.item-tool-btn {
@@ -1124,6 +1179,9 @@
         padding: 4px 7px;
         gap: 4px;
       }
+      body.sculpt-dock-hidden #fpv-equip-bar {
+        bottom: 8px;
+      }
       .fpv-slot-btn {
         padding: 4px 8px;
         font-size: 10.5px;
@@ -1369,25 +1427,47 @@
   </div>
 
   <!-- Bottom Brush / Interaction Dock -->
-  <div class="bottom-dock">
+  <div class="bottom-dock" id="bottom-dock">
     <button id="btn-touch-mode" class="touch-mode-btn" title="Toggle 1-Finger Touch between Sculpting Terrain and Rotating Camera (2 fingers always pinch-zoom/orbit)">✋ Touch: Sculpt</button>
     <button class="tool-btn active" data-tool="water" title="Pour water that sheds down slopes and collects in the lowest basins">💧 Pour Water</button>
     <button class="tool-btn" data-tool="lava" title="Pour glowing molten lava that flows down valleys, incinerates flora, melts snow & ice, and glows brightly at night">🔥 Pour Lava</button>
     <button id="btn-tool-volcano" class="tool-btn" data-tool="volcano" title="Single-use cataclysmic Volcano (10-minute actual cooldown): Click terrain to raise a massive volcano that erupts lava, brimstone, smoke & ash for 30 seconds!">🌋 Volcano</button>
     <button class="tool-btn" data-tool="fireworks" title="Launch 3D aerial fireworks shells from where you click or drag — rockets streak into the sky and burst into glowing multi-colored star patterns!">🎆 Fireworks</button>
-    <button class="tool-btn" data-tool="pour" title="Left-click + drag on terrain to pour sand">⏳ Pour Sand</button>
+
+    <!-- Materials Popup Menu (Replaces Pour Sand with Brick Road, Paved Road, Dirt, Sand) -->
+    <div class="dock-popup-wrap" id="popup-wrap-materials">
+      <button type="button" class="dock-popup-trigger" id="btn-popup-materials" title="Choose surface material to pour or pave (Sand, Dirt, Paved Road, Brick Road)">
+        <span id="label-popup-materials">🧱 Materials</span> <span>▴</span>
+      </button>
+      <div class="dock-popup-menu" id="popup-menu-materials">
+        <div class="dock-popup-title">🧱 Surface Materials</div>
+        <button class="tool-btn" data-tool="pour" data-popup-group="materials" data-short-label="⏳ Sand" title="Pour loose drifting desert sand">⏳ Sand</button>
+        <button class="tool-btn" data-tool="mat-dirt" data-popup-group="materials" data-short-label="🟫 Dirt" title="Lay rich dark-brown loamy soil & dirt path">🟫 Dirt</button>
+        <button class="tool-btn" data-tool="mat-paved" data-popup-group="materials" data-short-label="🛣️ Paved Road" title="Pave smooth dark asphalt road that resists wind erosion">🛣️ Paved Road</button>
+        <button class="tool-btn" data-tool="mat-brick" data-popup-group="materials" data-short-label="🧱 Brick Road" title="Lay terracotta masonry brick road that resists wind erosion">🧱 Brick Road</button>
+      </div>
+    </div>
+
     <button class="tool-btn" data-tool="seed" title="Plant flora (grows Jungle near open water, Cacti & Scrub in the desert)">🌱 Plant Flora</button>
     <button class="tool-btn" data-tool="fauna" title="Spawn biome animals (Camels & Oryx in desert, Flamingos & Macaws in jungle, Fish in water)">🐪 Spawn Animals</button>
     <button class="tool-btn" data-tool="dig" title="Excavate sand & carve basins for water to pool">⛏️ Dig Basin</button>
     <button class="tool-btn" data-tool="rock" title="Place wind-blocking & water-damming boulders">🪨 Add Boulder</button>
     <button class="tool-btn" data-tool="wall" title="Draw dam / drift walls">🧱 Dam / Wall</button>
-    <div class="dock-section-group" title="Placeable 3D World Items (Can be destroyed by Erase brush, Bow & Arrow, Lightning, Volcano, or Lava)">
-      <span class="dock-section-label">📦 Items</span>
-      <button class="tool-btn item-tool-btn" data-tool="item-tap" title="Place an Artesian Water Tap that sticks in the ground and spurts water at a fluctuating rate to fill a pond until destroyed">🚰 Water Tap</button>
-      <button class="tool-btn item-tool-btn" data-tool="item-feeder" title="Place an Animal Feeder trough that attracts nearby deer/oryx, rabbits, camels & fennec foxes until it runs out of food or is destroyed">🌾 Animal Feeder</button>
-      <button class="tool-btn item-tool-btn" data-tool="item-lantern" title="Place a Lantern hanging from a wooden stick that illuminates the surrounding area at night, attracts moths, and lures bats">🏮 Lantern</button>
+
+    <!-- Items Popup Menu (Water Tap, Animal Feeder, Lantern) -->
+    <div class="dock-popup-wrap" id="popup-wrap-items">
+      <button type="button" class="dock-popup-trigger" id="btn-popup-items" title="Place destructible 3D world items (Water Tap, Animal Feeder, Lantern)">
+        <span id="label-popup-items">📦 Items</span> <span>▴</span>
+      </button>
+      <div class="dock-popup-menu" id="popup-menu-items">
+        <div class="dock-popup-title">📦 Placeable Items</div>
+        <button class="tool-btn item-tool-btn" data-tool="item-tap" data-popup-group="items" data-short-label="🚰 Water Tap" title="Place an Artesian Water Tap that sticks in the ground and spurts water at a fluctuating rate to fill a pond until destroyed">🚰 Water Tap</button>
+        <button class="tool-btn item-tool-btn" data-tool="item-feeder" data-popup-group="items" data-short-label="🌾 Animal Feeder" title="Place an Animal Feeder trough that attracts nearby deer/oryx, rabbits, camels & fennec foxes until it runs out of food or is destroyed">🌾 Animal Feeder</button>
+        <button class="tool-btn item-tool-btn" data-tool="item-lantern" data-popup-group="items" data-short-label="🏮 Lantern" title="Place a Lantern hanging from a wooden stick that illuminates the surrounding area at night, attracts moths, and lures bats">🏮 Lantern</button>
+      </div>
     </div>
-    <button class="tool-btn" data-tool="erase" title="Clear obstacles, flora & placed items in brush radius">🧹 Erase</button>
+
+    <button class="tool-btn" data-tool="erase" title="Clear obstacles, roads, flora & placed items in brush radius">🧹 Erase</button>
     <button id="btn-dock-reset-water-plants" class="danger" title="Remove all water, plants, and aquatic/jungle animals from the current map">🔄 Reset Water & Life</button>
     <span class="dock-hint">
       <kbd>L-Drag</kbd> Sculpt · <kbd>R-Drag</kbd> Orbit · <kbd>V</kbd> Walk Mode
@@ -1739,6 +1819,8 @@
     const pendingRockHeight = new Float32Array(MAX_CELLS);
     const pondAge = new Float32Array(MAX_CELLS);        // Seconds a pond cell has held calm water (spawns lily pads & frogs once mature!)
     const grassMask = new Uint8Array(MAX_CELLS);        // 1 = vegetated sand surface at an angle too steep for 3D plant models (renders as green grass & counts as a plant)
+    const plantSubmergedTimer = new Float32Array(MAX_CELLS); // Seconds a non-water plant cell has been submerged under water (>3.0s deletes the plant!)
+    const surfaceMaterial = new Uint8Array(MAX_CELLS);  // 0 = Sand (default), 1 = Dirt, 2 = Paved Road, 3 = Brick Road
 
     const params = {
       fidelity: 3,            // 1: Low-Poly Fast, 2: Balanced, 3: High, 4: Ultra, 5: Cinematic Max
@@ -3512,7 +3594,7 @@
       pendingRockHeight.fill(0);
       pondAge.fill(0);
       grassMask.fill(0);
-      grassMask.fill(0);
+      plantSubmergedTimer.fill(0);
       // Remove aquatic & jungle-dependent wildlife while keeping desert camels, oryx, lions, and hawks
       if (typeof faunaAgents !== 'undefined') {
         for (let i = faunaAgents.length - 1; i >= 0; i--) {
@@ -3549,7 +3631,8 @@
       pendingRockHeight.fill(0);
       pondAge.fill(0);
       grassMask.fill(0);
-      grassMask.fill(0);
+      plantSubmergedTimer.fill(0);
+      surfaceMaterial.fill(0);
       soilMoisture.fill(0);
       waterProximity.fill(0);
       veg.fill(0);
@@ -4145,7 +4228,7 @@
           const wp = waterProximity[i];
           const isJungleZone = wp >= 0.38;
 
-          if (obstacleType[i] === 2 || w > 0.85) {
+          if (obstacleType[i] === 2 || w > 0.14 || surfaceMaterial[i] >= 2) {
             if (w > 0.95 && v > 0) v = Math.max(0, v - 0.03 * stepScale);
             veg[i] = v;
             continue;
@@ -4315,10 +4398,14 @@
           const availSand = sand[i];
           if (availSand <= 0.0005) continue;
           if (water[i] > 0.03) continue;
+          const surfMat = surfaceMaterial[i];
+          // Paved Road (2) and Brick Road (3) lock the surface against wind drift
+          if (surfMat === 2 || surfMat === 3) continue;
 
           const m = soilMoisture[i];
           const rootArmor = getRootErosionResistance(veg[i]);
-          const thresholdSpeed = 3.5 + m * 5.5 + rootArmor * 9.0;
+          const dirtBonus = surfMat === 1 ? 5.0 : 0.0;
+          const thresholdSpeed = 3.5 + m * 5.5 + rootArmor * 9.0 + dirtBonus;
 
           const localWind = windSpeedMap[i];
           if (localWind <= thresholdSpeed) continue;
@@ -4447,9 +4534,11 @@
           if (s <= 0.001) continue;
 
           const isJungleCell = waterProximity[i] >= 0.38;
+          const surfMat = surfaceMaterial[i];
+          const matBonus = (surfMat === 2 || surfMat === 3) ? 0.55 : (surfMat === 1 ? 0.20 : 0.0);
           const rootBonus = getRootErosionResistance(veg[i]) * (isJungleCell ? 0.26 : 0.04);
           const moistureBonus = soilMoisture[i] * (isJungleCell ? 0.22 : 0.10);
-          const localMaxDelta = (baseReposeTan + moistureBonus + rootBonus) * CELL_SIZE;
+          const localMaxDelta = (baseReposeTan + moistureBonus + rootBonus + matBonus) * CELL_SIZE;
 
           const hCenter = bedrock[i] + s;
 
@@ -4620,9 +4709,35 @@
         }
 
         const crestTint = clamp(s * 0.035, 0, 0.11);
-        let sr = (0.89 + crestTint) * (1.0 - m * 0.36);
-        let sg = (0.69 + crestTint * 0.8) * (1.0 - m * 0.38);
-        let sb = (0.43 + crestTint * 0.5) * (1.0 - m * 0.42);
+        const surfMat = surfaceMaterial[i];
+        let sr, sg, sb;
+        if (surfMat === 1) {
+          // 1. Dirt Surface (rich loamy earth with organic soil texture)
+          const dirtNoise = (hash2(i % GRID, Math.floor(i / GRID)) - 0.5) * 0.06;
+          sr = (0.44 + dirtNoise) * (1.0 - m * 0.28);
+          sg = (0.31 + dirtNoise * 0.8) * (1.0 - m * 0.30);
+          sb = (0.20 + dirtNoise * 0.6) * (1.0 - m * 0.32);
+        } else if (surfMat === 2) {
+          // 2. Paved Road (dark charcoal asphalt road with subtle aggregate grain)
+          const asphaltGrain = (hash2((i % GRID) * 1.7, Math.floor(i / GRID) * 1.7) - 0.5) * 0.04;
+          sr = 0.22 + asphaltGrain;
+          sg = 0.23 + asphaltGrain;
+          sb = 0.25 + asphaltGrain;
+        } else if (surfMat === 3) {
+          // 3. Brick Road (warm terracotta masonry brick road with alternating course variation & mortar tint)
+          const gx = i % GRID;
+          const gy = Math.floor(i / GRID);
+          const brickChecker = ((gx + (gy % 2)) % 2 === 0) ? 0.035 : -0.025;
+          const brickJitter = (hash2(gx * 2.3, gy * 3.1) - 0.5) * 0.05;
+          sr = 0.66 + brickChecker + brickJitter;
+          sg = 0.30 + brickChecker * 0.6 + brickJitter * 0.5;
+          sb = 0.21 + brickChecker * 0.4 + brickJitter * 0.4;
+        } else {
+          // 0. Default Desert Sand
+          sr = (0.89 + crestTint) * (1.0 - m * 0.36);
+          sg = (0.69 + crestTint * 0.8) * (1.0 - m * 0.38);
+          sb = (0.43 + crestTint * 0.5) * (1.0 - m * 0.42);
+        }
 
         if (v > 0.08) {
           if (isJungleZone || isGrassCell) {
@@ -4667,7 +4782,7 @@
           sb = sb * (1 - mh) + 0.96 * mh;
         }
 
-        const effectiveSandBlend = isGrassCell ? Math.max(sandBlend, 0.86) : sandBlend;
+        const effectiveSandBlend = (isGrassCell || surfMat > 0) ? Math.max(sandBlend, 0.92) : sandBlend;
         let tr = br * (1 - effectiveSandBlend) + sr * effectiveSandBlend;
         let tg = bg * (1 - effectiveSandBlend) + sg * effectiveSandBlend;
         let tb = bb * (1 - effectiveSandBlend) + sb * effectiveSandBlend;
@@ -4866,7 +4981,7 @@
         for (let x = 1; x < GRID - 1; x++) {
           const i = row + x;
           const v = veg[i];
-          if (v < 0.12) continue;
+          if (v < 0.12 || surfaceMaterial[i] >= 2) continue;
 
           if ((cFern + cJungleBush + cJungleTree + cScrub + cBarrel + cSaguaro + cGrassJungle + cGrassDesert) >= fidelityCap) {
             break;
@@ -11492,6 +11607,14 @@
       }
     }
 
+    function syncSculptDockVisibility() {
+      const hideSculptDock = params.fpvMode && params.fpvEquip !== 'sculpt';
+      document.body.classList.toggle('sculpt-dock-hidden', hideSculptDock);
+      if (hideSculptDock) {
+        document.querySelectorAll('.dock-popup-wrap.open').forEach((w) => w.classList.remove('open'));
+      }
+    }
+
     function setFpvEquipment(mode) {
       if (!FPV_EQUIP_ORDER.includes(mode)) return;
       params.fpvEquip = mode;
@@ -11513,6 +11636,7 @@
       if (mode !== 'torch') {
         torchLight.intensity = 0.0;
       }
+      syncSculptDockVisibility();
     }
 
     function cycleFpvEquipment(dir = 1) {
@@ -11586,6 +11710,7 @@
         camera.position.copy(fpvState.savedOrbitPos);
         controls.target.copy(fpvState.savedOrbitTarget);
         controls.update();
+        syncSculptDockVisibility();
       }
     }
 
@@ -12063,6 +12188,32 @@
           } else if (params.tool === 'pour') {
             const maxSand = Math.max(0, MAX_TERRAIN_HEIGHT - bedrock[i]);
             sand[i] = Math.min(maxSand, sand[i] + falloff * 0.65);
+            surfaceMaterial[i] = 0; // Desert Sand
+          } else if (params.tool === 'mat-dirt') {
+            const maxSand = Math.max(0, MAX_TERRAIN_HEIGHT - bedrock[i]);
+            sand[i] = Math.min(maxSand, Math.max(sand[i], 0.30) + falloff * 0.35);
+            surfaceMaterial[i] = 1; // Rich Loamy Dirt
+            soilMoisture[i] = Math.max(soilMoisture[i], 0.32 * falloff);
+          } else if (params.tool === 'mat-paved' || params.tool === 'mat-brick') {
+            if (dist < 0.78) {
+              const maxSand = Math.max(0, MAX_TERRAIN_HEIGHT - bedrock[i]);
+              sand[i] = Math.min(maxSand, Math.max(sand[i], 0.32));
+              // Smoothly grade road bed toward neighboring elevation for a clean drivable/walkable road
+              const avgGround = 0.25 * (
+                (bedrock[i + 1] + sand[i + 1]) +
+                (bedrock[i - 1] + sand[i - 1]) +
+                (bedrock[i + GRID] + sand[i + GRID]) +
+                (bedrock[i - GRID] + sand[i - GRID])
+              );
+              const curGround = bedrock[i] + sand[i];
+              const targetGround = curGround * (1.0 - falloff * 0.35) + avgGround * (falloff * 0.35);
+              sand[i] = clamp(targetGround - bedrock[i], 0.28, maxSand);
+              surfaceMaterial[i] = (params.tool === 'mat-paved') ? 2 : 3;
+              veg[i] = 0.0;
+              grassMask[i] = 0;
+              plantSubmergedTimer[i] = 0.0;
+              if (obstacleType[i] === 1) obstacleType[i] = 0;
+            }
           } else if (params.tool === 'seed') {
             // Only seed new empty cells if total plants on the map are below activePlantCap; existing plants can still grow taller
             const isAlreadyPlant = veg[i] >= 0.12;
@@ -12113,7 +12264,10 @@
             }
           } else if (params.tool === 'erase') {
             obstacleType[i] = 0;
+            surfaceMaterial[i] = 0;
             veg[i] = 0;
+            grassMask[i] = 0;
+            plantSubmergedTimer[i] = 0;
             water[i] = 0;
             lavaFrac[i] = 0;
             bedrock[i] = clamp(bedrock[i] * (1 - falloff * 0.35) + 1.5 * (falloff * 0.35), MIN_TERRAIN_HEIGHT, MAX_TERRAIN_HEIGHT);
@@ -12508,8 +12662,46 @@
       draggingCompass = false;
     });
 
+    // Popup Menu Controllers for Bottom Sculpt Dock ("🧱 Materials ▴" & "📦 Items ▴")
+    const popupWrapMaterials = document.getElementById('popup-wrap-materials');
+    const btnPopupMaterials = document.getElementById('btn-popup-materials');
+    const labelPopupMaterials = document.getElementById('label-popup-materials');
+    const popupWrapItems = document.getElementById('popup-wrap-items');
+    const btnPopupItems = document.getElementById('btn-popup-items');
+    const labelPopupItems = document.getElementById('label-popup-items');
+
+    function closeAllDockPopups() {
+      if (popupWrapMaterials) popupWrapMaterials.classList.remove('open');
+      if (popupWrapItems) popupWrapItems.classList.remove('open');
+    }
+
+    if (btnPopupMaterials && popupWrapMaterials) {
+      btnPopupMaterials.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willOpen = !popupWrapMaterials.classList.contains('open');
+        closeAllDockPopups();
+        if (willOpen) popupWrapMaterials.classList.add('open');
+      });
+    }
+
+    if (btnPopupItems && popupWrapItems) {
+      btnPopupItems.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willOpen = !popupWrapItems.classList.contains('open');
+        closeAllDockPopups();
+        if (willOpen) popupWrapItems.classList.add('open');
+      });
+    }
+
+    window.addEventListener('pointerdown', (e) => {
+      if (!e.target.closest('.dock-popup-wrap')) {
+        closeAllDockPopups();
+      }
+    });
+
     document.querySelectorAll('.tool-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (btn.dataset.tool === 'volcano' && (volcanoEruptionState.active || Date.now() < volcanoCooldownUntil)) {
           updateVolcanoButtonUI();
           return;
@@ -12518,12 +12710,39 @@
           b.classList.toggle('active', b.dataset.tool === btn.dataset.tool);
         });
         params.tool = btn.dataset.tool;
+
+        // Update Materials & Items popup trigger button active states & labels
+        const isMaterialTool = ['pour', 'mat-dirt', 'mat-paved', 'mat-brick'].includes(params.tool);
+        const isItemTool = ['item-tap', 'item-feeder', 'item-lantern'].includes(params.tool);
+        if (btnPopupMaterials) {
+          btnPopupMaterials.classList.toggle('has-active-child', isMaterialTool);
+          if (labelPopupMaterials) {
+            const matchBtn = document.querySelector(`.dock-popup-menu .tool-btn[data-tool="${params.tool}"][data-popup-group="materials"]`);
+            labelPopupMaterials.textContent = (isMaterialTool && matchBtn && matchBtn.dataset.shortLabel)
+              ? matchBtn.dataset.shortLabel
+              : '🧱 Materials';
+          }
+        }
+        if (btnPopupItems) {
+          btnPopupItems.classList.toggle('has-active-child', isItemTool);
+          if (labelPopupItems) {
+            const matchBtn = document.querySelector(`.dock-popup-menu .tool-btn[data-tool="${params.tool}"][data-popup-group="items"]`);
+            labelPopupItems.textContent = (isItemTool && matchBtn && matchBtn.dataset.shortLabel)
+              ? matchBtn.dataset.shortLabel
+              : '📦 Items';
+          }
+        }
+        closeAllDockPopups();
+
         const ringColors = {
           water: 0x38bdf8,
           lava: 0xff4500,
           volcano: 0xdc2626,
           fireworks: 0xe879f9,
           pour: 0xffc56d,
+          'mat-dirt': 0x92400e,
+          'mat-paved': 0x64748b,
+          'mat-brick': 0xc2410c,
           seed: 0x4ade80,
           fauna: 0xf472b6,
           dig: 0xf97316,
@@ -12694,9 +12913,10 @@
         if (timerBadge) timerBadge.textContent = 'Manual';
       }
 
-      // --- POND MATURITY TRACKER (Ponds that exist >= 10s sprout floating Lily Pads, Lotus Flowers & attract Frogs!) ---
+      // --- POND MATURITY TRACKER & SUBMERGED NON-WATER PLANT DROWNING (>3 SECONDS UNDERWATER DELETES PLANT!) ---
       let matureCount = 0;
       let pondMaturityChanged = false;
+      let submergedFloraDeleted = false;
       for (let i = 0; i < MAX_CELLS; i++) {
         const w = water[i];
         const lf = lavaFrac[i];
@@ -12717,9 +12937,27 @@
             pondMaturityChanged = true;
           }
         }
+
+        // Non-water plants (trees, bushes, ferns, cacti, scrub, grass) submerged under water (w >= 0.085m) for more than 3.0 seconds are deleted!
+        if (veg[i] >= 0.12) {
+          if (w >= 0.085 && lf < 0.30) {
+            plantSubmergedTimer[i] += dt;
+            if (plantSubmergedTimer[i] > 3.0) {
+              veg[i] = 0.0;
+              vegHealth[i] = 0.0;
+              grassMask[i] = 0;
+              plantSubmergedTimer[i] = 0.0;
+              submergedFloraDeleted = true;
+            }
+          } else if (plantSubmergedTimer[i] > 0.0) {
+            plantSubmergedTimer[i] = Math.max(0.0, plantSubmergedTimer[i] - dt * 2.0);
+          }
+        } else if (plantSubmergedTimer[i] > 0.0) {
+          plantSubmergedTimer[i] = 0.0;
+        }
       }
       params.maturePondCells = matureCount;
-      if (pondMaturityChanged || (matureCount > 0 && frameCount % 10 === 0)) {
+      if (submergedFloraDeleted || pondMaturityChanged || (matureCount > 0 && frameCount % 10 === 0)) {
         rebuildFloraInstances();
       }
 
@@ -13392,6 +13630,8 @@
       pendingRockHeight.fill(0);
       pondAge.fill(0);
       grassMask.fill(0);
+      plantSubmergedTimer.fill(0);
+      surfaceMaterial.fill(0);
 
       // 5. Release WebGL shadow map textures, render lists, and GPU program/buffer caches
       if (sunLight.shadow && sunLight.shadow.map) {
