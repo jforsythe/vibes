@@ -7300,20 +7300,27 @@
       let cCamel = 0, cOryx = 0, cFlamingo = 0, cMacaw = 0, cFish = 0, cHawk = 0, cSkeleton = 0;
       let cFennec = 0, cBat = 0, cOwl = 0, cOwlEyes = 0, cFrog = 0, cRabbit = 0;
 
-      // Helper for Frogs & Alligators: find the nearest body of water to migrate toward when their current pond dries up!
-      const findNearestWaterTarget = (fromX, fromZ, minDepth = 0.06) => {
+      // Helper for Frogs & Alligators: find a body of water to migrate toward when their current pond dries up!
+      // Uses agentPhase to spread different individuals around different shoreline/pond points so they never pile onto one cell!
+      const findNearestWaterTarget = (fromX, fromZ, minDepth = 0.06, agentPhase = 0.0) => {
         if (params.totalWaterVol < 15) return null;
+        const jitterX = Math.cos(agentPhase * 2.3) * 6.5;
+        const jitterZ = Math.sin(agentPhase * 2.3) * 6.5;
         let bestI = -1;
-        let bestD2 = 1e9;
+        let bestScore = 1e9;
+        let bestRealD2 = 1e9;
         for (let wy = 4; wy < GRID - 4; wy += 2) {
           for (let wx = 4; wx < GRID - 4; wx += 2) {
             const ci = idx(wx, wy);
             if (water[ci] >= minDepth && lavaFrac[ci] < 0.15) {
               const candX = ((wx / (GRID - 1)) - 0.5) * WORLD_SIZE;
               const candZ = ((wy / (GRID - 1)) - 0.5) * WORLD_SIZE;
-              const d2 = (candX - fromX) * (candX - fromX) + (candZ - fromZ) * (candZ - fromZ);
-              if (d2 < bestD2) {
-                bestD2 = d2;
+              const dx = candX - (fromX + jitterX);
+              const dz = candZ - (fromZ + jitterZ);
+              const scoreD2 = dx * dx + dz * dz;
+              if (scoreD2 < bestScore) {
+                bestScore = scoreD2;
+                bestRealD2 = (candX - fromX) * (candX - fromX) + (candZ - fromZ) * (candZ - fromZ);
                 bestI = ci;
               }
             }
@@ -7323,9 +7330,9 @@
         const wgx = bestI % GRID;
         const wgy = Math.floor(bestI / GRID);
         return {
-          wx: ((wgx / (GRID - 1)) - 0.5) * WORLD_SIZE,
-          wz: ((wgy / (GRID - 1)) - 0.5) * WORLD_SIZE,
-          d2: bestD2
+          wx: ((wgx / (GRID - 1)) - 0.5) * WORLD_SIZE + Math.cos(agentPhase) * 1.6,
+          wz: ((wgy / (GRID - 1)) - 0.5) * WORLD_SIZE + Math.sin(agentPhase) * 1.6,
+          d2: bestRealD2
         };
       };
 
@@ -7390,16 +7397,19 @@
           faunaAgents.splice(i, 1);
           continue;
         }
-        // Frogs & Alligators: if their current pond dries up, they migrate toward the nearest body of water,
-        // and if they stay dry for too long without reaching water, they disappear just like fish!
+        // Frogs & Alligators: each frog has its own staggered moisture reserve & thirst tolerance so they don't all need water at the exact same moment!
         if (a.type === 'frog' && !a.isBurning) {
-          const isFrogAtWater = (waterDepth >= 0.022 && localLava < 0.20) || (wp >= 0.44 && params.totalWaterVol >= 25);
+          const personalMinWp = 0.24 + (a.phase % 0.24); // Individual moisture comfort threshold (0.24 .. 0.48)
+          const personalMinDepth = 0.012 + (a.phase % 0.020);
+          const isFrogAtWater = (waterDepth >= personalMinDepth && localLava < 0.20) || (wp >= personalMinWp && params.totalWaterVol >= 25);
           if (!isFrogAtWater) {
-            a.dryTimer = (a.dryTimer || 0.0) + dt;
+            // Different frogs deplete their skin hydration at slightly different rates (0.65x .. 1.25x)
+            const dryRate = 0.65 + ((a.phase * 1.7) % 0.60);
+            a.dryTimer = (a.dryTimer || 0.0) + dt * dryRate;
           } else {
-            a.dryTimer = Math.max(0.0, (a.dryTimer || 0.0) - dt * 3.0);
+            a.dryTimer = Math.max(0.0, (a.dryTimer || 0.0) - dt * 3.5);
           }
-          const maxFrogDryTime = params.totalWaterVol < 25 ? 4.0 : 11.5;
+          const maxFrogDryTime = params.totalWaterVol < 25 ? (4.0 + (a.phase % 3.0)) : (13.5 + (a.phase % 8.5));
           if (a.dryTimer >= maxFrogDryTime) {
             faunaAgents.splice(i, 1);
             continue;
@@ -7945,23 +7955,49 @@
 
         } else if (a.type === 'frog') {
           // Oasis Pond Frog: hops in parabolic 3D leaps along pond banks & floating lily pads, then sits and croaks ("rib-bit!");
-          // if its current pond dries up, it actively migrates toward the nearest body of water!
+          // each frog has its own staggered thirst reserve (`frogThirstDelay`) and personal-space repulsion so frogs never pile up!
           const pWp = waterProximity[pIdx];
-          const isFrogMigratingToWater = (waterDepth < 0.022 && wp < 0.44);
+          const personalMinWp = 0.24 + (a.phase % 0.24);
+          const frogThirstDelay = 1.2 + (a.phase / (Math.PI * 2)) * 7.5; // Wait 1.2s..8.7s of dry time before migrating
+          const isFrogMigratingToWater = ((a.dryTimer || 0.0) >= frogThirstDelay) && (waterDepth < 0.018 && wp < personalMinWp);
+
+          // Active frog-to-frog personal-space repulsion so frogs spread evenly around the shoreline & lily pads!
+          let frogRepelX = 0.0;
+          let frogRepelZ = 0.0;
+          for (let j = 0; j < faunaAgents.length; j++) {
+            if (j === i) continue;
+            const other = faunaAgents[j];
+            if (other.type !== 'frog' || other.state !== 'alive') continue;
+            const dxF = a.x - other.x;
+            const dzF = a.z - other.z;
+            const d2F = dxF * dxF + dzF * dzF;
+            if (d2F > 0.0001 && d2F < 16.0) { // 4.0m personal space radius
+              const distF = Math.sqrt(d2F);
+              const push = (1.0 - distF / 4.0);
+              frogRepelX += (dxF / distF) * push;
+              frogRepelZ += (dzF / distF) * push;
+            }
+          }
+          const hasFrogCrowd = Math.hypot(frogRepelX, frogRepelZ) > 0.18;
+
           if (isLavaHazardAhead || isInMoltenLava || probeH.localLava > 0.12) {
             steerToHighDryGround(16.0);
+          } else if (hasFrogCrowd && !isFrogMigratingToWater) {
+            // Gently hop away from crowded neighbor frogs to spread out along the bank
+            steerToward(Math.atan2(frogRepelX, frogRepelZ), 6.5 * coldSpeedMult);
           } else if (isFrogMigratingToWater) {
-            const waterTarget = findNearestWaterTarget(a.x, a.z, 0.05);
+            const waterTarget = findNearestWaterTarget(a.x, a.z, 0.05, a.phase);
             if (waterTarget) {
-              steerToward(Math.atan2(waterTarget.wx - a.x, waterTarget.wz - a.z), 8.2 * coldSpeedMult);
+              const targetAng = Math.atan2((waterTarget.wx - a.x) + frogRepelX * 2.5, (waterTarget.wz - a.z) + frogRepelZ * 2.5);
+              steerToward(targetAng, 7.8 * coldSpeedMult);
             } else {
               a.heading += a.turnRate * dt * 1.2 * coldSpeedMult;
             }
-          } else if (pWp < 0.42 || probeH.waterDepth > 1.05 || obstacleType[pIdx] === 2) {
-            // Stay near pond shoreline and shallow lily-pad water
-            const waterTarget = (pWp < 0.42) ? findNearestWaterTarget(a.x, a.z, 0.05) : null;
+          } else if (pWp < personalMinWp || probeH.waterDepth > 1.05 || obstacleType[pIdx] === 2) {
+            // Stay near pond shoreline and shallow lily-pad water, offset by personal phase
+            const waterTarget = (pWp < personalMinWp) ? findNearestWaterTarget(a.x, a.z, 0.05, a.phase) : null;
             if (waterTarget && waterTarget.d2 < 900.0) {
-              steerToward(Math.atan2(waterTarget.wx - a.x, waterTarget.wz - a.z), 6.5 * coldSpeedMult);
+              steerToward(Math.atan2(waterTarget.wx - a.x, waterTarget.wz - a.z), 5.8 * coldSpeedMult);
             } else {
               a.heading += 2.2 * coldSpeedMult * dt;
             }
@@ -8094,18 +8130,52 @@
         } else if (a.type === 'macaw' || a.type === 'bat') {
           let swoopingLantern = null;
           let swoopDist = 72.0;
-          if (a.type === 'bat' && isNightTime && typeof placedWorldItems !== 'undefined') {
-            for (let k = 0; k < placedWorldItems.length; k++) {
-              const it = placedWorldItems[k];
-              if (it.type === 'item-lantern' && it.mothsActive && (it.mothSupply || 0) > 0.05) {
-                // World position of the hanging lantern globe
-                const lx = it.x + Math.cos(it.yaw) * 1.02;
-                const lz = it.z - Math.sin(it.yaw) * 1.02;
-                const dL = Math.hypot(lx - a.x, lz - a.z);
-                if (dL < swoopDist) {
-                  swoopDist = dL;
-                  swoopingLantern = { it, lx, lz, ly: it.y + 2.25 };
+
+          if (a.type === 'bat') {
+            // Staggered individual bat hunger & satiation cycle so bats never all get hungry or swarm at the same time!
+            if (a.batHungerCooldown === undefined) {
+              // Initialize each bat at a different point in its hunger cycle (0s .. 24s)
+              a.batHungerCooldown = (a.phase / (Math.PI * 2)) * 24.0;
+              a.batFeedDuration = 0.0;
+            }
+            if (a.batHungerCooldown > 0.0) {
+              a.batHungerCooldown = Math.max(0.0, a.batHungerCooldown - dt);
+            }
+
+            const isBatHungry = (a.batHungerCooldown <= 0.0);
+            if (isBatHungry && isNightTime && typeof placedWorldItems !== 'undefined') {
+              for (let k = 0; k < placedWorldItems.length; k++) {
+                const it = placedWorldItems[k];
+                // Only approach a lantern if it has active moths AND isn't already crowded by >2 feeding bats!
+                if (it.type === 'item-lantern' && it.mothsActive && (it.mothSupply || 0) > 0.05 && (it.batsFeedingThisFrame || 0) < 2) {
+                  const lx = it.x + Math.cos(it.yaw) * 1.02;
+                  const lz = it.z - Math.sin(it.yaw) * 1.02;
+                  const dL = Math.hypot(lx - a.x, lz - a.z);
+                  if (dL < swoopDist) {
+                    swoopDist = dL;
+                    swoopingLantern = { it, lx, lz, ly: it.y + 2.25 };
+                  }
                 }
+              }
+            }
+          }
+
+          // Gentle bat-to-bat aerial separation so flying bats don't stack in the same airspace
+          let batRepelX = 0.0;
+          let batRepelZ = 0.0;
+          if (a.type === 'bat') {
+            for (let j = 0; j < faunaAgents.length; j++) {
+              if (j === i) continue;
+              const other = faunaAgents[j];
+              if (other.type !== 'bat' || other.state !== 'alive') continue;
+              const dxB = a.x - other.x;
+              const dzB = a.z - other.z;
+              const d2B = dxB * dxB + dzB * dzB;
+              if (d2B > 0.001 && d2B < 25.0) {
+                const distB = Math.sqrt(d2B);
+                const pushB = (1.0 - distB / 5.0);
+                batRepelX += (dxB / distB) * pushB;
+                batRepelZ += (dzB / distB) * pushB;
               }
             }
           }
@@ -8114,23 +8184,31 @@
           let targetAlt = groundY + (a.type === 'bat' ? 4.4 : 4.8) + Math.sin(time * (a.type === 'bat' ? 3.2 : 2.1) + a.phase) * 1.8;
 
           if (swoopingLantern) {
-            // Bats are attracted to the moths fluttering around lit lanterns and swoop in to catch & deplete them!
+            // Hungry bat swoops in to catch a moth snack for 3.5-6.5s, then becomes satiated and flies off!
             const angleToLantern = Math.atan2(swoopingLantern.lx - a.x, swoopingLantern.lz - a.z);
             if (swoopDist > 3.6) {
               steerToward(angleToLantern, 4.8);
               batSpeedMult = 1.18;
-              // Begin descending into an attack dive as the bat approaches the lantern
               const diveBlend = clamp(1.0 - (swoopDist - 3.6) / 18.0, 0.0, 1.0);
               targetAlt = targetAlt * (1.0 - diveBlend) + (swoopingLantern.ly + 0.35 + Math.sin(time * 7.5 + a.phase) * 0.45) * diveBlend;
             } else {
-              // Tight acrobatic moth-catching swoop right around the hanging lantern globe — flags lantern for slow, rate-capped moth consumption!
               const orbitTangent = angleToLantern + Math.PI * 0.42;
               steerToward(orbitTangent, 7.5);
               batSpeedMult = 1.28;
               targetAlt = swoopingLantern.ly + Math.sin(time * 9.0 + a.phase) * 0.42;
               const lan = swoopingLantern.it;
               lan.batsFeedingThisFrame = (lan.batsFeedingThisFrame || 0) + 1;
+
+              a.batFeedDuration = (a.batFeedDuration || 0.0) + dt;
+              const maxSnackTime = 3.5 + (a.phase % 3.2);
+              if (a.batFeedDuration >= maxSnackTime) {
+                // Bat is now full/satiated! Fly away and wait 15-30s before getting hungry again
+                a.batFeedDuration = 0.0;
+                a.batHungerCooldown = 15.0 + Math.random() * 16.0;
+              }
             }
+          } else if (Math.hypot(batRepelX, batRepelZ) > 0.22) {
+            steerToward(Math.atan2(batRepelX, batRepelZ), 3.8);
           } else if (waterProximity[pIdx] < 0.25) {
             a.heading += 1.5 * dt;
           } else {
