@@ -1360,7 +1360,7 @@
   <div class="dev-stats-bar" id="dev-stats-bar">
     <div class="dev-bar-header">
       <span>🛠️ Dev Mode · Animal Proximity</span>
-      <span class="dev-bar-sub" id="dev-audio-range-label">🔊 &le; 65m</span>
+      <span class="dev-bar-sub" id="dev-audio-range-label">🔊 &le; 40m</span>
     </div>
     <div class="dev-bar-sub" id="dev-camera-pos-label">Cam: (0, 0, 0) · Ground: 0.0m</div>
     <div class="dev-animal-list" id="dev-animal-list">
@@ -1723,7 +1723,7 @@
       isUnderwater: false,
       audioEnabled: true,
       devMode: false,
-      animalAudioMaxDist: 65.0, // Only play animal sounds when the camera is within 65m of the animal!
+      animalAudioMaxDist: 40.0, // Only play animal sounds when the camera is within <= 40m of the animal!
       skyColorHex: 0xd5a87a,
       skyFogDensity: 0.0020
     };
@@ -9154,7 +9154,7 @@
 
       _audioTmpVec.set(wx, wy, wz);
       const dist = camera.position.distanceTo(_audioTmpVec);
-      const maxAudibleDist = params.animalAudioMaxDist || 65.0;
+      const maxAudibleDist = params.animalAudioMaxDist || 40.0;
       if (!forceImmediate && dist > maxAudibleDist) return;
 
       const ctx = ensureAudioContext();
@@ -9165,7 +9165,7 @@
       const now = ctx.currentTime;
       const { pan } = computeWorldAudioSpatial(wx, wy, wz);
       const outBus = createSpatialPanner(ctx, pan);
-      // Smooth proximity falloff: full volume very close, fading smoothly to 0 at maxAudibleDist (65m)
+      // Smooth proximity falloff: full volume very close, fading smoothly to 0 at maxAudibleDist (40m)
       const proxGain = forceImmediate ? 0.85 : Math.pow(clamp(1.0 - dist / maxAudibleDist, 0.05, 1.0), 1.35);
 
       // Authentic Puerto Rican Coquí Frog ("CO-QUÍ!") acoustic profile:
@@ -9359,7 +9359,7 @@
 
       _audioTmpVec.set(wx, wy, wz);
       const dist = camera.position.distanceTo(_audioTmpVec);
-      const maxAudibleDist = params.animalAudioMaxDist || 65.0;
+      const maxAudibleDist = params.animalAudioMaxDist || 40.0;
       if (dist > maxAudibleDist) return;
 
       const ctx = ensureAudioContext();
@@ -11840,7 +11840,7 @@
       const cx = camera.position.x;
       const cy = camera.position.y;
       const cz = camera.position.z;
-      const maxAud = params.animalAudioMaxDist || 65.0;
+      const maxAud = params.animalAudioMaxDist || 40.0;
 
       if (devAudioRangeLabelEl) {
         devAudioRangeLabelEl.textContent = `🔊 Audio \u2264 ${Math.round(maxAud)}m`;
