@@ -10947,9 +10947,9 @@
       return root;
     }
 
-    // Pre-allocated pool of 6 realistic THREE.PointLights for Lanterns at startup (intensity = 0.0 when unused).
-    // Dynamically assigned each frame to the 6 lanterns nearest the camera so placing a lantern has ZERO shader-recompile delay!
-    const LANTERN_LIGHT_POOL_SIZE = 6;
+    // Pre-allocated pool of 10 realistic THREE.PointLights for Lanterns at startup (intensity = 0.0 when unused).
+    // Dynamically assigned each frame to the 10 lanterns nearest the camera so placing a lantern has ZERO shader-recompile delay!
+    const LANTERN_LIGHT_POOL_SIZE = 10;
     const lanternLightPool = [];
     for (let k = 0; k < LANTERN_LIGHT_POOL_SIZE; k++) {
       const ptLight = new THREE.PointLight(0xff9e3b, 0.0, 26.0, 1.35);
@@ -12091,7 +12091,7 @@
         rebuildFloraInstances();
       }
 
-      // Assign the 6 pre-allocated THREE.PointLights to the 6 lanterns nearest the camera at night!
+      // Assign the 10 pre-allocated THREE.PointLights to the 10 lanterns nearest the camera at night!
       if (isNightTime && _activeLanternCandidates.length > 0) {
         if (_activeLanternCandidates.length > LANTERN_LIGHT_POOL_SIZE) {
           _activeLanternCandidates.sort((a, b) => a.distSq - b.distSq);
