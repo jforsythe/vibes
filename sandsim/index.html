@@ -1463,6 +1463,9 @@
     const iceCover = new Float32Array(MAX_CELLS);       // 0..1 surface ice crust on lakes/pools during snow & ice storms
     const lavaFrac = new Float32Array(MAX_CELLS);       // 0.0 = water, 1.0 = molten glowing lava
     const lavaFracNext = new Float32Array(MAX_CELLS);
+    const plantBurnTimer = new Float32Array(MAX_CELLS); // 0 = not burning; 0.01..1.10s = plant ignited in fire before removal
+    const steamStageTimer = new Float32Array(MAX_CELLS);// 0 = not steaming; 0.01..0.95s = water turning to steam on lava before hardening to rock
+    const pendingRockHeight = new Float32Array(MAX_CELLS);
 
     const params = {
       fidelity: 3,            // 1: Low-Poly Fast, 2: Balanced, 3: High, 4: Ultra, 5: Cinematic Max
@@ -3098,6 +3101,9 @@
       waterNext.fill(0);
       lavaFrac.fill(0);
       lavaFracNext.fill(0);
+      plantBurnTimer.fill(0);
+      steamStageTimer.fill(0);
+      pendingRockHeight.fill(0);
       soilMoisture.fill(0);
       moistureNext.fill(0);
       waterProximity.fill(0);
@@ -3106,6 +3112,9 @@
       vegHealth.fill(1);
       snowCover.fill(0);
       iceCover.fill(0);
+      plantBurnTimer.fill(0);
+      steamStageTimer.fill(0);
+      pendingRockHeight.fill(0);
       // Remove aquatic & jungle-dependent wildlife while keeping desert camels, oryx, lions, and hawks
       if (typeof faunaAgents !== 'undefined') {
         for (let i = faunaAgents.length - 1; i >= 0; i--) {
@@ -3127,6 +3136,9 @@
       water.fill(0);
       lavaFrac.fill(0);
       lavaFracNext.fill(0);
+      plantBurnTimer.fill(0);
+      steamStageTimer.fill(0);
+      pendingRockHeight.fill(0);
       soilMoisture.fill(0);
       waterProximity.fill(0);
       veg.fill(0);
@@ -3135,6 +3147,9 @@
       obstacleType.fill(0);
       snowCover.fill(0);
       iceCover.fill(0);
+      plantBurnTimer.fill(0);
+      steamStageTimer.fill(0);
+      pendingRockHeight.fill(0);
 
       for (let y = 0; y < GRID; y++) {
         for (let x = 0; x < GRID; x++) {
@@ -3363,25 +3378,53 @@
       0.7071, 0.7071, 0.7071, 0.7071
     ];
 
-    // Helper: Cool & solidify molten lava at cell i into hard volcanic basalt rock (obstacleType = 3)
+    // Helper: Ignite a plant at cell i so it burns in fire for ~1.1 seconds before being incinerated/removed
+    function ignitePlantAtCell(i) {
+      if (veg[i] < 0.12) return;
+      if (plantBurnTimer[i] <= 0.0) {
+        plantBurnTimer[i] = 0.01;
+        if (typeof spawnFireFlameAtCell === 'function') {
+          spawnFireFlameAtCell(i, 3);
+        }
+      }
+    }
+
+    // Stage 1: When water or snow touches lava at cell i, trigger the initial boiling STEAM stage (~0.95s)
+    // before committing the quenched lava into hard volcanic basalt rock (Stage 2)
     function solidifyLavaCellToRock(i, solidifyDepth) {
       const w = water[i];
       if (w <= 0.005 || lavaFrac[i] < 0.20) return;
       const dH = Math.min(w, solidifyDepth);
       if (dH <= 0.001) return;
 
-      // Fuse any underlying loose sand + the cooled lava thickness into solid, wind-proof volcanic bedrock
-      const rockAdd = sand[i] + dH * 0.95;
-      bedrock[i] = clamp(bedrock[i] + rockAdd, MIN_TERRAIN_HEIGHT, MAX_TERRAIN_HEIGHT);
-      sand[i] = 0.0;
-      obstacleType[i] = 3; // Cooled Volcanic Basalt Rock (hard like rock)
-      veg[i] = 0.0;
+      pendingRockHeight[i] = Math.min(w, pendingRockHeight[i] + dH);
+      if (steamStageTimer[i] <= 0.0) {
+        steamStageTimer[i] = 0.01;
+      }
+      if (typeof spawnSteamPuffAtCell === 'function') {
+        spawnSteamPuffAtCell(i, 3);
+      }
+    }
 
-      water[i] = Math.max(0.0, w - dH);
-      if (water[i] < 0.025) {
+    // Stage 2: Finalize hardening into solid volcanic basalt rock after the initial steam stage completes
+    function commitQuenchedLavaToRock(i) {
+      const w = water[i];
+      const dH = Math.min(w, Math.max(pendingRockHeight[i], w * 0.85));
+      if (dH > 0.002) {
+        const rockAdd = sand[i] + dH * 0.95;
+        bedrock[i] = clamp(bedrock[i] + rockAdd, MIN_TERRAIN_HEIGHT, MAX_TERRAIN_HEIGHT);
+        sand[i] = 0.0;
+        obstacleType[i] = 3; // Cooled Volcanic Basalt Rock (hard like rock)
+        veg[i] = 0.0;
+        plantBurnTimer[i] = 0.0;
+        water[i] = Math.max(0.0, w - dH);
+      }
+      if (water[i] < 0.03) {
         water[i] = 0.0;
         lavaFrac[i] = 0.0;
       }
+      steamStageTimer[i] = 0.0;
+      pendingRockHeight[i] = 0.0;
     }
 
     function waterShedAndPoolStep(stepScale = 1.0) {
@@ -3444,9 +3487,10 @@
             }
 
             if (totalWeightedDiff > 0) {
-              // Fast-flowing liquid water (1.0x) vs. thick, slow-moving molten lava (~0.24x) and frozen surface ice
+              // Fast-flowing liquid water (1.0x) vs. thick, slow-moving molten lava (~0.24x), steaming quenching lava, and frozen surface ice
               const iceDamp = (cellLava < 0.25 && iceCover[i] > 0.1) ? (1.0 - clamp(iceCover[i] * 0.9, 0.0, 0.92)) : 1.0;
-              const viscosityMult = (1.0 - cellLava * 0.76) * iceDamp;
+              const steamQuenchDamp = steamStageTimer[i] > 0 ? 0.12 : 1.0;
+              const viscosityMult = (1.0 - cellLava * 0.76) * iceDamp * steamQuenchDamp;
               const maxOutflow = Math.min(w, maxDrop * 0.52, totalWeightedDiff * 0.145) * flowScale * viscosityMult;
               if (maxOutflow > 1e-7) {
                 waterNext[i] -= maxOutflow;
@@ -3533,11 +3577,25 @@
 
           const isLavaCell = (water[i] > 0.025 && lavaFrac[i] >= 0.35);
 
+          // Check if this cell is near molten lava (within 1-cell 8-neighborhood) so nearby plants ignite in fire!
+          let isNearLavaCell = isLavaCell;
+          if (!isNearLavaCell && veg[i] >= 0.12) {
+            for (let d = 0; d < 8; d++) {
+              const ni = i + N8_OFFSETS[d];
+              if (water[ni] > 0.03 && lavaFrac[ni] >= 0.35) {
+                isNearLavaCell = true;
+                break;
+              }
+            }
+          }
+          if (isNearLavaCell && veg[i] >= 0.12) {
+            ignitePlantAtCell(i);
+          }
+
           if (isLavaCell) {
-            // Molten lava incinerates vegetation, vaporizes soil moisture, and melts thin frost
+            // Molten lava ignites vegetation in fire (burns for ~1s before removal), vaporizes soil moisture, and melts thin frost
             m = 0.0;
             wp = 0.0;
-            if (veg[i] > 0) veg[i] = Math.max(0, veg[i] - 0.45 * stepScale);
             snowCover[i] = 0.0;
             iceCover[i] = 0.0;
           } else {
@@ -4017,7 +4075,10 @@
 
         wPos[i3 + 1] = groundY + w + 0.04;
         wDepth[i] = w;
-        wLava[i] = lf;
+        const stTimer = steamStageTimer[i];
+        // During the initial boiling steam stage (water touching lava), transition the lava mask into hissing white steam before hardening to rock
+        const steamProgress = stTimer > 0.0 ? clamp(stTimer / 0.90, 0.0, 1.0) : 0.0;
+        wLava[i] = stTimer > 0.0 ? lf * (1.0 - steamProgress * 0.85) : lf;
 
         const depthFactor = clamp(w / 2.2, 0.0, 1.0);
         let wr = 0.24 * (1 - depthFactor) + 0.05 * depthFactor;
@@ -4034,6 +4095,13 @@
           wr = wr * (1 - lf) + 0.98 * lf;
           wg = wg * (1 - lf) + 0.34 * lf;
           wb = wb * (1 - lf) + 0.04 * lf;
+        }
+        if (stTimer > 0.0) {
+          // Frothy boiling white-gray steam & cooling basalt froth during the initial steam stage
+          const steamFroth = Math.sin(steamProgress * Math.PI);
+          wr = wr * (1 - steamFroth * 0.88) + 0.95 * (steamFroth * 0.88);
+          wg = wg * (1 - steamFroth * 0.88) + 0.96 * (steamFroth * 0.88);
+          wb = wb * (1 - steamFroth * 0.88) + 0.98 * (steamFroth * 0.88);
         }
         wCol[i3]     = wr;
         wCol[i3 + 1] = wg;
@@ -4321,10 +4389,23 @@
           const mountY = hCenter * (1.0 - footWeight) + minFootH * footWeight - (0.04 + slopeTan * 0.14);
           dummy.position.set(wx, mountY, wz);
 
-          // Slightly compact scale on steeper slopes for a tighter footprint fit
-          const slopeScaleFit = clamp(1.0 - slopeTan * 0.28, 0.68, 1.0);
-          const frostCap = clamp(snowCover[i] * 0.78, 0.0, 0.85);
+          // Slightly compact scale on steeper slopes for a tighter footprint fit (and shrink slightly as a burning plant chars down!)
+          const burnTime = plantBurnTimer[i];
+          const isPlantBurning = burnTime > 0.0;
+          const burnProg = isPlantBurning ? clamp(burnTime / 1.10, 0.0, 1.0) : 0.0;
+          const burnShrink = isPlantBurning ? (1.0 - burnProg * 0.32 + Math.sin((uniforms.uTime.value || 0) * 32.0 + i) * 0.06) : 1.0;
+          const slopeScaleFit = clamp(1.0 - slopeTan * 0.28, 0.68, 1.0) * burnShrink;
+          const frostCap = isPlantBurning ? 0.0 : clamp(snowCover[i] * 0.78, 0.0, 0.85);
           const applyFrostTint = (r, g, b) => {
+            if (isPlantBurning) {
+              // Ignited plant burns with flickering bright yellow-orange-red fire before charring into glowing embers
+              const flicker = 0.5 + 0.5 * Math.sin((uniforms.uTime.value || 0) * 34.0 + i * 1.7);
+              const fireR = burnProg < 0.7 ? 1.0 : (1.0 - (burnProg - 0.7) * 2.2);
+              const fireG = burnProg < 0.5 ? (0.45 + flicker * 0.50) : Math.max(0.08, (1.0 - burnProg) * (0.55 + flicker * 0.35));
+              const fireB = burnProg < 0.35 ? (0.08 + flicker * 0.22) : 0.02;
+              tempColor.setRGB(fireR, fireG, fireB);
+              return;
+            }
             tempColor.setRGB(
               r * (1 - frostCap) + 0.93 * frostCap,
               g * (1 - frostCap) + 0.97 * frostCap,
@@ -5765,24 +5846,23 @@
         const cellIdx = idx(gx, gz);
         const wp = waterProximity[cellIdx];
 
-        // Despawn aquatic fish/crocs if their pool dries up (or turns into lava for fish), or jungle birds/bats/jaguars if all water & jungle vanish
-        if (a.type === 'fish' && (waterDepth < 0.068 || localLava > 0.25)) {
+        // Despawn aquatic fish if their pool dries up; if lava enters a fish pool, ignite the fish in fire for 1s before removal!
+        if (a.type === 'fish' && waterDepth < 0.068 && !a.isBurning) {
           faunaAgents.splice(i, 1);
           continue;
         }
-        if (a.type === 'croc' && params.totalWaterVol < 40 && !isInMoltenLava) {
+        if (a.type === 'croc' && params.totalWaterVol < 40 && !isInMoltenLava && !a.isBurning) {
           disposeApexRig(a);
           faunaAgents.splice(i, 1);
           continue;
         }
-        if ((a.type === 'macaw' || a.type === 'bat' || a.type === 'jaguar') && params.totalWaterVol < 30 && params.junglePlantCount < 15) {
+        if ((a.type === 'macaw' || a.type === 'bat' || a.type === 'jaguar') && params.totalWaterVol < 30 && params.junglePlantCount < 15 && !a.isBurning) {
           disposeApexRig(a);
           faunaAgents.splice(i, 1);
           continue;
         }
 
-        // --- DROWNING, LAVA INCINERATION & UN-DROWNING CHECK FOR ANIMALS ---
-        // Animals ONLY drown in water when FULLY SUBMERGED; however, stepping into molten lava rapidly burns any ground animal into a skeleton!
+        // --- DROWNING, LAVA IGNITION (1-SECOND FIRE BURN) & UN-DROWNING CHECK FOR ANIMALS ---
         let isDrowning = false;
         const isFlyer = (a.type === 'macaw' || a.type === 'hawk' || a.type === 'bat' || a.type === 'owl');
         const speciesFullHeight = {
@@ -5800,15 +5880,42 @@
         };
         const fullSubmergeDepth = (speciesFullHeight[a.type] || 1.45) * a.scale;
         const fleeThreshold = a.type === 'flamingo' ? 0.36 : (isFlyer ? 999 : 0.04);
-        const isInHazardousWetArea = (!isFlyer && isInMoltenLava) || ((a.type !== 'fish' && a.type !== 'croc') && (effectiveWaterDepth > fleeThreshold));
 
-        if (!isFlyer && isInMoltenLava) {
+        // Check if this animal is touching lava OR near lava (within 1 grid cell of active molten lava)
+        let isNearMoltenLava = isInMoltenLava;
+        if (!isNearMoltenLava && !isFlyer) {
+          for (let d = 0; d < 8; d++) {
+            const ni = cellIdx + N8_OFFSETS[d];
+            if (water[ni] > 0.035 && lavaFrac[ni] >= 0.32) {
+              isNearMoltenLava = true;
+              break;
+            }
+          }
+        }
+
+        if ((!isFlyer && isNearMoltenLava) || (a.type === 'fish' && localLava > 0.22)) {
+          a.isBurning = true;
+        }
+
+        const isInHazardousWetArea = a.isBurning || (!isFlyer && isNearMoltenLava) || ((a.type !== 'fish' && a.type !== 'croc') && (effectiveWaterDepth > fleeThreshold));
+
+        if (a.isBurning) {
           isDrowning = true;
-          a.submergedTime += dt * 4.2; // Rapid incineration in molten lava (~0.95s)
-          if (a.submergedTime >= 4.0) {
+          a.burnTimer = (a.burnTimer || 0) + dt;
+          if (typeof spawnFireFlameAtWorld === 'function') {
+            spawnFireFlameAtWorld(a.x, a.y + 0.35 * a.scale, a.z, a.scale, 2);
+          }
+          // After burning in fire for ~1.10 seconds, turn into a 3D Bone Skeleton (or remove if small fish)
+          if (a.burnTimer >= 1.10) {
+            if (a.type === 'fish') {
+              faunaAgents.splice(i, 1);
+              continue;
+            }
             disposeApexRig(a);
             a.state = 'skeleton';
             a.skeletonTimer = 0;
+            a.isBurning = false;
+            a.burnTimer = 0;
             continue;
           }
         } else if (a.type !== 'fish' && a.type !== 'croc') {
@@ -6144,7 +6251,16 @@
         dummy.scale.setScalar(a.scale);
         dummy.updateMatrix();
         tempColor.setHex(a.colorHex);
-        if (isDrowning && a.submergedTime > 0) {
+        if (a.isBurning) {
+          // Flickering bright yellow-orange-red fire tint while the animal is burning for 1 second!
+          const burnP = clamp((a.burnTimer || 0) / 1.10, 0, 1);
+          const flk = 0.5 + 0.5 * Math.sin(time * 36.0 + a.phase);
+          tempColor.setRGB(
+            1.0,
+            burnP < 0.65 ? (0.38 + flk * 0.55) : (0.15 + flk * 0.25),
+            burnP < 0.45 ? (0.05 + flk * 0.20) : 0.01
+          );
+        } else if (isDrowning && a.submergedTime > 0) {
           const tDrown = clamp(a.submergedTime / 3.5, 0, 1);
           tempColor.lerp(new THREE.Color(0xd6d3c9), tDrown * 0.65);
         }
@@ -6294,6 +6410,233 @@
     lavaEmberSystem.visible = false;
     scene.add(lavaEmberSystem);
 
+    // 11C. 3D IGNITED FIRE FLAMES (Burning Plants & Animals) + BILLOWING WHITE STEAM CLOUDS (Water Touching Lava)
+    const FIRE_PARTICLE_COUNT = 1200;
+    const fireGeo = new THREE.BufferGeometry();
+    const firePos = new Float32Array(FIRE_PARTICLE_COUNT * 3);
+    const fireCol = new Float32Array(FIRE_PARTICLE_COUNT * 3);
+    const fireVel = new Float32Array(FIRE_PARTICLE_COUNT * 3);
+    const fireLife = new Float32Array(FIRE_PARTICLE_COUNT);
+    for (let i = 0; i < FIRE_PARTICLE_COUNT; i++) {
+      firePos[i * 3 + 1] = -999;
+      fireLife[i] = 2.0;
+    }
+    fireGeo.setAttribute('position', new THREE.BufferAttribute(firePos, 3));
+    fireGeo.setAttribute('color', new THREE.BufferAttribute(fireCol, 3));
+    const fireMat = new THREE.PointsMaterial({
+      size: 1.85,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.94,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const fireFlameSystem = new THREE.Points(fireGeo, fireMat);
+    fireFlameSystem.frustumCulled = false;
+    scene.add(fireFlameSystem);
+    let fireWriteHead = 0;
+
+    function spawnFireFlameAtWorld(wx, wy, wz, heightScale = 1.0, count = 2) {
+      for (let k = 0; k < count; k++) {
+        const idxP = fireWriteHead;
+        fireWriteHead = (fireWriteHead + 1) % FIRE_PARTICLE_COUNT;
+        const i3 = idxP * 3;
+        const r = (0.35 + Math.random() * 0.55) * heightScale;
+        const ang = Math.random() * Math.PI * 2;
+        firePos[i3]     = wx + Math.cos(ang) * r;
+        firePos[i3 + 1] = wy + Math.random() * 0.9 * heightScale;
+        firePos[i3 + 2] = wz + Math.sin(ang) * r;
+
+        fireVel[i3]     = (Math.random() - 0.5) * 1.6;
+        fireVel[i3 + 1] = 2.8 + Math.random() * 3.4;
+        fireVel[i3 + 2] = (Math.random() - 0.5) * 1.6;
+
+        fireCol[i3]     = 1.0;
+        fireCol[i3 + 1] = 0.85;
+        fireCol[i3 + 2] = 0.25;
+        fireLife[idxP]  = 0.01;
+      }
+    }
+
+    function spawnFireFlameAtCell(i, count = 2) {
+      const gx = i % GRID;
+      const gy = Math.floor(i / GRID);
+      const wx = ((gx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+      const wz = ((gy / (GRID - 1)) - 0.5) * WORLD_SIZE;
+      const wy = bedrock[i] + sand[i] + 0.25;
+      const sc = clamp(veg[i] * 0.55, 0.5, 1.8);
+      spawnFireFlameAtWorld(wx, wy, wz, sc, count);
+    }
+
+    const STEAM_PARTICLE_COUNT = 1400;
+    const steamGeo = new THREE.BufferGeometry();
+    const steamPos = new Float32Array(STEAM_PARTICLE_COUNT * 3);
+    const steamCol = new Float32Array(STEAM_PARTICLE_COUNT * 3);
+    const steamVel = new Float32Array(STEAM_PARTICLE_COUNT * 3);
+    const steamLife = new Float32Array(STEAM_PARTICLE_COUNT);
+    for (let i = 0; i < STEAM_PARTICLE_COUNT; i++) {
+      steamPos[i * 3 + 1] = -999;
+      steamLife[i] = 2.0;
+    }
+    steamGeo.setAttribute('position', new THREE.BufferAttribute(steamPos, 3));
+    steamGeo.setAttribute('color', new THREE.BufferAttribute(steamCol, 3));
+    const steamMat = new THREE.PointsMaterial({
+      size: 2.65,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false
+    });
+    const steamCloudSystem = new THREE.Points(steamGeo, steamMat);
+    steamCloudSystem.frustumCulled = false;
+    scene.add(steamCloudSystem);
+    let steamWriteHead = 0;
+
+    function spawnSteamPuffAtWorld(wx, wy, wz, count = 2) {
+      for (let k = 0; k < count; k++) {
+        const idxP = steamWriteHead;
+        steamWriteHead = (steamWriteHead + 1) % STEAM_PARTICLE_COUNT;
+        const i3 = idxP * 3;
+        steamPos[i3]     = wx + (Math.random() - 0.5) * 1.4;
+        steamPos[i3 + 1] = wy + 0.15 + Math.random() * 0.55;
+        steamPos[i3 + 2] = wz + (Math.random() - 0.5) * 1.4;
+
+        steamVel[i3]     = (Math.random() - 0.5) * 2.2;
+        steamVel[i3 + 1] = 3.2 + Math.random() * 3.8;
+        steamVel[i3 + 2] = (Math.random() - 0.5) * 2.2;
+
+        const shade = 0.88 + Math.random() * 0.12;
+        steamCol[i3]     = shade;
+        steamCol[i3 + 1] = shade * 0.99;
+        steamCol[i3 + 2] = shade;
+        steamLife[idxP]  = 0.01;
+      }
+    }
+
+    function spawnSteamPuffAtCell(i, count = 2) {
+      const gx = i % GRID;
+      const gy = Math.floor(i / GRID);
+      const wx = ((gx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+      const wz = ((gy / (GRID - 1)) - 0.5) * WORLD_SIZE;
+      const wy = bedrock[i] + sand[i] + water[i];
+      spawnSteamPuffAtWorld(wx, wy, wz, count);
+    }
+
+    function updateFireAndSteamEffects(dt) {
+      const time = uniforms.uTime.value;
+      const rad = THREE.MathUtils.degToRad(params.windDirDeg);
+      const windX = Math.cos(rad) * params.windSpeed * 0.16;
+      const windZ = Math.sin(rad) * params.windSpeed * 0.16;
+
+      let anyBurningPlants = false;
+      let anyPlantRemoved = false;
+      let anySteamRockChanged = false;
+
+      // 1. Advance burning plants (burn in fire for ~1.10s before removal) & steaming lava->rock cells (~0.90s steam stage before hardening)
+      for (let i = 0; i < MAX_CELLS; i++) {
+        const bt = plantBurnTimer[i];
+        if (bt > 0.0) {
+          anyBurningPlants = true;
+          const nextBt = bt + dt;
+          if (nextBt >= 1.10 || veg[i] < 0.08) {
+            // Finished burning for ~1.1s -> incinerate and remove plant!
+            veg[i] = 0.0;
+            plantBurnTimer[i] = 0.0;
+            anyPlantRemoved = true;
+          } else {
+            plantBurnTimer[i] = nextBt;
+            if (Math.random() < 0.45) {
+              spawnFireFlameAtCell(i, 1);
+            }
+          }
+        }
+
+        const st = steamStageTimer[i];
+        if (st > 0.0) {
+          anySteamRockChanged = true;
+          const nextSt = st + dt;
+          if (Math.random() < 0.65) {
+            spawnSteamPuffAtCell(i, 1);
+          }
+          if (nextSt >= 0.90) {
+            // Initial steam stage complete -> harden quenched lava into solid volcanic rock!
+            commitQuenchedLavaToRock(i);
+            spawnSteamPuffAtCell(i, 2);
+          } else {
+            steamStageTimer[i] = nextSt;
+          }
+        }
+      }
+
+      if (anySteamRockChanged) {
+        syncTerrainAndWaterMeshes();
+      }
+      if (anyBurningPlants || anyPlantRemoved) {
+        rebuildFloraInstances();
+      }
+
+      // 2. Update 3D Fire Flame Particles
+      let activeFire = 0;
+      for (let i = 0; i < FIRE_PARTICLE_COUNT; i++) {
+        let life = fireLife[i];
+        if (life >= 1.0) continue;
+        activeFire++;
+        life += dt * 2.1;
+        fireLife[i] = life;
+        const i3 = i * 3;
+        if (life >= 1.0) {
+          firePos[i3 + 1] = -999;
+          continue;
+        }
+        const swirl = Math.sin(time * 16.0 + i * 1.9) * 1.5;
+        firePos[i3]     += (fireVel[i3] + windX * 0.5 + swirl) * dt;
+        firePos[i3 + 1] += fireVel[i3 + 1] * dt;
+        firePos[i3 + 2] += (fireVel[i3 + 2] + windZ * 0.5 - swirl) * dt;
+
+        // Bright yellow-gold core -> blazing orange -> crimson flame -> dark smoke tip
+        const heat = 1.0 - life;
+        fireCol[i3]     = clamp(heat * 1.8, 0.15, 1.0);
+        fireCol[i3 + 1] = clamp(Math.pow(heat, 1.65) * 1.15, 0.02, 0.95);
+        fireCol[i3 + 2] = clamp(Math.pow(heat, 3.2) * 0.55, 0.0, 0.45);
+      }
+      fireFlameSystem.visible = activeFire > 0;
+      if (activeFire > 0) {
+        fireGeo.attributes.position.needsUpdate = true;
+        fireGeo.attributes.color.needsUpdate = true;
+      }
+
+      // 3. Update 3D Billowing White Steam Cloud Particles
+      let activeSteam = 0;
+      for (let i = 0; i < STEAM_PARTICLE_COUNT; i++) {
+        let life = steamLife[i];
+        if (life >= 1.0) continue;
+        activeSteam++;
+        life += dt * 0.88;
+        steamLife[i] = life;
+        const i3 = i * 3;
+        if (life >= 1.0) {
+          steamPos[i3 + 1] = -999;
+          continue;
+        }
+        const billowX = Math.sin(time * 3.5 + i * 1.1) * 1.6;
+        const billowZ = Math.cos(time * 3.1 + i * 1.4) * 1.6;
+        steamPos[i3]     += (steamVel[i3] + windX + billowX) * dt;
+        steamPos[i3 + 1] += steamVel[i3 + 1] * (1.0 - life * 0.45) * dt;
+        steamPos[i3 + 2] += (steamVel[i3 + 2] + windZ + billowZ) * dt;
+
+        const fade = Math.sin((1.0 - life) * Math.PI * 0.5);
+        const shade = (0.86 + 0.14 * (1.0 - life)) * fade;
+        steamCol[i3]     = shade;
+        steamCol[i3 + 1] = shade * 0.99;
+        steamCol[i3 + 2] = shade;
+      }
+      steamCloudSystem.visible = activeSteam > 0;
+      if (activeSteam > 0) {
+        steamGeo.attributes.position.needsUpdate = true;
+        steamGeo.attributes.color.needsUpdate = true;
+      }
+    }
+
     // Bilinear height interpolation for smooth FPV walking, surface ice solidity, molten lava & underwater detection
     function sampleHeightsAtWorld(wx, wz) {
       const fx = clamp(((wx / WORLD_SIZE) + 0.5) * (GRID - 1), 0, GRID - 1.001);
@@ -6406,6 +6749,7 @@
 
     function updateParticles(dt) {
       updateLavaEmbers(dt);
+      updateFireAndSteamEffects(dt);
       // Automatically show falling snowflakes, monsoon rain, or haboob dust storms during severe weather, OR whenever user toggles Particles ON
       const isBadStormActive = (params.snowRate > 0.05) || (params.rainRate > 0.35) || (params.weatherMode === 'haboob');
       particleSystem.visible = (params.showParticles || isBadStormActive) && (params.windSpeed > 1 || params.rainRate > 0.05 || params.snowRate > 0.05);
@@ -7325,36 +7669,39 @@
           const i = idx(x, y);
 
           if (params.tool === 'water') {
-            if (water[i] > 0.025 && lavaFrac[i] >= 0.25) {
-              // Pouring water directly onto molten lava cools & solidifies the lava into hard volcanic rock!
-              solidifyLavaCellToRock(i, water[i]);
+            if ((water[i] > 0.025 && lavaFrac[i] >= 0.25) || steamStageTimer[i] > 0.0) {
+              // Pouring water directly onto molten lava triggers the boiling steam stage before hardening into volcanic rock!
+              solidifyLavaCellToRock(i, Math.max(water[i], falloff * 0.65));
+            } else {
+              const maxWaterDepth = Math.max(0, MAX_TERRAIN_HEIGHT - (bedrock[i] + sand[i]));
+              water[i] = Math.min(maxWaterDepth, water[i] + falloff * 0.85);
+              lavaFrac[i] = 0.0;
+              soilMoisture[i] = Math.min(1.0, soilMoisture[i] + falloff * 0.5);
             }
-            const maxWaterDepth = Math.max(0, MAX_TERRAIN_HEIGHT - (bedrock[i] + sand[i]));
-            water[i] = Math.min(maxWaterDepth, water[i] + falloff * 0.85);
-            lavaFrac[i] = 0.0;
-            soilMoisture[i] = Math.min(1.0, soilMoisture[i] + falloff * 0.5);
           } else if (params.tool === 'lava') {
             if (water[i] > 0.04 && lavaFrac[i] < 0.25) {
-              // Pouring lava directly into cold water quenches & solidifies the contact layer into hard rock!
+              // Pouring lava directly into cold water triggers the boiling steam stage before hardening into rock!
               const quenchH = Math.min(water[i], falloff * 0.85);
               lavaFrac[i] = 1.0;
               solidifyLavaCellToRock(i, quenchH);
             } else if (snowCover[i] > 0.06 || iceCover[i] > 0.06) {
-              // Pouring lava onto accumulated snow or frozen lake ice cools the first layer into hard rock!
+              // Pouring lava onto accumulated snow or frozen lake ice triggers steam & cools into hard rock!
               const snowQuench = (snowCover[i] + iceCover[i]) * 0.65 * falloff;
               snowCover[i] = 0.0;
               iceCover[i] = 0.0;
-              bedrock[i] = clamp(bedrock[i] + sand[i] + snowQuench, MIN_TERRAIN_HEIGHT, MAX_TERRAIN_HEIGHT);
-              sand[i] = 0.0;
-              obstacleType[i] = 3;
+              water[i] = Math.max(water[i], snowQuench);
+              lavaFrac[i] = 1.0;
+              solidifyLavaCellToRock(i, snowQuench);
             }
             const maxLavaDepth = Math.max(0, MAX_TERRAIN_HEIGHT - (bedrock[i] + sand[i]));
             water[i] = Math.min(maxLavaDepth, water[i] + falloff * 0.85);
             lavaFrac[i] = 1.0;
-            // Molten lava immediately vaporizes soil moisture, melts snow/ice, and incinerates flora in the brush radius
+            // Molten lava vaporizes soil moisture, melts snow/ice, and ignites flora in fire (burns for 1s before removal)!
             soilMoisture[i] = 0.0;
             waterProximity[i] = 0.0;
-            veg[i] = 0.0;
+            if (veg[i] >= 0.12) {
+              ignitePlantAtCell(i);
+            }
             snowCover[i] = 0.0;
             iceCover[i] = 0.0;
           } else if (params.tool === 'pour') {
@@ -8086,12 +8433,13 @@
     document.getElementById('btn-cloudburst').addEventListener('click', () => {
       for (let i = 0; i < MAX_CELLS; i++) {
         if (water[i] > 0.02 && lavaFrac[i] >= 0.25) {
-          // Flash flood water quenches any active molten lava into hard volcanic rock!
+          // Flash flood water flashes into boiling steam on contact with lava before hardening into volcanic rock!
           solidifyLavaCellToRock(i, water[i]);
+        } else {
+          water[i] += 0.38;
+          lavaFrac[i] = 0.0;
+          soilMoisture[i] = Math.min(1.0, soilMoisture[i] + 0.45);
         }
-        water[i] += 0.38;
-        lavaFrac[i] = 0.0;
-        soilMoisture[i] = Math.min(1.0, soilMoisture[i] + 0.45);
       }
       for (let k = 0; k < 6; k++) {
         waterShedAndPoolStep();
@@ -8402,6 +8750,9 @@
       obstacleType.fill(0);
       snowCover.fill(0);
       iceCover.fill(0);
+      plantBurnTimer.fill(0);
+      steamStageTimer.fill(0);
+      pendingRockHeight.fill(0);
 
       // 5. Release WebGL shadow map textures, render lists, and GPU program/buffer caches
       if (sunLight.shadow && sunLight.shadow.map) {
