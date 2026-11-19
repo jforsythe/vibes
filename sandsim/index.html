@@ -1499,7 +1499,8 @@
       <button class="panel-icon-btn" data-section="sec-terrain" title="1. Terrain & Watersheds">🏞️</button>
       <button class="panel-icon-btn" data-section="sec-weather" title="2. Weather & Climate Regimes">🌤️</button>
       <button class="panel-icon-btn" data-section="sec-biome" title="3. Biome Flora & Wildlife">🌴</button>
-      <button class="panel-icon-btn" data-section="sec-items" title="Placeable World Items (Water Tap, Animal Feeder, Lantern)">📦</button>
+      <button class="panel-icon-btn" data-section="sec-items" title="Placeable World Items (Water Tap, Animal Feeder, Lantern, Offroad Truck)">📦</button>
+      <button class="panel-icon-btn" data-section="sec-vehicle-tuner" title="Offroad Vehicle Tuner (Smoke, Skid Threshold, Gear Engine Tune, Headlights)">🛻</button>
       <button class="panel-icon-btn" data-section="sec-wind" title="4. Wind, Rain & Evaporation">💨</button>
       <button class="panel-icon-btn" data-section="sec-sim" title="5. Simulation & Overlays">🎛️</button>
       <button class="panel-icon-btn" id="btn-icon-dev-mode" title="Toggle Developer Mode Stat Bar (Nearby Animal Distances)">🛠️</button>
@@ -1665,6 +1666,103 @@
         <div class="fidelity-details" style="margin-top:6px;">
           <span>Click terrain to place</span>
           <span>Destroy: 🧹 Erase, 🏹 Arrow, ⚡, 🔥</span>
+        </div>
+      </div>
+
+      <!-- Offroad Vehicle Tuner Section -->
+      <div class="section-card" id="sec-vehicle-tuner">
+        <div class="section-header">
+          <span>🛻 Offroad Vehicle Tuner</span>
+          <span class="fidelity-badge" id="val-truck-gear-badge">Idle</span>
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>Tire Smoke / Dust Intensity</span>
+            <span class="control-val" id="val-truck-smoke">25%</span>
+          </div>
+          <input type="range" id="slider-truck-smoke" min="0" max="100" step="1" value="25" title="0% = No tire dust/smoke; 100% = Heavy drift smoke plumes" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>Skid / Squeal Sound Threshold</span>
+            <span class="control-val" id="val-truck-skid-thresh">2.6 · Balanced</span>
+          </div>
+          <input type="range" id="slider-truck-skid-thresh" min="0.5" max="6.5" step="0.1" value="2.6" title="Lower = tires squeal on gentle corners; Higher = only on hard high-speed turns & drifts" />
+        </div>
+
+        <div class="zone-label" style="color:#fcd34d; margin-top:4px;">
+          <span>🎵 Engine Pitch Tune by Gear</span>
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>1st Gear Tune (Launch Pitch)</span>
+            <span class="control-val" id="val-truck-gear1">98 Hz</span>
+          </div>
+          <input type="range" id="slider-truck-gear1" min="45" max="165" step="1" value="98" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>2nd Gear Tune (Mid-Range)</span>
+            <span class="control-val" id="val-truck-gear2">108 Hz</span>
+          </div>
+          <input type="range" id="slider-truck-gear2" min="45" max="165" step="1" value="108" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>3rd Gear Tune (High-Speed)</span>
+            <span class="control-val" id="val-truck-gear3">114 Hz</span>
+          </div>
+          <input type="range" id="slider-truck-gear3" min="45" max="170" step="1" value="114" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>4th Gear Tune (Overdrive Cruise)</span>
+            <span class="control-val" id="val-truck-gear4">70 Hz</span>
+          </div>
+          <input type="range" id="slider-truck-gear4" min="32" max="150" step="1" value="70" />
+        </div>
+
+        <div class="zone-label" style="color:#bae6fd; margin-top:4px;">
+          <span>🔦 Night Headlight Beam & Color</span>
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>Headlight Beam Angle (Spread)</span>
+            <span class="control-val" id="val-truck-light-angle">28°</span>
+          </div>
+          <input type="range" id="slider-truck-light-angle" min="10" max="65" step="1" value="28" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>Headlight Throw Distance</span>
+            <span class="control-val" id="val-truck-light-dist">78 m</span>
+          </div>
+          <input type="range" id="slider-truck-light-dist" min="20" max="140" step="2" value="78" />
+        </div>
+
+        <div class="control-row" style="margin-top:4px;">
+          <div class="control-label" style="align-items:center;">
+            <span>Headlight Color</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+              <input type="color" id="input-truck-light-color" value="#fff1c4" style="width:26px; height:22px; padding:0; border:1px solid rgba(255,255,255,0.25); border-radius:4px; background:transparent; cursor:pointer;" title="Pick custom headlight color" />
+              <span class="control-val" id="val-truck-light-color">#FFF1C4</span>
+            </div>
+          </div>
+          <div style="display:flex; gap:5px; margin-top:4px;">
+            <button type="button" class="truck-color-preset" data-color="#fff1c4" style="flex:1; padding:4px 2px; font-size:10px; border-color:#fff1c4; color:#fff1c4;" title="Warm Halogen">Halogen</button>
+            <button type="button" class="truck-color-preset" data-color="#bae6fd" style="flex:1; padding:4px 2px; font-size:10px; border-color:#bae6fd; color:#bae6fd;" title="Xenon Ice Blue">Xenon</button>
+            <button type="button" class="truck-color-preset" data-color="#fbbf24" style="flex:1; padding:4px 2px; font-size:10px; border-color:#fbbf24; color:#fbbf24;" title="Baja Fog Amber">Amber</button>
+            <button type="button" class="truck-color-preset" data-color="#22d3ee" style="flex:1; padding:4px 2px; font-size:10px; border-color:#22d3ee; color:#22d3ee;" title="Cyber Neon Cyan">Cyan</button>
+            <button type="button" class="truck-color-preset" data-color="#ff4d4d" style="flex:1; padding:4px 2px; font-size:10px; border-color:#ff4d4d; color:#ff4d4d;" title="Crimson Red">Red</button>
+          </div>
         </div>
       </div>
 
@@ -1863,6 +1961,16 @@
       floraSyncInterval: 3,
       fpvMode: false,
       driveMode: false,
+      truckSmokeIntensity: 0.25,     // 0.0 (Off) .. 1.0 (Heavy drift smoke plumes)
+      truckSkidThreshold: 2.6,       // Cornering/drift threshold before tire squeal triggers (0.5 .. 6.5)
+      truckGear1Tune: 98.0,          // Peak engine pitch in 1st Gear (Hz)
+      truckGear2Tune: 108.0,         // Peak engine pitch in 2nd Gear (Hz)
+      truckGear3Tune: 114.0,         // Peak engine pitch in 3rd Gear (Hz)
+      truckGear4Tune: 70.0,          // Engine cruise pitch in 4th Gear Overdrive (Hz)
+      truckLightAngleDeg: 28.0,      // Headlight beam cone angle in degrees (10° .. 65°)
+      truckLightDistance: 78.0,      // Headlight throw distance in meters (20m .. 140m)
+      truckLightColorHex: '#fff1c4', // Headlight color hex
+      truckLightRGB: [1.0, 0.945, 0.769],
       fpvEquip: 'sculpt',     // 'sculpt' | 'none' | 'bow' | 'torch'
       isUnderwater: false,
       audioEnabled: true,
@@ -4608,6 +4716,11 @@
 
       // Gather active offroad truck dual headlights once per sync so they project twin beams onto the terrain ahead at night
       const activeTruckHeadlights = [];
+      const hlMaxDist = params.truckLightDistance || 78.0;
+      const hlAngleRad = THREE.MathUtils.degToRad(clamp(params.truckLightAngleDeg || 28.0, 10.0, 65.0) * 0.5);
+      const hlConeTan = Math.tan(hlAngleRad);
+      const hlSplayRad = hlAngleRad * 0.18;
+      const [hlR, hlG, hlB] = params.truckLightRGB || [1.0, 0.945, 0.769];
       if (isNightTimeNow && typeof placedWorldItems !== 'undefined') {
         const lanternNightGlow = clamp((nightFactor - 0.15) / 0.65, 0.28, 1.0);
         for (let k = 0; k < placedWorldItems.length; k++) {
@@ -4622,15 +4735,15 @@
               {
                 hx: it.x + fwdX * 1.85 - rightX * 0.62,
                 hz: it.z + fwdZ * 1.85 - rightZ * 0.62,
-                dirX: Math.sin(it.yaw - 0.048),
-                dirZ: Math.cos(it.yaw - 0.048),
+                dirX: Math.sin(it.yaw - hlSplayRad),
+                dirZ: Math.cos(it.yaw - hlSplayRad),
                 strength: lanternNightGlow * 2.65
               },
               {
                 hx: it.x + fwdX * 1.85 + rightX * 0.62,
                 hz: it.z + fwdZ * 1.85 + rightZ * 0.62,
-                dirX: Math.sin(it.yaw + 0.048),
-                dirZ: Math.cos(it.yaw + 0.048),
+                dirX: Math.sin(it.yaw + hlSplayRad),
+                dirZ: Math.cos(it.yaw + hlSplayRad),
                 strength: lanternNightGlow * 2.65
               }
             );
@@ -4845,7 +4958,7 @@
           tb = tb * (1 - snowBlend) + 1.00 * snowBlend;
         }
 
-        // Offroad Truck Twin Headlight Beams Projected Far Out in Front of the Vehicle at Night (78m range!)
+        // Offroad Truck Twin Headlight Beams Projected Far Out in Front of the Vehicle at Night (configurable angle, distance & color!)
         if (activeTruckHeadlights.length > 0) {
           const cellWx = tPos[i3];
           const cellWz = tPos[i3 + 2];
@@ -4855,21 +4968,21 @@
             const dx = cellWx - hl.hx;
             const dz = cellWz - hl.hz;
             const fwdDist = dx * hl.dirX + dz * hl.dirZ;
-            if (fwdDist > 0.3 && fwdDist < 78.0) {
+            if (fwdDist > 0.3 && fwdDist < hlMaxDist) {
               const latDist = Math.abs(dx * (-hl.dirZ) + dz * hl.dirX);
-              const coneHalfW = 0.55 + fwdDist * 0.25;
+              const coneHalfW = 0.50 + fwdDist * hlConeTan;
               if (latDist < coneHalfW) {
                 const latFalloff = 1.0 - (latDist / coneHalfW);
-                const distFalloff = 1.0 - (fwdDist / 78.0);
+                const distFalloff = 1.0 - (fwdDist / hlMaxDist);
                 beamBoost += latFalloff * latFalloff * Math.pow(distFalloff, 0.75) * hl.strength;
               }
             }
           }
           if (beamBoost > 0.001) {
             const bbVal = Math.min(2.25, beamBoost);
-            tr = Math.min(1.0, tr + bbVal * 0.92);
-            tg = Math.min(1.0, tg + bbVal * 0.85);
-            tb = Math.min(1.0, tb + bbVal * 0.68);
+            tr = Math.min(1.0, tr + bbVal * 0.92 * hlR);
+            tg = Math.min(1.0, tg + bbVal * 0.92 * hlG);
+            tb = Math.min(1.0, tb + bbVal * 0.92 * hlB);
           }
         }
 
@@ -11317,25 +11430,50 @@
       const time = uniforms.uTime.value || 0.0;
       const absSpd = Math.abs(activeTruck.speed || 0.0);
 
-      // 4-speed offroad gear RPM curve (with 4th-gear overdrive shift at high speed so full speed settles into a lower, deeper V8 rumble!)
-      let gearRatio = 0.0;
+      // 4-speed offroad gear RPM curve tuned by user's per-gear engine pitch sliders (truckGear1Tune .. truckGear4Tune)!
+      const g1Peak = params.truckGear1Tune || 98.0;
+      const g2Peak = params.truckGear2Tune || 108.0;
+      const g3Peak = params.truckGear3Tune || 114.0;
+      const g4Peak = params.truckGear4Tune || 70.0;
+      const idleBase = 38.0;
+      let baseRpmFreq = idleBase;
+      let gearLabel = 'Idle';
       const isOverdrive4th = (absSpd >= 19.5);
-      if (absSpd < 6.8) {
-        gearRatio = absSpd / 6.8;
+      if (absSpd < 0.25) {
+        baseRpmFreq = idleBase;
+        gearLabel = 'Idle';
+      } else if (absSpd < 6.8) {
+        const t = absSpd / 6.8;
+        baseRpmFreq = idleBase + t * (g1Peak - idleBase);
+        gearLabel = `1st · ${Math.round(absSpd)} m/s`;
       } else if (absSpd < 13.4) {
-        gearRatio = 0.30 + ((absSpd - 6.8) / 6.6) * 0.65;
+        const t = (absSpd - 6.8) / 6.6;
+        const g2Low = idleBase + (g2Peak - idleBase) * 0.34;
+        baseRpmFreq = g2Low + t * (g2Peak - g2Low);
+        gearLabel = `2nd · ${Math.round(absSpd)} m/s`;
       } else if (absSpd < 19.5) {
-        gearRatio = 0.34 + ((absSpd - 13.4) / 6.1) * 0.56;
+        const t = (absSpd - 13.4) / 6.1;
+        const g3Low = idleBase + (g3Peak - idleBase) * 0.38;
+        baseRpmFreq = g3Low + t * (g3Peak - g3Low);
+        gearLabel = `3rd · ${Math.round(absSpd)} m/s`;
       } else {
-        // 4th Gear Overdrive: drops RPM down into a deeper, lower-pitched high-speed cruise
-        gearRatio = 0.22 + clamp((absSpd - 19.5) / 10.0, 0.0, 0.28);
+        // 4th Gear Overdrive: uses user's 4th Gear Tune slider (truckGear4Tune)
+        const t = clamp((absSpd - 19.5) / 10.0, 0.0, 1.0);
+        const g4Low = Math.max(28.0, g4Peak * 0.72);
+        baseRpmFreq = g4Low + t * (g4Peak - g4Low);
+        gearLabel = `4th OD · ${Math.round(absSpd)} m/s`;
+      }
+
+      const gearBadge = document.getElementById('val-truck-gear-badge');
+      if (gearBadge && gearBadge.textContent !== gearLabel) {
+        gearBadge.textContent = gearLabel;
       }
 
       const accelLoad = Math.max(0.0, Math.abs(throttleInput));
-      const overdriveToneScale = isOverdrive4th ? 0.55 : 1.0;
-      const driftRevBoost = (isDrifting && absSpd > 2.0) ? 18.0 : 0.0;
+      const overdriveToneScale = isOverdrive4th ? clamp(g4Peak / 115.0, 0.42, 1.15) : 1.0;
+      const driftRevBoost = (isDrifting && absSpd > 2.0) ? 16.0 : 0.0;
       const rpmJitter = Math.sin(time * 32.0) * 1.2;
-      const rpmFreq = 40.0 + gearRatio * 74.0 + accelLoad * 24.0 * overdriveToneScale + driftRevBoost + rpmJitter;
+      const rpmFreq = baseRpmFreq + accelLoad * 18.0 * overdriveToneScale + driftRevBoost + rpmJitter;
 
       loops.engOsc1.frequency.setTargetAtTime(rpmFreq, now, 0.05);
       loops.engOsc2.frequency.setTargetAtTime(rpmFreq * 0.5, now, 0.05);
@@ -11348,9 +11486,11 @@
       const targetEngGain = 0.065 + accelLoad * 0.14 + clamp(absSpd / 24.0, 0.0, 1.0) * 0.10;
       loops.engineGain.gain.setTargetAtTime(targetEngGain, now, 0.05);
 
-      // Speed squeal around corners + Spacebar drift tire screech & skid!
-      const driftLoad = (isDrifting && absSpd > 2.2)
-        ? clamp((absSpd - 1.8) / 9.0 + Math.abs(activeTruck.driftSlipAngle || 0.0) * 0.9, 0.30, 1.0)
+      // Speed squeal around corners + Spacebar drift tire screech & skid (scaled by user's Skid Threshold slider)!
+      const skidThresh = params.truckSkidThreshold || 2.6;
+      const minDriftSpd = 0.8 + skidThresh * 0.55;
+      const driftLoad = (isDrifting && absSpd > minDriftSpd)
+        ? clamp((absSpd - minDriftSpd) / (3.5 + skidThresh * 2.0) + Math.abs(activeTruck.driftSlipAngle || 0.0) * 0.9, 0.25, 1.0)
         : 0.0;
       const totalSqueal = clamp(Math.max(cornerSquealLoad, driftLoad), 0.0, 1.0);
 
@@ -11624,8 +11764,15 @@
           const isBeingDriven = (params.driveMode && it === activeDrivenTruck);
           const headlightBeams = it.mesh.userData.headlightBeams;
           if (headlightBeams) {
+            const beamLenScale = (params.truckLightDistance || 78.0) / 78.0;
+            const halfAngRad = THREE.MathUtils.degToRad((params.truckLightAngleDeg || 28.0) * 0.5);
+            const baseHalfAngRad = THREE.MathUtils.degToRad(14.0);
+            const beamRadScale = (Math.tan(halfAngRad) / Math.tan(baseHalfAngRad)) * beamLenScale;
             for (let b = 0; b < headlightBeams.length; b++) {
-              headlightBeams[b].visible = isNightTime;
+              const bc = headlightBeams[b];
+              bc.visible = isNightTime;
+              bc.scale.set(beamRadScale, beamRadScale, beamLenScale);
+              bc.rotation.y = (b === 0 ? -1 : 1) * halfAngRad * 0.18;
             }
           }
 
@@ -11826,30 +11973,42 @@
             }
           }
 
-          // 5. Subtle Low-Profile Tire Sand Kickup & Pond Splash FX + Audio (never obscures chase camera view!)
-          const cornerSquealLoad = (absSpd > 7.5 && Math.abs(it.steerAngle) > 0.16)
-            ? clamp(((Math.abs(it.steerAngle) * absSpd) - 2.6) / 4.8, 0.0, 1.0)
+          // 5. Tunable Tire Smoke / Sand Kickup & Skid Threshold Audio
+          const skidThresh = params.truckSkidThreshold || 2.6;
+          const cornerMetric = Math.abs(it.steerAngle) * absSpd;
+          const cornerSquealLoad = (absSpd > 2.5 && cornerMetric > skidThresh)
+            ? clamp((cornerMetric - skidThresh) / Math.max(1.2, skidThresh * 1.8), 0.0, 1.0)
             : 0.0;
-          const isSkidding = (isDrifting && absSpd > 2.5) || (cornerSquealLoad > 0.25);
+          const minDriftSpd = 0.8 + skidThresh * 0.55;
+          const isSkidding = (isDrifting && absSpd > minDriftSpd) || (cornerSquealLoad > 0.18);
+          const smokeIntensity = params.truckSmokeIntensity ?? 0.25;
 
-          if (isSkidding && Math.random() < 0.28) {
-            // Subtle low-altitude tire sand/gravel kickup right at wheel height (instead of giant opaque steam clouds)
+          if (isSkidding && smokeIntensity > 0.01) {
             const rearX = it.x - fwdX * 1.25;
             const rearZ = it.z - fwdZ * 1.25;
-            const sideSign = Math.random() < 0.5 ? -1.0 : 1.0;
-            const idxP = tapDropletHead;
-            tapDropletHead = (tapDropletHead + 1) % TAP_DROPLET_COUNT;
-            const p3 = idxP * 3;
-            tapDropletPos[p3]     = rearX + rightX * 0.78 * sideSign + (Math.random() - 0.5) * 0.25;
-            tapDropletPos[p3 + 1] = avgWheelGroundY + 0.20;
-            tapDropletPos[p3 + 2] = rearZ + rightZ * 0.78 * sideSign + (Math.random() - 0.5) * 0.25;
-            tapDropletVel[p3]     = -fwdX * 1.8 + (Math.random() - 0.5) * 1.4;
-            tapDropletVel[p3 + 1] = 0.55 + Math.random() * 0.65;
-            tapDropletVel[p3 + 2] = -fwdZ * 1.8 + (Math.random() - 0.5) * 1.4;
-            tapDropletCol[p3]     = 0.68;
-            tapDropletCol[p3 + 1] = 0.60;
-            tapDropletCol[p3 + 2] = 0.48;
-            tapDropletLife[idxP]  = 0.45;
+            // Low-altitude tire sand/dust kickup proportional to smokeIntensity
+            const particleBurstCount = Math.random() < (smokeIntensity * 1.15) ? (smokeIntensity > 0.65 ? 2 : 1) : 0;
+            for (let sp = 0; sp < particleBurstCount; sp++) {
+              const sideSign = Math.random() < 0.5 ? -1.0 : 1.0;
+              const idxP = tapDropletHead;
+              tapDropletHead = (tapDropletHead + 1) % TAP_DROPLET_COUNT;
+              const p3 = idxP * 3;
+              tapDropletPos[p3]     = rearX + rightX * 0.78 * sideSign + (Math.random() - 0.5) * 0.30;
+              tapDropletPos[p3 + 1] = avgWheelGroundY + 0.20;
+              tapDropletPos[p3 + 2] = rearZ + rightZ * 0.78 * sideSign + (Math.random() - 0.5) * 0.30;
+              tapDropletVel[p3]     = -fwdX * 1.8 + (Math.random() - 0.5) * 1.5;
+              tapDropletVel[p3 + 1] = (0.45 + smokeIntensity * 0.85) + Math.random() * 0.60;
+              tapDropletVel[p3 + 2] = -fwdZ * 1.8 + (Math.random() - 0.5) * 1.5;
+              tapDropletCol[p3]     = 0.70;
+              tapDropletCol[p3 + 1] = 0.63;
+              tapDropletCol[p3 + 2] = 0.52;
+              tapDropletLife[idxP]  = Math.max(0.15, 0.55 - smokeIntensity * 0.35);
+            }
+            // If user turns Smoke Intensity above 45%, also emit proportional drift smoke puffs
+            if (smokeIntensity > 0.45 && Math.random() < (smokeIntensity - 0.45) * 0.75) {
+              const sideSign = Math.random() < 0.5 ? -1.0 : 1.0;
+              spawnSteamPuffAtWorld(rearX + rightX * 0.78 * sideSign, avgWheelGroundY + 0.22, rearZ + rightZ * 0.78 * sideSign, 1);
+            }
           } else if (absSpd > 5.0 && waterDepth > 0.08 && Math.random() < 0.85) {
             emitTapWaterDroplet(
               it.x - fwdX * 1.1 + (Math.random() - 0.5) * 1.4,
@@ -11902,19 +12061,25 @@
       const headlightTruck = activeDrivenTruck || getLatestPlacedTruck();
       if (isNightTime && headlightTruck) {
         const nightGlow = clamp((nightFactor - 0.15) / 0.65, 0.35, 1.0);
+        const hlDist = params.truckLightDistance || 78.0;
         const fwdX = Math.sin(headlightTruck.yaw);
         const fwdZ = Math.cos(headlightTruck.yaw);
+        const nearOffset = clamp(hlDist * 0.16, 4.5, 22.0);
+        const farOffset = clamp(hlDist * 0.44, 12.0, 58.0);
+
+        truckHeadlightPoint.distance = hlDist * 1.15;
         truckHeadlightPoint.position.set(
-          headlightTruck.x + fwdX * 11.5,
+          headlightTruck.x + fwdX * nearOffset,
           headlightTruck.y + 2.5,
-          headlightTruck.z + fwdZ * 11.5
+          headlightTruck.z + fwdZ * nearOffset
         );
         truckHeadlightPoint.intensity = 8.5 * nightGlow;
 
+        truckHeadlightPointFar.distance = hlDist * 1.38;
         truckHeadlightPointFar.position.set(
-          headlightTruck.x + fwdX * 30.0,
+          headlightTruck.x + fwdX * farOffset,
           headlightTruck.y + 3.4,
-          headlightTruck.z + fwdZ * 30.0
+          headlightTruck.z + fwdZ * farOffset
         );
         truckHeadlightPointFar.intensity = 9.5 * nightGlow;
       } else {
@@ -13776,6 +13941,114 @@
       params.timeOfDay = parseFloat(e.target.value);
       updateSunPosition();
       syncUILabels();
+    });
+
+    // --- Offroad Vehicle Tuner Controls (Smoke Intensity, Skid Threshold, Per-Gear Engine Tune, Headlight Angle/Distance/Color) ---
+    const sliderTruckSmoke = document.getElementById('slider-truck-smoke');
+    const sliderTruckSkidThresh = document.getElementById('slider-truck-skid-thresh');
+    const sliderTruckGear1 = document.getElementById('slider-truck-gear1');
+    const sliderTruckGear2 = document.getElementById('slider-truck-gear2');
+    const sliderTruckGear3 = document.getElementById('slider-truck-gear3');
+    const sliderTruckGear4 = document.getElementById('slider-truck-gear4');
+    const sliderTruckLightAngle = document.getElementById('slider-truck-light-angle');
+    const sliderTruckLightDist = document.getElementById('slider-truck-light-dist');
+    const inputTruckLightColor = document.getElementById('input-truck-light-color');
+
+    function formatSkidThresholdLabel(val) {
+      if (val <= 1.4) return `${val.toFixed(1)} · Hair-Trigger`;
+      if (val <= 3.2) return `${val.toFixed(1)} · Balanced`;
+      if (val <= 4.8) return `${val.toFixed(1)} · Hard Corners`;
+      return `${val.toFixed(1)} · Extreme Only`;
+    }
+
+    function applyTruckLightColorHex(hexStr) {
+      params.truckLightColorHex = hexStr;
+      const c = new THREE.Color(hexStr);
+      params.truckLightRGB = [c.r, c.g, c.b];
+      truckHeadlightPoint.color.copy(c);
+      truckHeadlightPointFar.color.copy(c);
+      sharedTruckHeadlightLensMat.emissive.copy(c);
+      sharedTruckHeadlightBeamMat.color.copy(c);
+      const valEl = document.getElementById('val-truck-light-color');
+      if (valEl) valEl.textContent = hexStr.toUpperCase();
+      if (inputTruckLightColor && inputTruckLightColor.value.toLowerCase() !== hexStr.toLowerCase()) {
+        inputTruckLightColor.value = hexStr;
+      }
+      syncTerrainAndWaterMeshes();
+    }
+
+    if (sliderTruckSmoke) {
+      sliderTruckSmoke.addEventListener('input', (e) => {
+        const pct = parseInt(e.target.value, 10);
+        params.truckSmokeIntensity = pct / 100.0;
+        const el = document.getElementById('val-truck-smoke');
+        if (el) el.textContent = pct === 0 ? 'Off (0%)' : `${pct}%`;
+      });
+    }
+    if (sliderTruckSkidThresh) {
+      sliderTruckSkidThresh.addEventListener('input', (e) => {
+        const v = parseFloat(e.target.value);
+        params.truckSkidThreshold = v;
+        const el = document.getElementById('val-truck-skid-thresh');
+        if (el) el.textContent = formatSkidThresholdLabel(v);
+      });
+    }
+    if (sliderTruckGear1) {
+      sliderTruckGear1.addEventListener('input', (e) => {
+        params.truckGear1Tune = parseFloat(e.target.value);
+        const el = document.getElementById('val-truck-gear1');
+        if (el) el.textContent = `${Math.round(params.truckGear1Tune)} Hz`;
+      });
+    }
+    if (sliderTruckGear2) {
+      sliderTruckGear2.addEventListener('input', (e) => {
+        params.truckGear2Tune = parseFloat(e.target.value);
+        const el = document.getElementById('val-truck-gear2');
+        if (el) el.textContent = `${Math.round(params.truckGear2Tune)} Hz`;
+      });
+    }
+    if (sliderTruckGear3) {
+      sliderTruckGear3.addEventListener('input', (e) => {
+        params.truckGear3Tune = parseFloat(e.target.value);
+        const el = document.getElementById('val-truck-gear3');
+        if (el) el.textContent = `${Math.round(params.truckGear3Tune)} Hz`;
+      });
+    }
+    if (sliderTruckGear4) {
+      sliderTruckGear4.addEventListener('input', (e) => {
+        params.truckGear4Tune = parseFloat(e.target.value);
+        const el = document.getElementById('val-truck-gear4');
+        if (el) el.textContent = `${Math.round(params.truckGear4Tune)} Hz`;
+      });
+    }
+    if (sliderTruckLightAngle) {
+      sliderTruckLightAngle.addEventListener('input', (e) => {
+        params.truckLightAngleDeg = parseFloat(e.target.value);
+        const el = document.getElementById('val-truck-light-angle');
+        if (el) el.textContent = `${Math.round(params.truckLightAngleDeg)}°`;
+        syncTerrainAndWaterMeshes();
+      });
+    }
+    if (sliderTruckLightDist) {
+      sliderTruckLightDist.addEventListener('input', (e) => {
+        params.truckLightDistance = parseFloat(e.target.value);
+        const el = document.getElementById('val-truck-light-dist');
+        if (el) el.textContent = `${Math.round(params.truckLightDistance)} m`;
+        syncTerrainAndWaterMeshes();
+      });
+    }
+    if (inputTruckLightColor) {
+      inputTruckLightColor.addEventListener('input', (e) => {
+        applyTruckLightColorHex(e.target.value);
+      });
+    }
+    document.querySelectorAll('.truck-color-preset').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (btn.dataset.color) {
+          applyTruckLightColorHex(btn.dataset.color);
+        }
+      });
     });
 
     const btnDayCycle = document.getElementById('btn-toggle-day-cycle');
