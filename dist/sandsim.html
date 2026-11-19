@@ -11468,7 +11468,380 @@
     function create3DVolumetricNebulaGroup(presetId) {
       const nebGroup = new THREE.Group();
 
-      // 8 stacked translucent 3D volumetric gas shells at staggered Z depths and tilts for true 3D depth & glow
+      // Special Dedicated High-Fidelity 3D Multi-Stage Architecture for Eagle Nebula: Pillars of Creation (M16)
+      if (presetId === 'pillars') {
+        // STAGE A: 4 Deep-Space Ionized Cavern & Outer Molecular Cloud Layers (z = -1.35 .. -0.30)
+        //          Renders the turquoise/cyan O-III star-forming cavity, the warm golden-orange left ionization wall,
+        //          the upper-left "Stellar Spire" (Fairy) dust column, and the outer purple-crimson molecular cloud frame.
+        const bgLayers = 4;
+        for (let l = 0; l < bgLayers; l++) {
+          const zOff = -1.35 + l * 0.35;
+          const planeGeo = new THREE.PlaneGeometry(9.6, 8.0, 28, 28);
+          const posAttr = planeGeo.attributes.position;
+          for (let vi = 0; vi < posAttr.count; vi++) {
+            const vx = posAttr.getX(vi);
+            const vy = posAttr.getY(vi);
+            const r2 = (vx * vx + vy * vy) * 0.03;
+            posAttr.setZ(vi, Math.sin(vx * 0.7 + l) * 0.18 - r2 * 0.32);
+          }
+          planeGeo.computeVertexNormals();
+
+          const bgMat = new THREE.ShaderMaterial({
+            transparent: true,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+            blending: THREE.NormalBlending,
+            uniforms: {
+              uTime: opticsUniforms.uTime,
+              uLayer: { value: l / bgLayers }
+            },
+            vertexShader: `
+              varying vec2 vUv;
+              void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              }
+            `,
+            fragmentShader: `
+              uniform float uTime;
+              uniform float uLayer;
+              varying vec2 vUv;
+              ${OPTICS_NOISE_GLSL}
+              void main() {
+                vec2 p = (vUv - 0.5) * 2.15;
+                float r = length(p);
+                if (r > 1.18) discard;
+
+                vec3 q = vec3(p * 1.75, uLayer * 2.1 + uTime * 0.035);
+                float n1 = optFbm3(q);
+                float n2 = optFbm3(q * 2.15 + vec3(n1 * 1.35, -uTime * 0.025, uLayer * 1.4));
+                float n3 = optFbm3(q * 4.2 - vec3(n2 * 1.1));
+                float turb = clamp(n1 * 0.5 + n2 * 0.35 + n3 * 0.25, 0.0, 1.0);
+
+                // 1. Luminous Cyan / Turquoise / Baby-Blue O-III Ionized Core Cavity (centered slightly above & right of the pillars)
+                vec2 cavP = p - vec2(0.06, 0.14) + (vec2(n1, n2) - 0.5) * 0.24;
+                float cavDist = length(cavP * vec2(0.88, 0.96));
+                float cyanCore = smoothstep(0.78, 0.06, cavDist) * (0.65 + 0.45 * turb);
+
+                // 2. Warm Golden-Amber & Copper-Orange Left Emission Wall (p.x < -0.12)
+                vec2 leftWallP = p - vec2(-0.48, -0.06);
+                float leftWall = exp(-dot(leftWallP * vec2(1.4, 1.15), leftWallP * vec2(1.4, 1.15)) * 2.6) * (0.55 + 0.65 * n2);
+
+                // 3. Upper-Left "Stellar Spire" (Fairy of Eagle Nebula) dark dust promontory with bright golden ionization rim
+                vec2 spireP = p - vec2(-0.56, 0.26);
+                float spireRotX = spireP.x * 0.78 + spireP.y * 0.62;
+                float spireRotY = -spireP.x * 0.62 + spireP.y * 0.78;
+                float leftSpire = exp(-pow((spireRotY - sin(spireRotX * 6.0) * 0.03) * 11.5, 2.0)) *
+                                  smoothstep(-0.28, -0.02, spireRotX) * smoothstep(0.18, 0.02, spireRotX);
+                float leftSpireRim = smoothstep(0.22, 0.65, leftSpire) * (1.0 - smoothstep(0.68, 0.95, leftSpire)) * 2.2;
+
+                // 4. Sweeping Outer Violet-Purple, Magenta & Dark Molecular Cloud Cavern Walls
+                float outerWall = smoothstep(0.28, 0.92, cavDist + (n2 - 0.5) * 0.32);
+
+                vec3 colCyan    = vec3(0.22, 0.84, 0.98);
+                vec3 colDeepBlue= vec3(0.16, 0.42, 0.86);
+                vec3 colGold    = vec3(1.00, 0.74, 0.26);
+                vec3 colRust    = vec3(0.86, 0.34, 0.14);
+                vec3 colViolet  = vec3(0.34, 0.16, 0.46);
+                vec3 colDarkDust= vec3(0.08, 0.04, 0.12);
+
+                vec3 col = mix(colViolet, colDarkDust, smoothstep(0.45, 0.88, n3));
+                col = mix(col, mix(colDeepBlue, colCyan, smoothstep(0.2, 0.75, cyanCore)), cyanCore);
+                col = mix(col, mix(colRust, colGold, n2), clamp(leftWall * 0.95, 0.0, 0.88));
+                // Darken interior of upper-left Stellar Spire and add blazing golden ionization rim
+                col = mix(col, vec3(0.12, 0.06, 0.09), clamp(leftSpire * 0.85, 0.0, 0.85));
+                col += vec3(1.0, 0.86, 0.42) * leftSpireRim * 0.85;
+
+                float radialVignette = smoothstep(1.16, 0.32, r);
+                float layerAlpha = (0.28 + 0.14 * (1.0 - uLayer)) * radialVignette * (0.55 + 0.45 * turb);
+                gl_FragColor = vec4(col, clamp(layerAlpha, 0.0, 0.78));
+              }
+            `
+          });
+
+          const bgMesh = new THREE.Mesh(planeGeo, bgMat);
+          bgMesh.position.z = zOff;
+          nebGroup.add(bgMesh);
+        }
+
+        // STAGE B: 3 Foreground 3D Parallax Relief Layers for the Iconic 3 Pillars of Creation,
+        //          Billowing Lower Rust-Orange Pedestal, Blazing Photoevaporating Tips/Rims & Cometary Bok Globules (z = +0.05 .. +0.55)
+        const pillarLayers = 3;
+        for (let pl = 0; pl < pillarLayers; pl++) {
+          const zOff = 0.05 + pl * 0.24;
+          const pGeo = new THREE.PlaneGeometry(8.8, 7.6, 32, 32);
+          const posAttr = pGeo.attributes.position;
+          for (let vi = 0; vi < posAttr.count; vi++) {
+            const vx = posAttr.getX(vi);
+            const vy = posAttr.getY(vi);
+            posAttr.setZ(vi, Math.cos(vx * 1.4 + pl) * 0.12 + Math.sin(vy * 1.2) * 0.10);
+          }
+          pGeo.computeVertexNormals();
+
+          const pillarMat = new THREE.ShaderMaterial({
+            transparent: true,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+            blending: THREE.NormalBlending,
+            uniforms: {
+              uTime: opticsUniforms.uTime,
+              uDepthIdx: { value: pl / Math.max(1, pillarLayers - 1) }
+            },
+            vertexShader: `
+              varying vec2 vUv;
+              void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              }
+            `,
+            fragmentShader: `
+              uniform float uTime;
+              uniform float uDepthIdx;
+              varying vec2 vUv;
+              ${OPTICS_NOISE_GLSL}
+
+              // Helper for a single sculpted elephant-trunk molecular gas pillar with bulbous head & billowing FBM edges
+              vec3 evalPillarColumn(vec2 p, vec2 basePos, vec2 topPos, float halfWidth, float headBulb, float fbmA, float fbmB) {
+                vec2 axis = topPos - basePos;
+                float len = length(axis);
+                vec2 dir = axis / max(0.0001, len);
+                vec2 perp = vec2(-dir.y, dir.x);
+                vec2 rel = p - basePos;
+                float along = dot(rel, dir) / max(0.0001, len); // 0 at base -> 1 at tip
+                float across = dot(rel, perp);
+
+                // Slightly narrow neck below the tip, then bulbous elephant-trunk head at the top (along ~ 0.86..1.0)
+                float neckPinch = 1.0 - 0.24 * exp(-pow((along - 0.72) * 5.5, 2.0));
+                float headSwell = 1.0 + headBulb * exp(-pow((along - 0.92) * 7.5, 2.0));
+                float baseFlare = 1.0 + 0.55 * smoothstep(0.32, 0.0, along);
+                float profileW = halfWidth * neckPinch * headSwell * baseFlare;
+
+                // Billowing turbulent edge displacement from multi-octave 3D FBM
+                float edgeWarp = (fbmA - 0.5) * halfWidth * 1.15 + (fbmB - 0.5) * halfWidth * 0.55;
+                float dNorm = abs(across + edgeWarp * 0.48) / max(0.001, profileW);
+
+                // Vertical bounds with rounded turbulent cap at top (along = 1.0)
+                float topRound = length(vec2(across / max(0.001, profileW * 0.95), (along - 0.94) / 0.14));
+                float vMask = smoothstep(-0.15, 0.04, along) * (1.0 - smoothstep(0.92, 1.12 + (fbmA - 0.5) * 0.08, along));
+                float bodyDensity = smoothstep(1.18, 0.25, dNorm) * vMask;
+                float capDensity = smoothstep(1.15, 0.28, topRound) * smoothstep(0.75, 0.92, along);
+                float density = max(bodyDensity, capDensity);
+
+                // Photoevaporating Ionization Rim & Crown Flare (strongest at the top cap & upper-left UV-illuminated edge!)
+                float topCrown = smoothstep(0.62, 0.98, along) * smoothstep(1.35, 0.45, topRound);
+                float leftEdgeLight = smoothstep(0.25, 1.05, dNorm) * smoothstep(0.0, -0.02, across + edgeWarp * 0.3) * vMask;
+                float rightEdgeLight = smoothstep(0.35, 1.08, dNorm) * smoothstep(0.0, 0.02, across + edgeWarp * 0.3) * vMask * 0.65;
+                float rimFlare = clamp(topCrown * 1.45 + leftEdgeLight * 1.15 + rightEdgeLight, 0.0, 1.6);
+
+                return vec3(density, rimFlare, along);
+              }
+
+              void main() {
+                vec2 p = (vUv - 0.5) * 2.15;
+                float r = length(p);
+                if (r > 1.15) discard;
+
+                // Multi-octave 3D turbulent molecular gas noise
+                vec3 q = vec3(p * 3.1, uDepthIdx * 1.8 + uTime * 0.03);
+                float f1 = optFbm3(q);
+                float f2 = optFbm3(q * 2.35 + vec3(f1 * 1.5, -uTime * 0.02, 1.1));
+                float f3 = optFbm3(q * 5.2 - vec3(f2 * 1.2));
+
+                // Evaluate the 3 Iconic Pillars of Creation rising from the lower-center pedestal into the cyan cavern:
+                // Pillar 1 (Leftmost, Tallest Elephant Trunk with bulbous head at (-0.07, +0.23))
+                vec3 pil1 = evalPillarColumn(p, vec2(-0.12, -0.28), vec2(-0.07, 0.24), 0.068, 0.42, f1, f2);
+                // Pillar 2 (Middle Trunk rising parallel to (+0.02, +0.14))
+                vec3 pil2 = evalPillarColumn(p, vec2(-0.02, -0.30), vec2( 0.02, 0.15), 0.052, 0.28, f2, f3);
+                // Pillar 3 (Rightmost Slender Spire rising to (+0.09, +0.05))
+                vec3 pil3 = evalPillarColumn(p, vec2( 0.06, -0.32), vec2( 0.09, 0.06), 0.040, 0.18, f1, f3);
+
+                // Shared Billowing Lower Molecular Cloud Pedestal & Fiery Golden-Orange Cliff Ridge (below y = -0.16)
+                vec2 pedP = p - vec2(-0.06, -0.62);
+                // Asymmetric triangular pedestal that rises to meet the base of the 3 pillars and slopes down to the lower-right
+                float cliffLineX = 0.04 - (p.y + 0.20) * 0.34 + (f1 - 0.5) * 0.15 + sin(p.y * 11.0) * 0.035;
+                float leftSlopeX = -0.22 + (p.y + 0.20) * 0.55 - (f2 - 0.5) * 0.18;
+                float inPedestalX = smoothstep(leftSlopeX - 0.22, leftSlopeX + 0.06, p.x) *
+                                    (1.0 - smoothstep(cliffLineX - 0.03, cliffLineX + 0.07, p.x));
+                float inPedestalY = (1.0 - smoothstep(-0.24, -0.10, p.y)) * smoothstep(-1.08, -0.78, p.y);
+                float pedDensity = inPedestalX * inPedestalY * (0.65 + 0.45 * f2);
+
+                // Blazing golden-orange ionization cliff rim along the right boundary of the lower pedestal!
+                float cliffRimDist = abs(p.x - cliffLineX);
+                float cliffRimFlare = exp(-cliffRimDist * cliffRimDist * 650.0) * inPedestalY * (0.7 + 0.8 * f3);
+
+                // Freestanding Evaporating Gaseous Globules (Bok Globule cometary knots seen above Pillar 1 and to the right)
+                float egg1 = smoothstep(0.055, 0.015, length((p - vec2(0.01, 0.46)) * vec2(1.1, 0.75) + (f2 - 0.5) * 0.025));
+                float egg2 = smoothstep(0.042, 0.012, length((p - vec2(0.42, 0.01)) * vec2(1.0, 1.2) + (f3 - 0.5) * 0.02));
+                float eggDensity = max(egg1, egg2);
+                float eggRim = (smoothstep(0.15, 0.65, egg1) * (1.0 - smoothstep(0.65, 0.95, egg1)) +
+                                smoothstep(0.15, 0.65, egg2) * (1.0 - smoothstep(0.65, 0.95, egg2))) * 1.8;
+
+                // Combine the 3 Pillars + Lower Pedestal + Bok Globules
+                float pillarDensity = max(pil1.x, max(pil2.x * 0.96, pil3.x * 0.92));
+                float totalDensity = clamp(max(pillarDensity, max(pedDensity, eggDensity)), 0.0, 1.0);
+                float totalRimFlare = pil1.y + pil2.y * 0.92 + pil3.y * 0.85 + cliffRimFlare * 1.45 + eggRim;
+
+                // Broad soft turquoise-cyan & golden photoevaporative haze glowing immediately around the 3 pillar tips
+                float tipGlow1 = exp(-length(p - vec2(-0.07, 0.24)) * 6.2);
+                float tipGlow2 = exp(-length(p - vec2( 0.02, 0.15)) * 7.2);
+                float tipGlow3 = exp(-length(p - vec2( 0.09, 0.06)) * 8.5);
+                float photoHaze = (tipGlow1 + tipGlow2 * 0.8 + tipGlow3 * 0.65) * (0.55 + 0.6 * f1);
+
+                // Color Palette matching the Hubble / Astro-Chroma Eagle Nebula photograph:
+                // - Dark smoky mahogany/umber interior dust core
+                // - Warm terracotta/rust-orange billowing gas folds
+                // - Blazing golden-amber & electric-cyan/white photoevaporating ionization rims & tip flares!
+                vec3 darkCoreCol  = vec3(0.13, 0.05, 0.08);
+                vec3 rustGasCol   = vec3(0.84, 0.35, 0.16);
+                vec3 amberFireCol = vec3(1.00, 0.68, 0.22);
+                vec3 cyanFlareCol = vec3(0.38, 0.98, 0.96);
+                vec3 whiteGoldCol = vec3(1.00, 0.96, 0.78);
+
+                float internalWarmth = smoothstep(0.28, 0.82, f2 * 0.6 + f3 * 0.5);
+                vec3 bodyCol = mix(darkCoreCol, rustGasCol, internalWarmth * 0.82);
+                // Add warm golden-orange internal glow near the lower pedestal and pillar ribs
+                bodyCol = mix(bodyCol, amberFireCol, clamp(f3 * pedDensity * 0.85, 0.0, 0.75));
+
+                // Ionization flare color transitions from fiery orange-gold along the lower cliff to electric cyan-gold at the upper pillar tips!
+                float heightBlend = smoothstep(-0.22, 0.22, p.y);
+                vec3 flareCol = mix(amberFireCol, mix(cyanFlareCol, whiteGoldCol, 0.55), heightBlend);
+
+                vec3 finalCol = bodyCol * totalDensity
+                              + flareCol * totalRimFlare * 0.92
+                              + mix(cyanFlareCol, whiteGoldCol, 0.4) * photoHaze * 0.42;
+
+                float alpha = clamp(totalDensity * 0.78 + totalRimFlare * 0.46 + photoHaze * 0.24, 0.0, 0.95);
+                if (alpha < 0.01) discard;
+                gl_FragColor = vec4(finalCol, alpha);
+              }
+            `
+          });
+
+          const pMesh = new THREE.Mesh(pGeo, pillarMat);
+          pMesh.position.z = zOff;
+          nebGroup.add(pMesh);
+        }
+
+        // STAGE C: Open Star Cluster NGC 6611 (above/right of the Pillars) + Hero Cross-Flare Stars matching the photograph!
+        const nClusterStars = 145;
+        const cGeo = new THREE.BufferGeometry();
+        const cPos = new Float32Array(nClusterStars * 3);
+        const cCol = new Float32Array(nClusterStars * 3);
+        const cSize = new Float32Array(nClusterStars);
+        const cPhase = new Float32Array(nClusterStars);
+
+        // Iconic hero stars with prominent 4-point diffraction flares at key positions from the photo
+        const heroClusterStars = [
+          // Bright blue-white star just to the left of Pillar 1's head
+          [-0.58,  0.48,  0.45,  0.78, 0.94, 1.00, 22.0],
+          // Brilliant twin OB giant stars of NGC 6611 in the upper-right cyan cavity
+          [ 0.76,  1.22,  0.30,  0.80, 0.95, 1.00, 26.0],
+          [ 0.62,  1.38,  0.25,  0.84, 0.96, 1.00, 23.0],
+          [ 0.28,  1.05,  0.35,  0.82, 0.95, 1.00, 19.5],
+          // Warm golden-amber & blue-white spiked hero stars in the lower-right & bottom foreground
+          [ 2.15, -1.55,  0.65,  1.00, 0.88, 0.72, 27.0],
+          [ 2.82, -1.42,  0.60,  1.00, 0.82, 0.64, 21.0],
+          [ 0.68, -2.75,  0.70,  0.76, 0.92, 1.00, 28.0],
+          [-0.55, -2.18,  0.65,  1.00, 0.86, 0.74, 21.5],
+          [-0.38, -1.32,  0.60,  0.96, 0.94, 1.00, 18.5],
+          [ 1.35, -0.25,  0.50,  0.82, 0.95, 1.00, 20.0],
+          [-2.35,  1.95,  0.40,  1.00, 0.88, 0.75, 19.0]
+        ];
+
+        for (let i = 0; i < nClusterStars; i++) {
+          if (i < heroClusterStars.length) {
+            const hs = heroClusterStars[i];
+            cPos[i * 3]     = hs[0];
+            cPos[i * 3 + 1] = hs[1];
+            cPos[i * 3 + 2] = hs[2];
+            cCol[i * 3]     = hs[3];
+            cCol[i * 3 + 1] = hs[4];
+            cCol[i * 3 + 2] = hs[5];
+            cSize[i]        = hs[6];
+            cPhase[i]       = i * 0.7;
+          } else if (i < 78) {
+            // Dense NGC 6611 Young OB Star Cluster concentrated in the glowing cyan cavity above the Pillars!
+            const ang = Math.random() * Math.PI * 2;
+            const rad = Math.pow(Math.random(), 1.35) * 1.65;
+            cPos[i * 3]     = 0.25 + Math.cos(ang) * rad * 1.1;
+            cPos[i * 3 + 1] = 0.85 + Math.sin(ang) * rad * 0.95;
+            cPos[i * 3 + 2] = (Math.random() - 0.3) * 1.2;
+            const isGold = Math.random() > 0.78;
+            cCol[i * 3]     = isGold ? 1.00 : 0.78;
+            cCol[i * 3 + 1] = isGold ? 0.88 : 0.94;
+            cCol[i * 3 + 2] = isGold ? 0.70 : 1.00;
+            cSize[i]        = 5.5 + Math.pow(Math.random(), 2.2) * 12.5;
+            cPhase[i]       = Math.random() * Math.PI * 2;
+          } else {
+            // Scattered nebula field stars across the Eagle wings
+            cPos[i * 3]     = (Math.random() - 0.5) * 7.4;
+            cPos[i * 3 + 1] = (Math.random() - 0.5) * 6.2;
+            cPos[i * 3 + 2] = (Math.random() - 0.4) * 1.5;
+            const isWarm = Math.random() > 0.55;
+            cCol[i * 3]     = isWarm ? 1.00 : 0.82;
+            cCol[i * 3 + 1] = isWarm ? 0.85 : 0.94;
+            cCol[i * 3 + 2] = isWarm ? 0.72 : 1.00;
+            cSize[i]        = 4.5 + Math.pow(Math.random(), 2.4) * 11.5;
+            cPhase[i]       = Math.random() * Math.PI * 2;
+          }
+        }
+        cGeo.setAttribute('position', new THREE.BufferAttribute(cPos, 3));
+        cGeo.setAttribute('color', new THREE.BufferAttribute(cCol, 3));
+        cGeo.setAttribute('aSize', new THREE.BufferAttribute(cSize, 1));
+        cGeo.setAttribute('aPhase', new THREE.BufferAttribute(cPhase, 1));
+
+        // Dedicated astrophotography diffraction-flare star shader for M16's brilliant cluster stars
+        const pillarStarMat = new THREE.ShaderMaterial({
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          uniforms: { uTime: opticsUniforms.uTime },
+          vertexShader: `
+            attribute float aSize;
+            attribute float aPhase;
+            attribute vec3 color;
+            uniform float uTime;
+            varying vec3 vColor;
+            varying float vTwinkle;
+            varying float vHero;
+            void main() {
+              vColor = color;
+              vTwinkle = 0.82 + 0.18 * sin(uTime * 2.6 + aPhase);
+              vHero = smoothstep(12.0, 18.0, aSize);
+              vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+              gl_PointSize = aSize * (34.0 / max(8.0, -mvPos.z)) * (0.90 + 0.20 * vTwinkle);
+              gl_Position = projectionMatrix * mvPos;
+            }
+          `,
+          fragmentShader: `
+            varying vec3 vColor;
+            varying float vTwinkle;
+            varying float vHero;
+            void main() {
+              vec2 uv = gl_PointCoord - vec2(0.5);
+              float d = length(uv);
+              if (d > 0.5) discard;
+              float core = exp(-d * d * 42.0);
+              float halo = exp(-d * d * 10.5) * 0.45;
+              // Crisp 4-point primary diffraction spikes + subtle 45-deg secondary flares on bright stars
+              float spikeH = exp(-abs(uv.y) * 52.0) * smoothstep(0.5, 0.0, abs(uv.x));
+              float spikeV = exp(-abs(uv.x) * 52.0) * smoothstep(0.5, 0.0, abs(uv.y));
+              vec2 dUv = vec2(uv.x + uv.y, uv.x - uv.y) * 0.7071;
+              float diagSpikes = (exp(-abs(dUv.y) * 65.0) * smoothstep(0.28, 0.0, abs(dUv.x)) +
+                                  exp(-abs(dUv.x) * 65.0) * smoothstep(0.28, 0.0, abs(dUv.y))) * 0.35;
+              float totalSpikes = (spikeH + spikeV + diagSpikes) * (0.25 + 0.95 * vHero);
+              float alpha = clamp((core * 1.2 + halo + totalSpikes) * vTwinkle, 0.0, 1.0);
+              vec3 starCol = mix(vColor, vec3(1.0), clamp(core * 0.75 + totalSpikes * 0.35, 0.0, 1.0));
+              gl_FragColor = vec4(starCol, alpha);
+            }
+          `
+        });
+
+        nebGroup.add(new THREE.Points(cGeo, pillarStarMat));
+        return nebGroup;
+      }
+
+      // 8 stacked translucent 3D volumetric gas shells at staggered Z depths and tilts for Orion M42 & Lyra Ring M57
       const layerCount = 8;
       for (let l = 0; l < layerCount; l++) {
         const zOff = (l - (layerCount - 1) * 0.5) * 0.52;
@@ -11491,7 +11864,7 @@
           uniforms: {
             uTime: opticsUniforms.uTime,
             uLayer: { value: l / layerCount },
-            uMode: { value: presetId === 'orion' ? 0.0 : (presetId === 'pillars' ? 1.0 : 2.0) }
+            uMode: { value: presetId === 'orion' ? 0.0 : 2.0 }
           },
           vertexShader: `
             varying vec2 vUv;
@@ -11531,21 +11904,8 @@
                 vec3 sulfurCol = vec3(1.00, 0.72, 0.22);
                 col = mix(oIIICol, hAlphaCol, smoothstep(0.18, 0.72, r + (n2 - 0.5) * 0.45));
                 col = mix(col, sulfurCol, pow(n2, 2.6) * 0.65);
-                floatradialFade = smoothstep(1.08, 0.22, r);
-                alpha = gas * floatradialFade * (0.16 + 0.14 * (1.0 - abs(uLayer - 0.5) * 2.0)) * (0.65 + 0.35 * cavern);
-              } else if (uMode < 1.5) {
-                // Eagle Nebula: Pillars of Creation (M16): 3 towering molecular hydrogen spires with bright photoevaporating golden rims
-                float p1 = exp(-pow((p.x + 0.42 - sin(p.y * 1.8) * 0.06) * 5.8, 2.0)) * smoothstep(0.25, -0.75, p.y);
-                float p2 = exp(-pow((p.x - 0.02 + cos(p.y * 2.1) * 0.05) * 6.8, 2.0)) * smoothstep(0.45, -0.75, p.y);
-                float p3 = exp(-pow((p.x - 0.44 - sin(p.y * 2.4) * 0.05) * 7.8, 2.0)) * smoothstep(0.65, -0.75, p.y);
-                float spires = clamp((p1 + p2 * 0.9 + p3 * 0.8) * (0.55 + 0.85 * n2), 0.0, 1.0);
-                float ambientLagoon = smoothstep(1.05, 0.15, r) * gas * 0.22;
-                vec3 bgCyan = vec3(0.14, 0.68, 0.92);
-                vec3 spireRust = vec3(0.75, 0.32, 0.12);
-                vec3 rimGold = vec3(1.0, 0.92, 0.46);
-                float ionizationRim = smoothstep(0.32, 0.75, spires) * pow(n2, 1.5);
-                col = bgCyan * ambientLagoon * 1.4 + mix(spireRust, rimGold, ionizationRim) * spires * 1.25;
-                alpha = clamp(ambientLagoon + spires * 0.32, 0.0, 0.65);
+                float radialFade = smoothstep(1.08, 0.22, r);
+                alpha = gas * radialFade * (0.16 + 0.14 * (1.0 - abs(uLayer - 0.5) * 2.0)) * (0.65 + 0.35 * cavern);
               } else {
                 // Lyra Ring Planetary Nebula (M57): 3D bipolar ionized torus shell (blue He-II inner core -> teal O-III -> golden-crimson N-II outer filaments)
                 vec2 ep = vec2(p.x * 0.86, p.y * 1.12);
