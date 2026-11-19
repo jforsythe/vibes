@@ -1543,6 +1543,7 @@
     const plantBurnTimer = new Float32Array(MAX_CELLS); // 0 = not burning; 0.01..1.10s = plant ignited in fire before removal
     const steamStageTimer = new Float32Array(MAX_CELLS);// 0 = not steaming; 0.01..0.95s = water turning to steam on lava before hardening to rock
     const pendingRockHeight = new Float32Array(MAX_CELLS);
+    const pondAge = new Float32Array(MAX_CELLS);        // Seconds a pond cell has held calm water (spawns lily pads & frogs once mature!)
 
     const params = {
       fidelity: 3,            // 1: Low-Poly Fast, 2: Balanced, 3: High, 4: Ultra, 5: Cinematic Max
@@ -1573,6 +1574,8 @@
       totalLavaVol: 0,
       junglePlantCount: 0,
       desertPlantCount: 0,
+      lilyPadCount: 0,
+      maturePondCells: 0,
       activePlantCap: MAX_TOTAL_PLANTS,
       activeParticleCap: 9000,
       floraSyncInterval: 3,
@@ -3032,9 +3035,121 @@
       true
     );
 
+    // 3D Cactus Blossom Geometries (Prickly Pear / Barrel Cactus Paddle Blooms & Saguaro Crown/Arm-Tip Blooms)
+    function createFlowerClusterAt(parts, cx, cy, cz, scale = 1.0) {
+      // Flared open blossom cup
+      const cup = new THREE.CylinderGeometry(0.16 * scale, 0.05 * scale, 0.14 * scale, 7);
+      cup.translate(cx, cy + 0.05 * scale, cz);
+      parts.push(cup);
+      // 5 radiating rounded flower petals around the crown
+      for (let p = 0; p < 5; p++) {
+        const ang = (p / 5) * Math.PI * 2;
+        const petal = new THREE.SphereGeometry(0.095 * scale, 6, 5);
+        petal.scale(1.15, 0.48, 0.75);
+        petal.rotateY(-ang);
+        petal.translate(
+          cx + Math.cos(ang) * 0.11 * scale,
+          cy + 0.10 * scale,
+          cz + Math.sin(ang) * 0.11 * scale
+        );
+        parts.push(petal);
+      }
+    }
+
+    function createBarrelBloomGeometry() {
+      const parts = [];
+      const padRimCoords = [
+        [-0.34, 1.08,  0.05, 1.05],
+        [ 0.32, 1.11, -0.04, 1.05],
+        [ 0.00, 0.62,  0.00, 0.95],
+        [-0.54, 1.42,  0.10, 0.95],
+        [ 0.50, 1.45, -0.08, 0.95]
+      ];
+      for (const [bx, by, bz, sc] of padRimCoords) {
+        createFlowerClusterAt(parts, bx, by, bz, sc);
+      }
+      return safeMergeGeometries(parts, true);
+    }
+
+    function createSaguaroBloomGeometry() {
+      const parts = [];
+      // Main saguaro apex crown wreath (3 flowers) + Left Arm tip + Right Arm tip
+      createFlowerClusterAt(parts,  0.00, 3.66,  0.00, 1.35);
+      createFlowerClusterAt(parts,  0.14, 3.60,  0.12, 1.05);
+      createFlowerClusterAt(parts, -0.14, 3.60, -0.10, 1.05);
+      createFlowerClusterAt(parts,  0.78, 3.12,  0.00, 1.15);
+      createFlowerClusterAt(parts, -0.72, 2.52,  0.00, 1.10);
+      return safeMergeGeometries(parts, true);
+    }
+
+    const cactusBloomMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.36,
+      metalness: 0.04,
+      emissive: new THREE.Color(0x280614),
+      emissiveIntensity: 0.18
+    });
+    const barrelBloomInst = createPlantPool(createBarrelBloomGeometry(), cactusBloomMat, false);
+    const saguaroBloomInst = createPlantPool(createSaguaroBloomGeometry(), cactusBloomMat, false);
+
+    // 3D Floating Pond Lily Pads & Water-Lily Lotus Blossoms (appear on ponds that have existed long enough)
+    const MAX_LILYPAD_BUFFER = 900;
+    function createLilyPadGeometry() {
+      const parts = [];
+      // Primary notched circular lily pad leaf floating on the water surface
+      const pad1 = new THREE.CylinderGeometry(0.48, 0.48, 0.028, 14, 1, false, 0.24, Math.PI * 2 - 0.48);
+      pad1.translate(0, 0.018, 0);
+      parts.push(pad1);
+      // Smaller companion lily pad leaf
+      const pad2 = new THREE.CylinderGeometry(0.30, 0.30, 0.024, 12, 1, false, 2.3, Math.PI * 2 - 0.52);
+      pad2.translate(0.52, 0.016, 0.34);
+      parts.push(pad2);
+      return safeMergeGeometries(parts, true);
+    }
+
+    function createLilyFlowerGeometry() {
+      const parts = [];
+      createFlowerClusterAt(parts, 0.04, 0.025, -0.03, 1.25);
+      return safeMergeGeometries(parts, true);
+    }
+
+    const lilyPadInst = new THREE.InstancedMesh(
+      createLilyPadGeometry(),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.48, metalness: 0.05 }),
+      MAX_LILYPAD_BUFFER
+    );
+    lilyPadInst.castShadow = false;
+    lilyPadInst.receiveShadow = true;
+    lilyPadInst.count = 0;
+    lilyPadInst.frustumCulled = false;
+    for (let i = 0; i < MAX_LILYPAD_BUFFER; i++) {
+      lilyPadInst.setColorAt(i, tempColor.setHex(0x22c55e));
+    }
+    scene.add(lilyPadInst);
+
+    const lilyFlowerInst = new THREE.InstancedMesh(
+      createLilyFlowerGeometry(),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.32,
+        emissive: new THREE.Color(0x240a18),
+        emissiveIntensity: 0.16
+      }),
+      MAX_LILYPAD_BUFFER
+    );
+    lilyFlowerInst.castShadow = false;
+    lilyFlowerInst.receiveShadow = true;
+    lilyFlowerInst.count = 0;
+    lilyFlowerInst.frustumCulled = false;
+    for (let i = 0; i < MAX_LILYPAD_BUFFER; i++) {
+      lilyFlowerInst.setColorAt(i, tempColor.setHex(0xf9a8d4));
+    }
+    scene.add(lilyFlowerInst);
+
     const allPlantPools = [
       fernInst, jungleBushInst, jungleTrunkInst, jungleCrownInst,
-      desertScrubInst, barrelCactusInst, saguaroInst
+      desertScrubInst, barrelCactusInst, saguaroInst,
+      barrelBloomInst, saguaroBloomInst, lilyPadInst, lilyFlowerInst
     ];
 
     // ============================================================================
@@ -3193,11 +3308,12 @@
       plantBurnTimer.fill(0);
       steamStageTimer.fill(0);
       pendingRockHeight.fill(0);
+      pondAge.fill(0);
       // Remove aquatic & jungle-dependent wildlife while keeping desert camels, oryx, lions, and hawks
       if (typeof faunaAgents !== 'undefined') {
         for (let i = faunaAgents.length - 1; i >= 0; i--) {
           const t = faunaAgents[i].type;
-          if (t === 'fish' || t === 'flamingo' || t === 'macaw' || t === 'bat' || t === 'croc' || t === 'jaguar') {
+          if (t === 'fish' || t === 'frog' || t === 'flamingo' || t === 'macaw' || t === 'bat' || t === 'croc' || t === 'jaguar') {
             if (typeof disposeApexRig === 'function') disposeApexRig(faunaAgents[i]);
             faunaAgents.splice(i, 1);
           }
@@ -3217,6 +3333,7 @@
       plantBurnTimer.fill(0);
       steamStageTimer.fill(0);
       pendingRockHeight.fill(0);
+      pondAge.fill(0);
       soilMoisture.fill(0);
       waterProximity.fill(0);
       veg.fill(0);
@@ -3748,12 +3865,59 @@
     function ecologySuccessionStep(stepScale = 1.0) {
       let currentTotalPlants = params.junglePlantCount + params.desertPlantCount;
       const canSeedNewPlants = currentTotalPlants < params.activePlantCap;
+      const isVolcanoRisingNow = (typeof volcanoEruptionState !== 'undefined' && volcanoEruptionState.active && volcanoEruptionState.elapsed < 28.0);
+      // Effective weathering step so rocks degrade steadily into loose sand over ~40-75s of real time
+      const rockWeatherStep = Math.max(stepScale * 2.2, 0.038);
 
       for (let y = 1; y < GRID - 1; y++) {
         for (let x = 1; x < GRID - 1; x++) {
           const i = idx(x, y);
           let v = veg[i];
           let h = vegHealth[i];
+
+          // --- ROCK WEATHERING & DEGRADATION INTO LOOSE DRIFTING SAND ---
+          const obs = obstacleType[i];
+          if ((obs === 1 || obs === 3) && steamStageTimer[i] <= 0.0) {
+            let skipVolcanoCone = false;
+            if (isVolcanoRisingNow) {
+              const dVolc = Math.hypot(x - volcanoEruptionState.cx, y - volcanoEruptionState.cy) * CELL_SIZE;
+              if (dVolc <= volcanoEruptionState.radiusMeters * 1.05) skipVolcanoCone = true;
+            }
+            if (!skipVolcanoCone) {
+              const minNeighborB = Math.min(
+                bedrock[i + 1],
+                bedrock[i - 1],
+                bedrock[i + GRID],
+                bedrock[i - GRID]
+              );
+              // Rock erodes down toward the local neighboring bedrock floor (or baseline desert floor ~2.2m)
+              const baseFloor = Math.max(MIN_TERRAIN_HEIGHT + 0.15, Math.min(minNeighborB, 2.35));
+              const excessRock = bedrock[i] - baseFloor;
+
+              if (excessRock > 0.04) {
+                // Wind abrasion, rain/water erosion, and freeze-thaw snow/ice accelerate rock breakdown into sand
+                const windAbrasion = 0.65 + (windSpeedMap[i] / 18.0) * 0.75;
+                const waterWeather = 1.0 + Math.min(1.2, water[i] * 1.5) + params.rainRate * 1.1;
+                const freezeThaw = 1.0 + (snowCover[i] + iceCover[i]) * 1.6;
+                // Volcanic basalt rock (obs === 3) is slightly denser than sandstone boulders (obs === 1)
+                const hardnessMult = (obs === 3) ? 0.78 : 1.0;
+                const degradeAmt = Math.min(
+                  excessRock,
+                  (0.012 + excessRock * 0.0042) * windAbrasion * waterWeather * freezeThaw * hardnessMult * rockWeatherStep
+                );
+
+                bedrock[i] -= degradeAmt;
+                // Degraded rock crumbles directly into loose drifting desert sand!
+                sand[i] = Math.min(MAX_TERRAIN_HEIGHT - bedrock[i], sand[i] + degradeAmt * 0.95);
+
+                if (bedrock[i] - baseFloor <= 0.14) {
+                  obstacleType[i] = 0;
+                }
+              } else {
+                obstacleType[i] = 0;
+              }
+            }
+          }
 
           const s = sand[i];
           const w = water[i];
@@ -4386,6 +4550,10 @@
       let cScrub = 0;
       let cBarrel = 0;
       let cSaguaro = 0;
+      let cBarrelBloom = 0;
+      let cSaguaroBloom = 0;
+      let cLilyPad = 0;
+      let cLilyFlower = 0;
 
       // Count total vegetated cells so we can scale keepProb evenly across the entire map if over activePlantCap
       let totalVegCells = 0;
@@ -4574,6 +4742,25 @@
               applyFrostTint(0.42 * vh + 0.66 * (1 - vh), 0.68 * vh + 0.52 * (1 - vh), 0.16);
               barrelCactusInst.setColorAt(cBarrel, tempColor);
               cBarrel++;
+
+              // CACTUS BLOOM CHECK (Prickly Pear / Barrel Cactus blooms vibrant magenta, gold & coral flowers when healthy & moist!)
+              const mHere = soilMoisture[i];
+              const wpHere = waterProximity[i];
+              const canCactusBloom = !isPlantBurning && snowCover[i] < 0.18 && vh >= 0.70 && v >= 1.28 &&
+                (mHere >= 0.13 || wpHere >= 0.14 || params.rainRate >= 0.08);
+              if (canCactusBloom && cBarrelBloom < MAX_PLANT_BUFFER) {
+                barrelBloomInst.setMatrixAt(cBarrelBloom, dummy.matrix);
+                const bloomTrait = fastRand(x, y, 137);
+                if (bloomTrait < 0.45) {
+                  tempColor.setRGB(0.98, 0.22, 0.52); // Desert Prickly Pear Magenta-Rose
+                } else if (bloomTrait < 0.80) {
+                  tempColor.setRGB(1.00, 0.84, 0.14); // Golden Sunburst Yellow
+                } else {
+                  tempColor.setRGB(1.00, 0.44, 0.18); // Sunset Coral Orange
+                }
+                barrelBloomInst.setColorAt(cBarrelBloom, tempColor);
+                cBarrelBloom++;
+              }
             } else {
               if (cSaguaro >= MAX_PLANT_BUFFER) continue;
               const sc = (0.80 + clamp((v - 2.15) / 1.2, 0, 1) * 0.65) * slopeScaleFit;
@@ -4583,7 +4770,83 @@
               applyFrostTint(0.30 * vh + 0.58 * (1 - vh), 0.56 * vh + 0.45 * (1 - vh), 0.15);
               saguaroInst.setColorAt(cSaguaro, tempColor);
               cSaguaro++;
+
+              // CACTUS BLOOM CHECK (Tall Saguaro crowns & arm tips bloom when mature, healthy & nourished by moisture/rain!)
+              const mHere = soilMoisture[i];
+              const wpHere = waterProximity[i];
+              const canSaguaroBloom = !isPlantBurning && snowCover[i] < 0.18 && vh >= 0.70 && v >= 2.22 &&
+                (mHere >= 0.13 || wpHere >= 0.14 || params.rainRate >= 0.08);
+              if (canSaguaroBloom && cSaguaroBloom < MAX_PLANT_BUFFER) {
+                saguaroBloomInst.setMatrixAt(cSaguaroBloom, dummy.matrix);
+                const bloomTrait = fastRand(x, y, 149);
+                if (bloomTrait < 0.45) {
+                  tempColor.setRGB(1.00, 0.96, 0.72); // Iconic Saguaro Creamy Ivory-Gold Crown Blossom
+                } else if (bloomTrait < 0.78) {
+                  tempColor.setRGB(0.98, 0.26, 0.58); // Desert Rose Magenta
+                } else {
+                  tempColor.setRGB(1.00, 0.78, 0.20); // Desert Marigold Yellow
+                }
+                saguaroBloomInst.setColorAt(cSaguaroBloom, tempColor);
+                cSaguaroBloom++;
+              }
             }
+          }
+        }
+      }
+
+      // --- FLOATING LILY PADS & WATER-LILY BLOSSOMS ON MATURE PONDS (Ponds that have existed >= 10 seconds) ---
+      const timeNow = uniforms.uTime.value || 0.0;
+      for (let y = 2; y < GRID - 2 && cLilyPad < MAX_LILYPAD_BUFFER; y++) {
+        const row = y * GRID;
+        for (let x = 2; x < GRID - 2 && cLilyPad < MAX_LILYPAD_BUFFER; x++) {
+          const i = row + x;
+          const pAge = pondAge[i];
+          if (pAge < 10.0) continue;
+          const w = water[i];
+          // Lily pads thrive in calm shallow-to-medium pond water (0.09m - 2.6m deep), away from lava or thick ice
+          if (w < 0.09 || w > 2.6 || lavaFrac[i] >= 0.20 || iceCover[i] >= 0.35) continue;
+          // Natural clustering mask so lily pads form organic floating colonies across the pond
+          const padClusterNoise = valueNoise(x * 0.22 + 4.1, y * 0.22 + 7.3);
+          if (padClusterNoise < 0.36 || fastRand(x, y, 173) > 0.44) continue;
+
+          const wx = clamp(((x / (GRID - 1)) - 0.5) * WORLD_SIZE + (fastRand(x, y, 179) - 0.5) * 0.85, -halfWorld, halfWorld);
+          const wz = clamp(((y / (GRID - 1)) - 0.5) * WORLD_SIZE + (fastRand(y, x, 181) - 0.5) * 0.85, -halfWorld, halfWorld);
+          const { waterSurfaceY, waterDepth } = sampleHeightsAtWorld(wx, wz);
+          if (waterDepth < 0.08 || waterSurfaceY < -100) continue;
+
+          // Gentle ripple bobbing on the pond surface + smooth growth scale as pond matures from 10s -> 18s
+          const maturityScale = clamp((pAge - 10.0) / 8.0, 0.25, 1.0);
+          const padScale = (0.72 + fastRand(x, y, 191) * 0.58) * maturityScale;
+          const rippleBob = Math.sin(timeNow * 1.9 + wx * 0.45 + wz * 0.45) * 0.012;
+
+          dummy.position.set(wx, waterSurfaceY - 0.018 + rippleBob, wz);
+          dummy.rotation.set(
+            Math.sin(timeNow * 1.4 + i) * 0.035,
+            fastRand(x, y, 197) * Math.PI * 2,
+            Math.cos(timeNow * 1.6 + i) * 0.035
+          );
+          dummy.scale.setScalar(padScale);
+          dummy.updateMatrix();
+
+          lilyPadInst.setMatrixAt(cLilyPad, dummy.matrix);
+          const greenShade = 0.78 + fastRand(x, y, 199) * 0.32;
+          tempColor.setRGB(0.12 * greenShade, 0.68 * greenShade, 0.24 * greenShade);
+          lilyPadInst.setColorAt(cLilyPad, tempColor);
+          cLilyPad++;
+
+          // Mature lily pads (pondAge >= 13.5s) sprout glowing pink, white, or golden water-lily lotus blossoms!
+          if (pAge >= 13.5 && fastRand(x, y, 211) < 0.58 && cLilyFlower < MAX_LILYPAD_BUFFER) {
+            lilyFlowerInst.setMatrixAt(cLilyFlower, dummy.matrix);
+            const flTrait = fastRand(x, y, 223);
+            if (flTrait < 0.52) {
+              tempColor.setRGB(0.98, 0.62, 0.82); // Soft Lotus Pink
+            } else if (flTrait < 0.85) {
+              tempColor.setRGB(0.99, 0.98, 0.95); // Pure Water-Lily White
+            } else {
+              tempColor.setRGB(1.00, 0.92, 0.52); // Golden Nymphaea Yellow
+            }
+            lilyFlowerInst.setColorAt(cLilyFlower, tempColor);
+            cLilyFlower++;
           }
         }
       }
@@ -4595,9 +4858,14 @@
       desertScrubInst.count = cScrub;
       barrelCactusInst.count = cBarrel;
       saguaroInst.count = cSaguaro;
+      barrelBloomInst.count = cBarrelBloom;
+      saguaroBloomInst.count = cSaguaroBloom;
+      lilyPadInst.count = cLilyPad;
+      lilyFlowerInst.count = cLilyFlower;
 
       params.junglePlantCount = cFern + cJungleBush + cJungleTree;
       params.desertPlantCount = cScrub + cBarrel + cSaguaro;
+      params.lilyPadCount = cLilyPad;
 
       const pools = [
         [fernInst, cFern],
@@ -4606,7 +4874,11 @@
         [jungleCrownInst, cJungleTree],
         [desertScrubInst, cScrub],
         [barrelCactusInst, cBarrel],
-        [saguaroInst, cSaguaro]
+        [saguaroInst, cSaguaro],
+        [barrelBloomInst, cBarrelBloom],
+        [saguaroBloomInst, cSaguaroBloom],
+        [lilyPadInst, cLilyPad],
+        [lilyFlowerInst, cLilyFlower]
       ];
       for (const [inst, count] of pools) {
         if (count > 0) {
@@ -4865,6 +5137,51 @@
     const owlInst = createFaunaPool(createOwlBodyGeometry(), 0xe2e8f0, true);
     const owlWingLInst = createFaunaPool(createBirdWingGeometry(1.18, 0.44, 1), 0xe2e8f0, true);
     const owlWingRInst = createFaunaPool(createBirdWingGeometry(1.18, 0.44, -1), 0xe2e8f0, true);
+
+    // 6E. Oasis Pond Frog (facing +Z: crouching amphibious torso, wide head with bulging eyes, folded muscular hind legs & forelegs)
+    function createFrogGeometry() {
+      const parts = [];
+      // Plump crouching frog torso tilted slightly upward toward +Z
+      const body = new THREE.SphereGeometry(0.22, 8, 6);
+      body.scale(1.05, 0.72, 1.32);
+      body.rotateX(-0.22);
+      body.translate(0, 0.16, -0.02);
+      parts.push(body);
+
+      // Wide frog head & vocal throat sac
+      const head = new THREE.SphereGeometry(0.17, 7, 6);
+      head.scale(1.12, 0.78, 1.08);
+      head.translate(0, 0.24, 0.20);
+      parts.push(head);
+
+      // Two prominent bulging frog eyes on top of the head
+      for (const side of [-1, 1]) {
+        const eye = new THREE.SphereGeometry(0.058, 6, 5);
+        eye.translate(side * 0.10, 0.34, 0.25);
+        parts.push(eye);
+
+        // Folded muscular hind thigh + calf + webbed foot
+        const thigh = new THREE.SphereGeometry(0.12, 6, 5);
+        thigh.scale(0.68, 0.82, 1.35);
+        thigh.rotateY(side * 0.32);
+        thigh.translate(side * 0.20, 0.14, -0.10);
+        parts.push(thigh);
+
+        const foot = new THREE.BoxGeometry(0.11, 0.04, 0.24);
+        foot.rotateY(side * 0.18);
+        foot.translate(side * 0.22, 0.03, -0.06);
+        parts.push(foot);
+
+        // Front forelegs
+        const foreLeg = new THREE.CylinderGeometry(0.035, 0.03, 0.20, 5);
+        foreLeg.rotateX(0.15);
+        foreLeg.translate(side * 0.13, 0.10, 0.16);
+        parts.push(foreLeg);
+      }
+      return safeMergeGeometries(parts, true);
+    }
+
+    const frogInst = createFaunaPool(createFrogGeometry(), 0x22c55e, true);
 
     // 7. Bleached Bone Skeleton Geometry (Spine, 4 Pairs of Ribs, Skull & Limb Bones lying on the ground/lakebed)
     function createSkeletonGeometry() {
@@ -5790,6 +6107,12 @@
         speed = 3.8 + Math.random() * 0.8;
         scale = 1.15;
         colorHex = 0x3f6212;
+      } else if (type === 'frog') {
+        // Oasis Pond Frog (hops around pond banks, shallow water & floating lily pads, ribbiting periodically!)
+        speed = 3.1 + Math.random() * 0.9;
+        scale = 0.88 + Math.random() * 0.32;
+        const frogColors = [0x22c55e, 0x16a34a, 0x4ade80, 0x65a30d];
+        colorHex = frogColors[Math.floor(Math.random() * frogColors.length)];
       }
 
       faunaAgents.push({
@@ -5798,6 +6121,8 @@
         submergedTime: 0,
         skeletonTimer: 0,
         huntCooldown: 2.0 + Math.random() * 4.0,
+        croakTimer: 1.2 + Math.random() * 4.8,
+        hopPitch: 0,
         apexPhase: 'PROWL',
         stalkTimer: 0,
         pounceTimer: 0,
@@ -5845,9 +6170,15 @@
       const targetLions = params.desertPlantCount > 200 ? 2 : 1;
       const targetCrocs = hasWater ? (params.totalWaterVol > 1600 ? 2 : 1) : 0;
 
+      // Pond Frogs: emerge around ponds & floating lily pads (day and night, unless frozen in Snow & Ice)
+      const hasMaturePond = (params.maturePondCells > 4) || (params.totalWaterVol > 200);
+      const targetFrogs = (!isSnowAndIceActive && hasMaturePond)
+        ? clamp(Math.floor(params.maturePondCells / 12) + 8, 6, 26)
+        : 0;
+
       const counts = {
         camel: 0, oryx: 0, flamingo: 0, macaw: 0, fish: 0, hawk: 0,
-        fennec: 0, bat: 0, owl: 0,
+        fennec: 0, bat: 0, owl: 0, frog: 0,
         jaguar: 0, lion: 0, croc: 0
       };
       for (const a of faunaAgents) {
@@ -5886,6 +6217,7 @@
       };
 
       trySpawnInBiome('fish', targetFish, (i) => water[i] > 0.11 && lavaFrac[i] < 0.2);
+      trySpawnInBiome('frog', targetFrogs, (i) => ((water[i] >= 0.0 && water[i] < 0.55 && waterProximity[i] >= 0.50) || pondAge[i] >= 8.0) && water[i] < 1.1 && lavaFrac[i] < 0.2);
       trySpawnInBiome('flamingo', targetFlamingos, (i) => ((water[i] > 0.02 && water[i] < 0.45) || (waterProximity[i] > 0.65 && water[i] < 0.45)) && lavaFrac[i] < 0.2);
       trySpawnInBiome('macaw', targetMacaws, (i) => waterProximity[i] >= 0.38 && veg[i] > 1.2);
       trySpawnInBiome('camel', targetCamels, (i) => water[i] < 0.01 && waterProximity[i] < 0.45 && obstacleType[i] === 0);
@@ -5911,7 +6243,7 @@
       const isNightTime = (hr >= 19.0 || hr < 5.5) || ((skyUniforms.uNightFactor.value || 0) > 0.55);
 
       let cCamel = 0, cOryx = 0, cFlamingo = 0, cMacaw = 0, cFish = 0, cHawk = 0, cSkeleton = 0;
-      let cFennec = 0, cBat = 0, cOwl = 0;
+      let cFennec = 0, cBat = 0, cOwl = 0, cFrog = 0;
 
       for (let i = faunaAgents.length - 1; i >= 0; i--) {
         const a = faunaAgents[i];
@@ -5947,8 +6279,8 @@
           continue;
         }
 
-        // During Snow & Ice, all birds & bats (Flamingos, Macaws, Hawks, Owls, Fruit Bats) immediately disappear!
-        if (isSnowAndIceActive && (a.type === 'flamingo' || a.type === 'macaw' || a.type === 'hawk' || a.type === 'owl' || a.type === 'bat')) {
+        // During Snow & Ice, all birds, bats & pond frogs immediately disappear/hibernate!
+        if (isSnowAndIceActive && (a.type === 'flamingo' || a.type === 'macaw' || a.type === 'hawk' || a.type === 'owl' || a.type === 'bat' || a.type === 'frog')) {
           faunaAgents.splice(i, 1);
           continue;
         }
@@ -5974,6 +6306,10 @@
           faunaAgents.splice(i, 1);
           continue;
         }
+        if (a.type === 'frog' && params.totalWaterVol < 25 && !a.isBurning) {
+          faunaAgents.splice(i, 1);
+          continue;
+        }
         if (a.type === 'croc' && params.totalWaterVol < 40 && !isInMoltenLava && !a.isBurning) {
           disposeApexRig(a);
           faunaAgents.splice(i, 1);
@@ -5996,13 +6332,14 @@
           lion: 1.24,
           jaguar: 1.08,
           croc: 0.65,
+          frog: 999,
           macaw: 999,
           hawk: 999,
           bat: 999,
           owl: 999
         };
         const fullSubmergeDepth = (speciesFullHeight[a.type] || 1.45) * a.scale;
-        const fleeThreshold = a.type === 'flamingo' ? 0.36 : (isFlyer ? 999 : 0.04);
+        const fleeThreshold = a.type === 'frog' ? 1.15 : (a.type === 'flamingo' ? 0.36 : (isFlyer ? 999 : 0.04));
 
         // Check if this animal is touching lava OR near lava (within 1 grid cell of active molten lava)
         let isNearMoltenLava = isInMoltenLava;
@@ -6355,6 +6692,46 @@
           a.z += Math.cos(a.heading) * a.speed * feedingPause * fleeSpeedMult * dt;
           a.y = walkSurfaceY + Math.abs(Math.sin(time * 7.0 * coldSpeedMult + a.phase)) * 0.08 * feedingPause;
 
+        } else if (a.type === 'frog') {
+          // Oasis Pond Frog: hops in parabolic 3D leaps along pond banks & floating lily pads, then sits and croaks ("rib-bit!")
+          const pWp = waterProximity[pIdx];
+          if (isLavaHazardAhead || isInMoltenLava || probeH.localLava > 0.12) {
+            steerToHighDryGround(16.0);
+          } else if (pWp < 0.42 || probeH.waterDepth > 1.05 || obstacleType[pIdx] === 2) {
+            // Stay near pond shoreline and shallow lily-pad water
+            a.heading += 2.2 * coldSpeedMult * dt;
+          } else {
+            a.heading += a.turnRate * dt * 0.9 * coldSpeedMult;
+          }
+
+          // Sit-and-hop cycle: hop for 0.56s, then sit & call for ~1.8s (unless fleeing lava)
+          const hopCycle = (time * 1.35 + a.phase) % 2.35;
+          const isHopping = (hopCycle < 0.56) || isLavaHazardAhead || isInMoltenLava;
+          let hopHeight = 0.0;
+          if (isHopping) {
+            const hopT = (isLavaHazardAhead || isInMoltenLava) ? ((time * 4.5 + a.phase) % 1.0) : (hopCycle / 0.56);
+            hopHeight = Math.sin(hopT * Math.PI) * 0.46 * a.scale;
+            a.hopPitch = Math.cos(hopT * Math.PI) * -0.45;
+            const hopSpeed = a.speed * (isLavaHazardAhead ? 1.85 : 1.45) * coldSpeedMult;
+            a.x += Math.sin(a.heading) * hopSpeed * dt;
+            a.z += Math.cos(a.heading) * hopSpeed * dt;
+          } else {
+            a.hopPitch = 0.0;
+          }
+
+          // Frogs sit on the wet pond bank OR float right on top of shallow pond water & lily pads!
+          const frogBaseY = (waterDepth > 0.025 && waterSurfaceY > groundY) ? (waterSurfaceY - 0.015) : walkSurfaceY;
+          a.y = frogBaseY + hopHeight;
+
+          // Periodic 3D Spatial Frog Croak / Ribbit sound effect!
+          a.croakTimer = (a.croakTimer !== undefined ? a.croakTimer : 2.5) - dt;
+          if (a.croakTimer <= 0.0) {
+            a.croakTimer = 2.8 + Math.random() * 5.2;
+            if (!isHopping && typeof playFrogRibbitSound === 'function') {
+              playFrogRibbitSound(a.x, a.y, a.z);
+            }
+          }
+
         } else if (a.type === 'camel' || a.type === 'oryx' || a.type === 'fennec') {
           if (isLavaHazardAhead || isInHazardousWetArea || probeEffWater > fleeThreshold) {
             // Immediately sprint & steer toward the nearest dry higher ground to avoid lava or escape drowning!
@@ -6431,12 +6808,18 @@
         const struggleTilt = isDrowning ? Math.sin(time * 11.0 + a.phase) * 0.18 : 0;
         const isBird = isFlyer;
         const climb = isBird ? (a.climbRate || 0) : 0;
-        const birdPitch = isBird ? clamp(-climb * 0.08, -0.32, 0.32) : 0;
+        const birdPitch = isBird ? clamp(-climb * 0.08, -0.32, 0.32) : (a.type === 'frog' ? (a.hopPitch || 0) : 0);
         const roll = (isBird ? -a.turnRate * 0.35 : 0) + struggleTilt;
         const wiggle = (a.type === 'fish') ? Math.sin(time * 11.0 + a.phase) * 0.14 : 0;
         dummy.rotation.order = 'YXZ';
         dummy.rotation.set(birdPitch, a.heading + wiggle, roll);
-        dummy.scale.setScalar(a.scale);
+        if (a.type === 'frog' && !a.hopPitch) {
+          // Subtle throat-sac breathing pulse while frog sits on a lily pad or pond bank
+          const throatPulse = 1.0 + Math.max(0, Math.sin(time * 5.5 + a.phase)) * 0.08;
+          dummy.scale.set(a.scale * throatPulse, a.scale, a.scale * throatPulse);
+        } else {
+          dummy.scale.setScalar(a.scale);
+        }
         dummy.updateMatrix();
         tempColor.setHex(a.colorHex);
         if (a.isBurning) {
@@ -6512,6 +6895,10 @@
           owlInst.setColorAt(cOwl, tempColor);
           setBirdWingMatrices(owlWingLInst, owlWingRInst, cOwl, 14.0);
           cOwl++;
+        } else if (a.type === 'frog' && cFrog < MAX_FAUNA_PER_SPECIES) {
+          frogInst.setMatrixAt(cFrog, dummy.matrix);
+          frogInst.setColorAt(cFrog, tempColor);
+          cFrog++;
         }
       }
 
@@ -6533,6 +6920,7 @@
         [owlInst, cOwl],
         [owlWingLInst, cOwl],
         [owlWingRInst, cOwl],
+        [frogInst, cFrog],
         [skeletonInst, cSkeleton]
       ];
       for (const [inst, count] of faunaPools) {
@@ -8271,6 +8659,84 @@
       };
     }
 
+    // 3. 3D Spatial Oasis Pond Frog Croak & Two-Syllable "Rib-bit!" Synthesizer
+    let lastFrogSoundMs = 0;
+    let activeFrogAudioVoices = 0;
+    function playFrogRibbitSound(wx, wy, wz, forceImmediate = false) {
+      if (!params.audioEnabled || activeFrogAudioVoices >= 3) return;
+      const nowMs = performance.now();
+      if (!forceImmediate && nowMs - lastFrogSoundMs < 480) return;
+
+      _audioTmpVec.set(wx, wy, wz);
+      const dist = camera.position.distanceTo(_audioTmpVec);
+      if (!forceImmediate && dist > 145.0) return;
+
+      const ctx = ensureAudioContext();
+      if (!ctx) return;
+
+      lastFrogSoundMs = nowMs;
+      activeFrogAudioVoices++;
+      const now = ctx.currentTime;
+      const { distGain, pan } = computeWorldAudioSpatial(wx, wy, wz);
+      const outBus = createSpatialPanner(ctx, pan);
+
+      // Vocal-cord glottal sawtooth oscillator + throat-sac trill amplitude modulation + formant bandpass filter
+      const basePitch = 152 + Math.random() * 44; // Individual frog vocal pitch variation
+      const vocalOsc = ctx.createOscillator();
+      vocalOsc.type = 'sawtooth';
+
+      // Two-syllable "Rib-bit!" pitch contour
+      // Syllable 1 ("Rib-"): 0.00s -> 0.085s
+      vocalOsc.frequency.setValueAtTime(basePitch * 0.92, now);
+      vocalOsc.frequency.exponentialRampToValueAtTime(basePitch * 1.28, now + 0.08);
+      // Syllable 2 ("-bit!"): 0.115s -> 0.25s
+      vocalOsc.frequency.setValueAtTime(basePitch * 1.05, now + 0.115);
+      vocalOsc.frequency.exponentialRampToValueAtTime(basePitch * 1.54, now + 0.185);
+      vocalOsc.frequency.exponentialRampToValueAtTime(basePitch * 0.86, now + 0.255);
+
+      // Resonant throat-sac formant bandpass filter
+      const formantFilter = ctx.createBiquadFilter();
+      formantFilter.type = 'bandpass';
+      formantFilter.Q.setValueAtTime(5.2, now);
+      formantFilter.frequency.setValueAtTime(460, now);
+      formantFilter.frequency.exponentialRampToValueAtTime(890, now + 0.08);
+      formantFilter.frequency.setValueAtTime(520, now + 0.115);
+      formantFilter.frequency.exponentialRampToValueAtTime(1180, now + 0.185);
+      formantFilter.frequency.exponentialRampToValueAtTime(480, now + 0.255);
+
+      // Rapid 36 Hz glottal throat-trill modulator for realistic amphibian croak texture
+      const trillOsc = ctx.createOscillator();
+      trillOsc.type = 'sine';
+      trillOsc.frequency.setValueAtTime(34 + Math.random() * 8, now);
+      const trillGain = ctx.createGain();
+      trillGain.gain.setValueAtTime(45, now);
+      trillOsc.connect(trillGain);
+      trillGain.connect(vocalOsc.frequency);
+
+      // Two-syllable amplitude envelope ("Rib" ... "bit!")
+      const envGain = ctx.createGain();
+      const vol = 0.20 * distGain;
+      envGain.gain.setValueAtTime(0.0001, now);
+      envGain.gain.linearRampToValueAtTime(vol * 0.78, now + 0.016);
+      envGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      envGain.gain.setValueAtTime(0.001, now + 0.112);
+      envGain.gain.linearRampToValueAtTime(vol, now + 0.135);
+      envGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.265);
+
+      vocalOsc.connect(formantFilter);
+      formantFilter.connect(envGain);
+      envGain.connect(outBus);
+
+      vocalOsc.start(now);
+      trillOsc.start(now);
+      vocalOsc.stop(now + 0.28);
+      trillOsc.stop(now + 0.28);
+
+      vocalOsc.onended = () => {
+        activeFrogAudioVoices = Math.max(0, activeFrogAudioVoices - 1);
+      };
+    }
+
     function launchFireworkAtWorld(wx, wz, forceImmediate = false) {
       const nowMs = performance.now();
       if (!forceImmediate && nowMs - lastFireworkLaunchMs < 115) return;
@@ -9550,13 +10016,17 @@
         const hr = ((params.timeOfDay % 24) + 24) % 24;
         const isNightTime = (hr >= 19.0 || hr < 5.5) || ((skyUniforms.uNightFactor.value || 0) > 0.55);
 
-        if (w > 0.25 && lf < 0.25) {
+        if (w > 0.35 && lf < 0.25) {
           spawnAnimalAgent('fish', jx, jz);
         } else if ((w > 0.02 && lf < 0.25) || wp >= 0.42) {
-          if (isNightTime) {
+          const rPond = Math.random();
+          if (rPond < 0.42) {
+            spawnAnimalAgent('frog', jx, jz);
+            playFrogRibbitSound(jx, sampleSurfaceHeightAtWorld(jx, jz), jz, true);
+          } else if (isNightTime) {
             spawnAnimalAgent('bat', jx, jz);
           } else {
-            spawnAnimalAgent(Math.random() > 0.45 ? 'flamingo' : 'macaw', jx, jz);
+            spawnAnimalAgent(rPond > 0.70 ? 'flamingo' : 'macaw', jx, jz);
           }
         } else {
           const r = Math.random();
@@ -10246,6 +10716,35 @@
         if (timerBadge) timerBadge.textContent = 'Manual';
       }
 
+      // --- POND MATURITY TRACKER (Ponds that exist >= 10s sprout floating Lily Pads, Lotus Flowers & attract Frogs!) ---
+      let matureCount = 0;
+      let pondMaturityChanged = false;
+      for (let i = 0; i < MAX_CELLS; i++) {
+        const w = water[i];
+        const lf = lavaFrac[i];
+        if (w >= 0.085 && lf < 0.20 && iceCover[i] < 0.35) {
+          const prevAge = pondAge[i];
+          const nextAge = Math.min(120.0, prevAge + dt);
+          pondAge[i] = nextAge;
+          if (nextAge >= 10.0) {
+            matureCount++;
+            if (prevAge < 18.0 && ((prevAge < 10.0 && nextAge >= 10.0) || (prevAge < 13.5 && nextAge >= 13.5) || (frameCount % 12 === 0))) {
+              pondMaturityChanged = true;
+            }
+          }
+        } else if (pondAge[i] > 0.0) {
+          const prevAge = pondAge[i];
+          pondAge[i] = lf >= 0.30 ? 0.0 : Math.max(0.0, prevAge - dt * 3.5);
+          if (prevAge >= 10.0 && pondAge[i] < 10.0) {
+            pondMaturityChanged = true;
+          }
+        }
+      }
+      params.maturePondCells = matureCount;
+      if (pondMaturityChanged || (matureCount > 0 && frameCount % 10 === 0)) {
+        rebuildFloraInstances();
+      }
+
       // --- SNOW ACCUMULATION, LAKE ICE FREEZING & WARM SUNSHINE MELTING ---
       const isSnowing = params.snowRate > 0.05;
       if (!isSnowing && params.avgSnowCover <= 0.0005 && params.avgIceCover <= 0.0005) {
@@ -10433,6 +10932,9 @@
       for (let y = 1; y < GRID - 1; y++) {
         for (let x = 1; x < GRID - 1; x++) {
           const i = idx(x, y);
+          if (water[i] >= 0.085 && lavaFrac[i] < 0.20) {
+            pondAge[i] = Math.max(pondAge[i], 15.0);
+          }
           const isAlreadyPlant = veg[i] >= 0.12;
           if (!isAlreadyPlant && currentVegCells >= params.activePlantCap) continue;
           if (sand[i] > 0.08 && water[i] < 0.75 && obstacleType[i] !== 2) {
@@ -10709,7 +11211,7 @@
         macawInst, macawWingLInst, macawWingRInst,
         batInst, batWingLInst, batWingRInst,
         fishInst, hawkInst, hawkWingLInst, hawkWingRInst,
-        owlInst, owlWingLInst, owlWingRInst, skeletonInst
+        owlInst, owlWingLInst, owlWingRInst, frogInst, skeletonInst
       ];
       for (const inst of allFaunaInst) {
         inst.count = 0;
@@ -10738,6 +11240,7 @@
       plantBurnTimer.fill(0);
       steamStageTimer.fill(0);
       pendingRockHeight.fill(0);
+      pondAge.fill(0);
 
       // 5. Release WebGL shadow map textures, render lists, and GPU program/buffer caches
       if (sunLight.shadow && sunLight.shadow.map) {
