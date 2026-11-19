@@ -7881,9 +7881,28 @@
             // During FEAST (head-shake feeding, victory roar, and sphinx basking), remain stationary over the kill unless fleeing water
             apexSpeedMult = isInHazardousWetArea ? 1.0 : 0.0;
           } else {
-            // Scan for nearest eligible prey within 38m hunting range
+            // Scan for nearest eligible prey within 38m hunting range (Lions also sometimes chase & catch the Voxel Human!)
             let bestPrey = null;
             let bestDist = 38.0;
+            let isTargetVoxelHuman = false;
+
+            if (a.type === 'lion' && typeof voxelHuman !== 'undefined' && voxelHuman.active && !voxelHuman.isBurning) {
+              a.humanChaseDecisionTimer = (a.humanChaseDecisionTimer || 0.0) - dt;
+              if (a.humanChaseDecisionTimer <= 0.0) {
+                a.humanChaseDecisionTimer = 6.0 + Math.random() * 6.0;
+                // 60% chance a prowling lion decides to hunt the human when coming across him
+                a.willHuntHuman = Math.random() < 0.60;
+              }
+              if (a.willHuntHuman) {
+                const dHuman = Math.hypot(voxelHuman.x - a.x, voxelHuman.z - a.z);
+                if (dHuman < 34.0) {
+                  bestDist = dHuman;
+                  bestPrey = voxelHuman;
+                  isTargetVoxelHuman = true;
+                }
+              }
+            }
+
             for (let j = 0; j < faunaAgents.length; j++) {
               const p = faunaAgents[j];
               if (p.state !== 'alive') continue;
@@ -7894,14 +7913,19 @@
               if (!eligible) continue;
 
               const dPrey = Math.hypot(p.x - a.x, p.z - a.z);
-              if (dPrey < bestDist) {
+              // If the lion already locked onto the human within 26m, prioritize chasing the human!
+              if (dPrey < (isTargetVoxelHuman && bestDist < 26.0 ? bestDist * 0.65 : bestDist)) {
                 bestDist = dPrey;
                 bestPrey = p;
+                isTargetVoxelHuman = false;
               }
             }
 
             if (bestPrey) {
               isChasingPrey = true;
+              if (isTargetVoxelHuman) {
+                voxelHuman.beingChasedByLion = a;
+              }
               const targetAngle = Math.atan2(bestPrey.x - a.x, bestPrey.z - a.z);
               let angleDiff = targetAngle - a.heading;
               while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
@@ -7915,10 +7939,14 @@
                 a.lookYawOffset = clamp(angleDiff * 0.5, -0.35, 0.35);
                 apexSpeedMult = 2.15;
 
-                // Strike lands when close or at the end of the pounce arc -> prey turns into a 3D Bone Skeleton!
-                if (bestDist < 1.75 || a.pounceTimer >= 0.50) {
-                  bestPrey.state = 'skeleton';
-                  bestPrey.skeletonTimer = 0;
+                // Strike lands when close or at the end of the pounce arc -> prey turns into a 3D Bone Skeleton (or destroys Voxel Human)!
+                if (bestDist < 1.85 || a.pounceTimer >= 0.50) {
+                  if (isTargetVoxelHuman && typeof destroyVoxelHuman === 'function') {
+                    destroyVoxelHuman('lion');
+                  } else {
+                    bestPrey.state = 'skeleton';
+                    bestPrey.skeletonTimer = 0;
+                  }
                   a.huntCooldown = 10.0;
                   a.apexPhase = 'FEAST';
                   a.pounceTimer = 0;
@@ -9001,6 +9029,105 @@
       easelCanvasFrontMesh.position.set(0, 0, 0.034);
       canvasBoardGroup.add(easelCanvasFrontMesh);
 
+      // 4. 3D Pond Fishing Rod, Line, Floating Bobber & Caught Koi Fish (`fishingGroup`)
+      const fishingGroup = new THREE.Group();
+      fishingGroup.visible = false;
+      root.add(fishingGroup);
+
+      const rodPoleGeo = new THREE.CylinderGeometry(0.015, 0.032, 2.28, 7);
+      rodPoleGeo.translate(0, 1.14, 0);
+      rodPoleGeo.rotateX(1.06);
+      const rodPoleMesh = new THREE.Mesh(rodPoleGeo, woodMat);
+      rodPoleMesh.position.set(-0.28, 0.78, 0.26);
+      rodPoleMesh.castShadow = true;
+      fishingGroup.add(rodPoleMesh);
+
+      // Dynamic Fishing Line from Rod Tip (-0.28, 1.88, 2.25) to Floating Bobber / Hook
+      const fishLinePos = new Float32Array([
+        -0.28, 1.88, 2.25,
+        -0.28, 0.05, 2.38
+      ]);
+      const fishLineGeo = new THREE.BufferGeometry();
+      fishLineGeo.setAttribute('position', new THREE.BufferAttribute(fishLinePos, 3));
+      const fishLine = new THREE.Line(
+        fishLineGeo,
+        new THREE.LineBasicMaterial({ color: 0xe2e8f0, transparent: true, opacity: 0.85 })
+      );
+      fishingGroup.add(fishLine);
+
+      const bobberGroup = new THREE.Group();
+      bobberGroup.position.set(-0.28, 0.05, 2.38);
+      fishingGroup.add(bobberGroup);
+      const bobberTop = new THREE.Mesh(
+        new THREE.BoxGeometry(0.11, 0.08, 0.11),
+        new THREE.MeshBasicMaterial({ color: 0xef4444 })
+      );
+      bobberTop.position.y = 0.04;
+      bobberGroup.add(bobberTop);
+      const bobberBot = new THREE.Mesh(
+        new THREE.BoxGeometry(0.11, 0.07, 0.11),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
+      );
+      bobberBot.position.y = -0.035;
+      bobberGroup.add(bobberBot);
+
+      // 3D Caught Golden-Orange Koi Fish dangling from the line when he catches a fish!
+      const caughtFishGroup = new THREE.Group();
+      caughtFishGroup.position.set(-0.28, 0.95, 2.25);
+      caughtFishGroup.visible = false;
+      fishingGroup.add(caughtFishGroup);
+      const fishMat = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.35 });
+      const fishFinMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.45 });
+      const fishBody = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.34, 0.20), fishMat);
+      caughtFishGroup.add(fishBody);
+      const fishTail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.24), fishFinMat);
+      fishTail.position.set(0, -0.24, 0);
+      caughtFishGroup.add(fishTail);
+
+      // 5. 3D Diamond Kite with Streaming Ribbon Tail & Dynamic Kite String (`kiteGroup`)
+      const kiteGroup = new THREE.Group();
+      kiteGroup.visible = false;
+      root.add(kiteGroup);
+
+      const kiteDiamondGroup = new THREE.Group();
+      kiteDiamondGroup.position.set(0, 7.6, 3.8);
+      kiteGroup.add(kiteDiamondGroup);
+
+      const kitePanelColors = [0xef4444, 0xfacc15, 0x38bdf8, 0xec4899];
+      const kiteOffsets = [[-0.22, 0.24], [0.22, 0.24], [-0.22, -0.24], [0.22, -0.24]];
+      for (let kp = 0; kp < 4; kp++) {
+        const panel = new THREE.Mesh(
+          new THREE.BoxGeometry(0.42, 0.46, 0.04),
+          new THREE.MeshBasicMaterial({ color: kitePanelColors[kp] })
+        );
+        panel.position.set(kiteOffsets[kp][0], kiteOffsets[kp][1], 0);
+        kiteDiamondGroup.add(panel);
+      }
+      kiteDiamondGroup.rotation.z = Math.PI * 0.25;
+      kiteDiamondGroup.rotation.x = 0.52;
+
+      const kiteTailRibbons = [];
+      for (let tr = 0; tr < 4; tr++) {
+        const rib = new THREE.Mesh(
+          new THREE.BoxGeometry(0.14, 0.08, 0.14),
+          new THREE.MeshBasicMaterial({ color: kitePanelColors[tr % 4] })
+        );
+        kiteGroup.add(rib);
+        kiteTailRibbons.push(rib);
+      }
+
+      const kiteStrPos = new Float32Array([
+        -0.38, 1.32, 0.25,
+         0.00, 7.60, 3.80
+      ]);
+      const kiteStrGeo = new THREE.BufferGeometry();
+      kiteStrGeo.setAttribute('position', new THREE.BufferAttribute(kiteStrPos, 3));
+      const kiteStringLine = new THREE.Line(
+        kiteStrGeo,
+        new THREE.LineBasicMaterial({ color: 0xfef3c7, transparent: true, opacity: 0.90 })
+      );
+      kiteGroup.add(kiteStringLine);
+
       scene.add(root);
       return {
         root,
@@ -9014,12 +9141,25 @@
         brushGroup,
         brushTip,
         chairGroup,
-        easelGroup
+        easelGroup,
+        fishingGroup,
+        fishLineGeo,
+        bobberGroup,
+        caughtFishGroup,
+        kiteGroup,
+        kiteDiamondGroup,
+        kiteTailRibbons,
+        kiteStrGeo
       };
     }
 
     const voxelHuman = {
       active: false,
+      respawnCooldown: 0.0,       // Cooldown timer (25s) before a destroyed human regenerates into the world!
+      isBurning: false,
+      burnTimer: 0.0,
+      drownTimer: 0.0,
+      beingChasedByLion: null,
       x: 0,
       y: 0,
       z: 0,
@@ -9027,10 +9167,13 @@
       targetHeading: 0,
       speed: 2.8,
       scale: 1.15,
-      routine: 'WANDER',          // 'WANDER' | 'SURVEY_HORIZON' | 'CAMP_REST' | 'NATURE_OBSERVE' | 'LANDSCAPE_PAINTING' | 'PAINTING_READY'
+      routine: 'WANDER',          // 'WANDER' | 'SURVEY_HORIZON' | 'CAMP_REST' | 'NATURE_OBSERVE' | 'POND_FISHING' | 'FLY_KITE' | 'LANDSCAPE_PAINTING' | 'PAINTING_READY'
       routineTimer: 0,
       routineDuration: 14.0,
       routinesSinceLastPaint: 1,
+      fishBiteTimer: 5.0,
+      fishCaughtDisplayTimer: 0.0,
+      kiteStormTimer: 0.0,
       bubbleEmoji: '',
       bubbleTimer: 0.0,
       nextEmojiTimer: 0.0,
@@ -9355,9 +9498,9 @@
         easelWorkCtx.font = 'italic 700 16px Georgia, serif';
         easelWorkCtx.fillStyle = 'rgba(24, 16, 10, 0.75)';
         easelWorkCtx.textAlign = 'right';
-        easelWorkCtx.fillText('~ Voxel Artist', cw - 16, ch - 14);
+        easelWorkCtx.fillText('~ Oasis Artist', cw - 16, ch - 14);
         easelWorkCtx.fillStyle = 'rgba(254, 240, 138, 0.88)';
-        easelWorkCtx.fillText('~ Voxel Artist', cw - 17, ch - 15);
+        easelWorkCtx.fillText('~ Oasis Artist', cw - 17, ch - 15);
       }
       easelWorkCtx.restore();
       easelCanvasTex.needsUpdate = true;
@@ -9369,6 +9512,181 @@
       if (voxelHumanBubbleEmojiEl) {
         voxelHumanBubbleEmojiEl.textContent = emojiStr;
       }
+    }
+
+    // Check if there is swimmable/fishable pond water 1.8m..3.4m ahead of (hx, hz) in any direction; returns heading toward water or null
+    function findNearbyFishingWaterHeading(hx, hz) {
+      if (params.totalWaterVol < 25) return null;
+      let bestHeading = null;
+      let bestDepth = 0.042;
+      for (let d = 0; d < 16; d++) {
+        const ang = (d / 16) * Math.PI * 2;
+        const bx = hx + Math.sin(ang) * 2.38;
+        const bz = hz + Math.cos(ang) * 2.38;
+        if (Math.abs(bx) > WORLD_SIZE * 0.46 || Math.abs(bz) > WORLD_SIZE * 0.46) continue;
+        const h = sampleHeightsAtWorld(bx, bz);
+        if (h.waterDepth > bestDepth && h.localLava < 0.12 && h.localIce < 0.25) {
+          bestDepth = h.waterDepth;
+          bestHeading = ang;
+        }
+      }
+      return bestHeading;
+    }
+
+    function startVoxelHumanFishingRoutine(waterHeading) {
+      voxelHuman.heading = waterHeading;
+      voxelHuman.targetHeading = waterHeading;
+      voxelHuman.routine = 'POND_FISHING';
+      voxelHuman.routineDuration = 18.0 + Math.random() * 14.0;
+      voxelHuman.routineTimer = 0.0;
+      voxelHuman.fishBiteTimer = 4.2 + Math.random() * 4.5;
+      voxelHuman.fishCaughtDisplayTimer = 0.0;
+      voxelHuman.rig.caughtFishGroup.visible = false;
+      setVoxelHumanBubble('🎣', 4.5);
+    }
+
+    function startVoxelHumanKiteRoutine() {
+      voxelHuman.routine = 'FLY_KITE';
+      voxelHuman.routineDuration = 16.0 + Math.random() * 12.0;
+      voxelHuman.routineTimer = 0.0;
+      voxelHuman.kiteStormTimer = 0.0;
+      setVoxelHumanBubble('🪁', 4.5);
+    }
+
+    // Destroy the Voxel Human AND anything he is currently working on (chair, easel, painting, fishing rod, kite), starting a 25s respawn cooldown!
+    function destroyVoxelHuman(cause = 'destroyed') {
+      if (!voxelHuman.active) return;
+      const hx = voxelHuman.x;
+      const hy = voxelHuman.y;
+      const hz = voxelHuman.z;
+      const fwdX = Math.sin(voxelHuman.heading);
+      const fwdZ = Math.cos(voxelHuman.heading);
+      const rig = voxelHuman.rig;
+
+      // 1. Explode the Voxel Human into voxel shards & leave a 3D Bone Skeleton on the ground
+      spawnExplosionShards(hx, hy + 0.85, hz, 14, [0x0284c7, 0xd97706, 0xf4c29f, 0xe7e5e4]);
+      spawnSteamPuffAtWorld(hx, hy + 0.75, hz, 7);
+
+      if (typeof faunaAgents !== 'undefined' && faunaAgents.length < MAX_TOTAL_FAUNA) {
+        faunaAgents.push({
+          type: 'oryx',
+          state: 'skeleton',
+          submergedTime: 0,
+          skeletonTimer: 0,
+          x: hx,
+          y: hy,
+          z: hz,
+          heading: voxelHuman.heading,
+          scale: 1.02,
+          colorHex: 0xe7e5e4
+        });
+      }
+
+      // 2. Destroy anything the human was working on (Easel + Painting, Chair, Fishing Rod, or Kite!)
+      if (voxelHuman.routine === 'LANDSCAPE_PAINTING' || voxelHuman.routine === 'PAINTING_READY') {
+        const easelWx = hx + fwdX * 0.94;
+        const easelWz = hz + fwdZ * 0.94;
+        spawnExplosionShards(easelWx, hy + 1.15, easelWz, 14, [0x854d0e, 0x5c3a1d, 0xf3ead8, 0xef4444, 0x38bdf8, 0xfacc15]);
+        spawnSteamPuffAtWorld(easelWx, hy + 1.0, easelWz, 6);
+      } else if (voxelHuman.routine === 'POND_FISHING' || voxelHuman.routine === 'CAMP_REST') {
+        spawnExplosionShards(hx - fwdX * 0.2, hy + 0.55, hz - fwdZ * 0.2, 10, [0x5c3a1d, 0xfef3c7, 0xef4444]);
+      } else if (voxelHuman.routine === 'FLY_KITE') {
+        const kitePos = new THREE.Vector3();
+        rig.kiteDiamondGroup.getWorldPosition(kitePos);
+        spawnExplosionShards(kitePos.x, kitePos.y, kitePos.z, 12, [0xef4444, 0xfacc15, 0x38bdf8, 0xec4899]);
+        spawnSteamPuffAtWorld(kitePos.x, kitePos.y, kitePos.z, 6);
+      }
+
+      // 3. Wipe any active or completed painting & hide props/modals
+      voxelHuman.active = false;
+      voxelHuman.isBurning = false;
+      voxelHuman.burnTimer = 0.0;
+      voxelHuman.drownTimer = 0.0;
+      voxelHuman.beingChasedByLion = null;
+      voxelHuman.respawnCooldown = 25.0; // 25-second cooldown before a new human is regenerated into the world!
+      voxelHuman.finishedPaintingDataUrl = '';
+      voxelHuman.paintReadyTimer = 0.0;
+      voxelHuman.bubbleTimer = 0.0;
+      voxelHuman.bubbleEmoji = '';
+      clearEaselCanvasToLinen();
+      closeVoxelHumanPaintingModal();
+
+      rig.root.visible = false;
+      rig.chairGroup.visible = false;
+      rig.easelGroup.visible = false;
+      rig.paletteGroup.visible = false;
+      rig.brushGroup.visible = false;
+      rig.fishingGroup.visible = false;
+      rig.caughtFishGroup.visible = false;
+      rig.kiteGroup.visible = false;
+      if (voxelHumanBubbleEl) {
+        voxelHumanBubbleEl.style.display = 'none';
+        voxelHumanBubbleEl.classList.remove('painting-ready');
+      }
+
+      const causeMessages = {
+        'kite-lightning': '⚡ Oasis Artist was electrocuted through his kite in the thunderstorm! Regenerating in 25s...',
+        'lightning':      '⚡ Oasis Artist was struck by lightning! Regenerating in 25s...',
+        'lion':           '🦁 A desert lion caught the Oasis Artist! Regenerating in 25s...',
+        'truck':          '🛻 Oasis Artist was run over by the Offroad Truck! Regenerating in 25s...',
+        'lava':           '🌋 Oasis Artist was incinerated by molten lava! Regenerating in 25s...',
+        'drown':          '🌊 Oasis Artist drowned in deep water! Regenerating in 25s...',
+        'arrow':          '🏹 Oasis Artist was struck by an arrow! Regenerating in 25s...',
+        'erase':          '🧹 Oasis Artist & setup were erased! Regenerating in 25s...'
+      };
+      showCartridgeToast(causeMessages[cause] || '💥 Oasis Artist was destroyed! Regenerating in 25s...', true);
+    }
+
+    function electrocuteVoxelHumanThroughKite() {
+      if (!voxelHuman.active) return;
+      const hx = voxelHuman.x;
+      const hy = voxelHuman.y;
+      const hz = voxelHuman.z;
+      const kiteWorldPos = new THREE.Vector3();
+      voxelHuman.rig.kiteDiamondGroup.getWorldPosition(kiteWorldPos);
+
+      // Find nearest overhead storm cloud
+      let bestCloud = (typeof stormClusters !== 'undefined' && stormClusters.length > 0) ? stormClusters[0] : null;
+      let bestDist = 99999;
+      if (typeof stormClusters !== 'undefined') {
+        for (const cl of stormClusters) {
+          if (!cl.mesh.visible) continue;
+          const d = Math.hypot(cl.mesh.position.x - hx, cl.mesh.position.z - hz);
+          if (d < bestDist) {
+            bestDist = d;
+            bestCloud = cl;
+          }
+        }
+      }
+      if (bestCloud) bestCloud.flashIntensity = 1.0;
+
+      const cloudPt = bestCloud
+        ? new THREE.Vector3(bestCloud.mesh.position.x, bestCloud.mesh.position.y - 2.0, bestCloud.mesh.position.z)
+        : new THREE.Vector3(hx, hy + 46.0, hz);
+      const humanPt = new THREE.Vector3(hx, hy + 1.1, hz);
+
+      if (typeof buildJaggedLightningBoltMesh === 'function') {
+        // 1. Bolt from storm cloud to the kite
+        const bolt1 = buildJaggedLightningBoltMesh(cloudPt, kiteWorldPos);
+        lightningGroup.add(bolt1.boltRoot);
+        activeLightningBolts.push({ ...bolt1, age: 0.0, duration: 0.42, strikePos: kiteWorldPos });
+
+        // 2. Bolt traveling down the kite string directly into the human!
+        const bolt2 = buildJaggedLightningBoltMesh(kiteWorldPos, humanPt);
+        lightningGroup.add(bolt2.boltRoot);
+        activeLightningBolts.push({ ...bolt2, age: 0.0, duration: 0.42, strikePos: humanPt });
+      }
+
+      if (typeof lightningFlashLight !== 'undefined') {
+        lightningFlashLight.position.set(hx, hy + 14.0, hz);
+        lightningFlashLight.intensity = 30.0;
+      }
+      if (typeof playLightningThunderClap === 'function') {
+        playLightningThunderClap(hx, hy, hz);
+      }
+      spawnFireFlameAtWorld(kiteWorldPos.x, kiteWorldPos.y, kiteWorldPos.z, 1.8, 16);
+      spawnFireFlameAtWorld(hx, hy + 0.5, hz, 2.0, 20);
+      destroyVoxelHuman('kite-lightning');
     }
 
     function startVoxelHumanPaintingRoutine() {
@@ -9507,38 +9825,123 @@
     const _bubbleProjVec = new THREE.Vector3();
 
     function updateVoxelHumanArtist(dt) {
+      const rig = voxelHuman.rig;
+
+      // 1. If the Voxel Human was destroyed, count down the respawn cooldown before regenerating a new human!
       if (!voxelHuman.active) {
+        if (voxelHuman.respawnCooldown > 0.0) {
+          voxelHuman.respawnCooldown = Math.max(0.0, voxelHuman.respawnCooldown - dt);
+          rig.root.visible = false;
+          if (voxelHumanBubbleEl) voxelHumanBubbleEl.style.display = 'none';
+          if (valVoxelHumanStatusEl && frameCount % 6 === 0) {
+            valVoxelHumanStatusEl.textContent = `💀 Respawn (${Math.ceil(voxelHuman.respawnCooldown)}s)`;
+          }
+          if (voxelHuman.respawnCooldown > 0.0) {
+            return;
+          }
+        }
         spawnOrRelocateVoxelHuman();
       }
 
       const time = uniforms.uTime.value || 0.0;
       const halfBound = WORLD_SIZE * 0.44;
-      const { groundY, waterDepth, localLava } = sampleHeightsAtWorld(voxelHuman.x, voxelHuman.z);
+      const { groundY, waterDepth, localLava, waterSurfaceY } = sampleHeightsAtWorld(voxelHuman.x, voxelHuman.z);
 
-      // If lava or deep water floods the human's spot, pack up and relocate to safe ground!
-      if ((waterDepth > 0.35 || (waterDepth > 0.02 && localLava > 0.18)) && voxelHuman.routine !== 'WANDER') {
-        if (voxelHuman.routine !== 'PAINTING_READY') {
-          voxelHuman.routine = 'WANDER';
-          voxelHuman.routineTimer = 0.0;
-          voxelHuman.routineDuration = 10.0;
+      // 2. Check Molten Lava / Active Volcano / Deep Water Drowning destruction!
+      const gxH = clamp(Math.floor(((voxelHuman.x / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+      const gzH = clamp(Math.floor(((voxelHuman.z / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+      const cellIdxH = idx(gxH, gzH);
+      let isNearLavaH = (waterDepth > 0.025 && localLava >= 0.25);
+      if (!isNearLavaH) {
+        for (let d = 0; d < 8; d++) {
+          const ni = cellIdxH + N8_OFFSETS[d];
+          if (water[ni] > 0.035 && lavaFrac[ni] >= 0.30) {
+            isNearLavaH = true;
+            break;
+          }
         }
       }
-      if (waterDepth > 1.35 || (waterDepth > 0.03 && localLava > 0.25)) {
-        spawnOrRelocateVoxelHuman();
-        return;
+      if (!isNearLavaH && typeof volcanoEruptionState !== 'undefined' && volcanoEruptionState.active) {
+        if (Math.hypot(voxelHuman.x - volcanoEruptionState.wx, voxelHuman.z - volcanoEruptionState.wz) < volcanoEruptionState.radiusMeters * 0.85) {
+          isNearLavaH = true;
+        }
+      }
+
+      if (isNearLavaH) {
+        voxelHuman.isBurning = true;
+      }
+      if (voxelHuman.isBurning) {
+        voxelHuman.burnTimer = (voxelHuman.burnTimer || 0.0) + dt;
+        setVoxelHumanBubble('🔥', 1.2);
+        if (typeof spawnFireFlameAtWorld === 'function') {
+          spawnFireFlameAtWorld(voxelHuman.x, groundY + 0.5, voxelHuman.z, 1.15, 2);
+        }
+        if (voxelHuman.burnTimer >= 1.05) {
+          destroyVoxelHuman('lava');
+          return;
+        }
+      }
+
+      if (waterDepth > 1.38 && localLava < 0.25) {
+        voxelHuman.drownTimer = (voxelHuman.drownTimer || 0.0) + dt;
+        setVoxelHumanBubble('🌊', 1.2);
+        if (voxelHuman.drownTimer >= 3.2) {
+          destroyVoxelHuman('drown');
+          return;
+        }
+      } else {
+        voxelHuman.drownTimer = Math.max(0.0, (voxelHuman.drownTimer || 0.0) - dt * 2.5);
+      }
+
+      // 3. Check if a Desert Lion is actively charging/chasing the human -> drop any setup and sprint away in panic!
+      let activeChasingLion = null;
+      if (voxelHuman.beingChasedByLion && voxelHuman.beingChasedByLion.state === 'alive') {
+        const dLion = Math.hypot(voxelHuman.beingChasedByLion.x - voxelHuman.x, voxelHuman.beingChasedByLion.z - voxelHuman.z);
+        if (dLion < 26.0 && voxelHuman.beingChasedByLion.apexPhase !== 'FEAST' && voxelHuman.beingChasedByLion.apexPhase !== 'NIGHT_REST') {
+          activeChasingLion = voxelHuman.beingChasedByLion;
+        } else {
+          voxelHuman.beingChasedByLion = null;
+        }
+      }
+
+      if (activeChasingLion && voxelHuman.routine !== 'WANDER') {
+        // Abandon current activity (pack up/drop chair, easel, fishing rod, or kite) and run from the lion!
+        if (voxelHuman.routine === 'PAINTING_READY' || voxelHuman.routine === 'LANDSCAPE_PAINTING') {
+          voxelHuman.finishedPaintingDataUrl = '';
+          voxelHuman.paintReadyTimer = 0.0;
+          closeVoxelHumanPaintingModal();
+        }
+        voxelHuman.routine = 'WANDER';
+        voxelHuman.routineTimer = 0.0;
+        voxelHuman.routineDuration = 10.0;
+        setVoxelHumanBubble('🦁', 2.5);
+      }
+
+      // If shallow water floods the human's spot while sitting/painting, pack up and walk to dry ground
+      if (waterDepth > 0.28 && voxelHuman.routine !== 'WANDER' && voxelHuman.routine !== 'PAINTING_READY') {
+        voxelHuman.routine = 'WANDER';
+        voxelHuman.routineTimer = 0.0;
+        voxelHuman.routineDuration = 10.0;
       }
 
       voxelHuman.y = groundY;
-      const rig = voxelHuman.rig;
 
-      // Advance active routine state machine
+      // Reset all optional prop visibility by default; each routine turns on what it uses
+      rig.chairGroup.visible = false;
+      rig.easelGroup.visible = false;
+      rig.paletteGroup.visible = false;
+      rig.brushGroup.visible = false;
+      rig.fishingGroup.visible = false;
+      rig.caughtFishGroup.visible = false;
+      rig.kiteGroup.visible = false;
+
+      // 4. Advance active routine state machine
       if (voxelHuman.routine === 'PAINTING_READY') {
         // 60-Second Window where the 🖼️ bubble is clickable to view & download the finished painting!
         voxelHuman.paintReadyTimer -= dt;
         voxelHuman.bubbleEmoji = '🖼️';
         voxelHuman.bubbleTimer = voxelHuman.paintReadyTimer;
 
-        // Seated proudly beside the finished easel canvas
         rig.chairGroup.visible = true;
         rig.easelGroup.visible = true;
         rig.paletteGroup.visible = true;
@@ -9573,12 +9976,10 @@
         rig.paletteGroup.visible = true;
         rig.brushGroup.visible = true;
 
-        // Seated on the small folding chair in front of the tripod easel
         rig.bodyGroup.position.y = -0.22;
         rig.legLPivot.rotation.x = -Math.PI * 0.46;
         rig.legRPivot.rotation.x = -Math.PI * 0.46;
 
-        // Left arm holds the paint palette steady; Right arm dabs the paintbrush across the canvas!
         rig.armLPivot.rotation.set(-0.78, 0.28, 0.15);
         const dabStrokeX = -1.05 + Math.sin(time * 7.8) * 0.24 + Math.cos(time * 13.0) * 0.08;
         const dabStrokeY = -0.12 + Math.cos(time * 5.4) * 0.22;
@@ -9589,14 +9990,12 @@
           Math.cos(time * 2.3) * 0.05
         );
 
-        // Progressive brushstroke rendering onto the easel canvas every ~1.4 seconds
         voxelHuman.paintRenderStepTimer -= dt;
         if (voxelHuman.paintRenderStepTimer <= 0.0) {
           voxelHuman.paintRenderStepTimer = 1.45;
           renderPainterViewToEaselCanvas(progress, false);
         }
 
-        // Occasionally emit a Voice Bubble with an emoji of an interesting item in the landscape they are painting!
         voxelHuman.nextEmojiTimer -= dt;
         if (voxelHuman.nextEmojiTimer <= 0.0) {
           voxelHuman.nextEmojiTimer = 5.2 + Math.random() * 4.2;
@@ -9607,7 +10006,6 @@
             if (!voxelHuman.paintedSubjectHistory.some((h) => h.emoji === pick.emoji)) {
               voxelHuman.paintedSubjectHistory.push(pick);
             }
-            // Tint the voxel paintbrush tip to match the subject being painted
             const tipColors = [0xef4444, 0xfacc15, 0x38bdf8, 0x22c55e, 0xf97316, 0xa855f7];
             rig.brushTip.material.color.setHex(tipColors[Math.floor(Math.random() * tipColors.length)]);
           }
@@ -9616,16 +10014,172 @@
         if (voxelHuman.routineTimer >= voxelHuman.routineDuration) {
           finishVoxelHumanPaintingRoutine();
         }
+      } else if (voxelHuman.routine === 'POND_FISHING') {
+        // Pond Fishing Routine: sits on his chair at the pond bank with his rod & bobber out on the water!
+        // Stops immediately if the pond dries up, and sometimes catches a fish!
+        voxelHuman.routineTimer += dt;
+        const fwdX = Math.sin(voxelHuman.heading);
+        const fwdZ = Math.cos(voxelHuman.heading);
+        const bobberWx = voxelHuman.x + fwdX * 2.38;
+        const bobberWz = voxelHuman.z + fwdZ * 2.38;
+        const bobberSample = sampleHeightsAtWorld(bobberWx, bobberWz);
+
+        // If the pond dries up (or turns to lava/ice), stop fishing immediately!
+        if (bobberSample.waterDepth < 0.032 || bobberSample.localLava > 0.15) {
+          setVoxelHumanBubble('🏜️', 3.2);
+          voxelHuman.routine = 'WANDER';
+          voxelHuman.routineTimer = 0.0;
+          voxelHuman.routineDuration = 12.0 + Math.random() * 8.0;
+        } else {
+          rig.chairGroup.visible = true;
+          rig.fishingGroup.visible = true;
+          rig.bodyGroup.position.y = -0.22;
+          rig.legLPivot.rotation.x = -Math.PI * 0.46;
+          rig.legRPivot.rotation.x = -Math.PI * 0.46;
+          rig.armLPivot.rotation.set(-0.45, 0.15, 0.10);
+
+          const localWaterY = (bobberSample.waterSurfaceY - voxelHuman.y) / voxelHuman.scale;
+          const bobRipple = Math.sin(time * 4.2) * 0.035;
+
+          if (voxelHuman.fishCaughtDisplayTimer > 0.0) {
+            // Reeling in & holding up a freshly caught golden-orange Koi fish!
+            voxelHuman.fishCaughtDisplayTimer -= dt;
+            rig.caughtFishGroup.visible = true;
+            rig.caughtFishGroup.position.set(-0.28, 1.05 + Math.sin(time * 18.0) * 0.06, 2.22);
+            rig.caughtFishGroup.rotation.z = Math.sin(time * 24.0) * 0.45;
+            rig.caughtFishGroup.rotation.y = time * 6.0;
+            rig.bobberGroup.position.set(-0.28, 1.35, 2.24);
+            rig.armRPivot.rotation.set(-1.25 + Math.sin(time * 8.0) * 0.08, -0.10, -0.08);
+            rig.headPivot.rotation.set(-0.14, -0.10, 0);
+
+            const lineAttr = rig.fishLineGeo.attributes.position;
+            lineAttr.setXYZ(0, -0.28, 1.88, 2.25);
+            lineAttr.setXYZ(1, -0.28, 1.05, 2.22);
+            lineAttr.needsUpdate = true;
+          } else {
+            rig.caughtFishGroup.visible = false;
+            rig.bobberGroup.position.set(-0.28, localWaterY + bobRipple, 2.38);
+            rig.armRPivot.rotation.set(-0.85 + Math.sin(time * 1.8) * 0.04, -0.12, -0.06);
+            rig.headPivot.rotation.set(0.08, Math.sin(time * 0.9) * 0.12, 0);
+
+            const lineAttr = rig.fishLineGeo.attributes.position;
+            lineAttr.setXYZ(0, -0.28, 1.88, 2.25);
+            lineAttr.setXYZ(1, -0.28, localWaterY + bobRipple, 2.38);
+            lineAttr.needsUpdate = true;
+
+            voxelHuman.fishBiteTimer -= dt;
+            if (voxelHuman.fishBiteTimer <= 0.0) {
+              voxelHuman.fishBiteTimer = 5.0 + Math.random() * 5.0;
+              if (Math.random() < 0.65) {
+                // Caught a fish! Splash droplets at the bobber and pull up the flopping fish!
+                voxelHuman.fishCaughtDisplayTimer = 3.4;
+                setVoxelHumanBubble(Math.random() < 0.5 ? '🐟' : '🐠', 3.4);
+                for (let sp = 0; sp < 8; sp++) {
+                  const ang = (sp / 8) * Math.PI * 2;
+                  emitTapWaterDroplet(
+                    bobberWx,
+                    bobberSample.waterSurfaceY + 0.1,
+                    bobberWz,
+                    Math.cos(ang) * 1.8,
+                    2.2 + Math.random() * 1.6,
+                    Math.sin(ang) * 1.8
+                  );
+                }
+              } else {
+                // Nibbled the bobber!
+                setVoxelHumanBubble('🎣', 2.4);
+                emitTapWaterDroplet(bobberWx, bobberSample.waterSurfaceY + 0.08, bobberWz, 0, 1.6, 0);
+              }
+            }
+          }
+
+          if (voxelHuman.routineTimer >= voxelHuman.routineDuration && voxelHuman.fishCaughtDisplayTimer <= 0.0) {
+            voxelHuman.routine = 'WANDER';
+            voxelHuman.routineTimer = 0.0;
+            voxelHuman.routineDuration = 12.0 + Math.random() * 10.0;
+            voxelHuman.targetHeading = voxelHuman.heading + Math.PI + (Math.random() - 0.5) * 1.2;
+          }
+        }
+      } else if (voxelHuman.routine === 'FLY_KITE') {
+        // Kite Flying Routine: flies a colorful diamond kite in the desert wind!
+        // If flying a kite during a thunderstorm, lightning strikes the kite and electrocutes the human!
+        voxelHuman.routineTimer += dt;
+        rig.kiteGroup.visible = true;
+        rig.bodyGroup.position.y = Math.abs(Math.sin(time * 4.5)) * 0.03;
+
+        // Slowly stroll while looking up at the soaring kite
+        const lookX = voxelHuman.x + Math.sin(voxelHuman.heading) * 3.5;
+        const lookZ = voxelHuman.z + Math.cos(voxelHuman.heading) * 3.5;
+        const lookH = sampleHeightsAtWorld(lookX, lookZ);
+        if (Math.abs(lookX) < halfBound && Math.abs(lookZ) < halfBound && lookH.waterDepth < 0.03 && lookH.localLava < 0.05) {
+          voxelHuman.x += Math.sin(voxelHuman.heading) * (voxelHuman.speed * 0.35) * dt;
+          voxelHuman.z += Math.cos(voxelHuman.heading) * (voxelHuman.speed * 0.35) * dt;
+        }
+
+        const swing = Math.sin(time * 4.5) * 0.28;
+        rig.legLPivot.rotation.x = swing;
+        rig.legRPivot.rotation.x = -swing;
+        rig.armLPivot.rotation.set(-0.25, 0, 0.12);
+        rig.armRPivot.rotation.set(-1.65 + Math.sin(time * 2.8) * 0.14, -0.15, -0.12);
+        rig.headPivot.rotation.set(-0.48, Math.sin(time * 1.5) * 0.22, 0);
+
+        // Animate kite dancing in the wind + trailing tail ribbons + string from right hand to kite!
+        const windFactor = clamp(params.windSpeed / 14.0, 0.5, 1.8);
+        const kx = Math.sin(time * 2.1) * 1.35 * windFactor;
+        const ky = 6.8 + Math.sin(time * 1.7) * 0.95 + windFactor * 0.8;
+        const kz = 3.6 + Math.cos(time * 1.4) * 0.75;
+        rig.kiteDiamondGroup.position.set(kx, ky, kz);
+        rig.kiteDiamondGroup.rotation.z = Math.PI * 0.25 + Math.sin(time * 3.2) * 0.24;
+        rig.kiteDiamondGroup.rotation.y = Math.cos(time * 2.1) * 0.28;
+
+        for (let tr = 0; tr < rig.kiteTailRibbons.length; tr++) {
+          const rib = rig.kiteTailRibbons[tr];
+          const tOffset = (tr + 1) * 0.36;
+          rib.position.set(
+            kx + Math.sin(time * 7.5 - tr * 1.1) * (0.18 + tr * 0.06),
+            ky - 0.38 - tOffset,
+            kz - tOffset * 0.35
+          );
+          rib.rotation.z = Math.sin(time * 8.0 - tr) * 0.5;
+        }
+
+        const kStrAttr = rig.kiteStrGeo.attributes.position;
+        kStrAttr.setXYZ(0, -0.38, 1.62, 0.28);
+        kStrAttr.setXYZ(1, kx, ky, kz);
+        kStrAttr.needsUpdate = true;
+
+        // Thunderstorm Electrocution Check!
+        if (params.weatherMode === 'thunderstorm') {
+          voxelHuman.kiteStormTimer = (voxelHuman.kiteStormTimer || 0.0) + dt;
+          if (voxelHuman.kiteStormTimer > 0.7 && voxelHuman.bubbleEmoji !== '⚡') {
+            setVoxelHumanBubble('⚡', 2.0);
+          }
+          if (voxelHuman.kiteStormTimer >= 1.85) {
+            electrocuteVoxelHumanThroughKite();
+            return;
+          }
+        } else {
+          voxelHuman.kiteStormTimer = 0.0;
+        }
+
+        if (voxelHuman.routineTimer >= voxelHuman.routineDuration) {
+          voxelHuman.routine = 'WANDER';
+          voxelHuman.routineTimer = 0.0;
+          voxelHuman.routineDuration = 12.0 + Math.random() * 10.0;
+        }
       } else {
         // Non-painting routines: WANDER, SURVEY_HORIZON, CAMP_REST, NATURE_OBSERVE
         voxelHuman.routineTimer += dt;
-        rig.easelGroup.visible = false;
-        rig.paletteGroup.visible = false;
-        rig.brushGroup.visible = false;
 
         if (voxelHuman.routine === 'WANDER') {
-          rig.chairGroup.visible = false;
-          rig.bodyGroup.position.y = Math.abs(Math.sin(time * 7.5)) * 0.05;
+          const panicMult = activeChasingLion ? 1.48 : 1.0;
+          rig.bodyGroup.position.y = Math.abs(Math.sin(time * 7.5 * panicMult)) * 0.05;
+
+          if (activeChasingLion) {
+            // Flee directly away from the charging desert lion!
+            voxelHuman.targetHeading = Math.atan2(voxelHuman.x - activeChasingLion.x, voxelHuman.z - activeChasingLion.z);
+            if (voxelHuman.bubbleTimer <= 0.2) setVoxelHumanBubble('🦁', 1.8);
+          }
 
           // Probe ahead to avoid water, lava, steep walls & world edges
           const lookX = voxelHuman.x + Math.sin(voxelHuman.heading) * 4.5;
@@ -9639,28 +10193,34 @@
             Math.abs(lookH.groundY - groundY) > 2.2
           ) {
             voxelHuman.targetHeading = Math.atan2(-voxelHuman.x + (Math.random() - 0.5) * 40, -voxelHuman.z + (Math.random() - 0.5) * 40);
-          } else if (Math.random() < 0.02) {
+          } else if (!activeChasingLion && Math.random() < 0.02) {
             voxelHuman.targetHeading += (Math.random() - 0.5) * 1.4;
           }
 
           let diff = voxelHuman.targetHeading - voxelHuman.heading;
           while (diff > Math.PI) diff -= Math.PI * 2;
           while (diff < -Math.PI) diff += Math.PI * 2;
-          voxelHuman.heading += diff * Math.min(1.0, dt * 4.2);
+          voxelHuman.heading += diff * Math.min(1.0, dt * (activeChasingLion ? 7.5 : 4.2));
 
-          voxelHuman.x = clamp(voxelHuman.x + Math.sin(voxelHuman.heading) * voxelHuman.speed * dt, -halfBound, halfBound);
-          voxelHuman.z = clamp(voxelHuman.z + Math.cos(voxelHuman.heading) * voxelHuman.speed * dt, -halfBound, halfBound);
+          voxelHuman.x = clamp(voxelHuman.x + Math.sin(voxelHuman.heading) * voxelHuman.speed * panicMult * dt, -halfBound, halfBound);
+          voxelHuman.z = clamp(voxelHuman.z + Math.cos(voxelHuman.heading) * voxelHuman.speed * panicMult * dt, -halfBound, halfBound);
 
-          const swing = Math.sin(time * 7.5) * 0.65;
+          const swing = Math.sin(time * 7.5 * panicMult) * (activeChasingLion ? 0.85 : 0.65);
           rig.legLPivot.rotation.x = swing;
           rig.legRPivot.rotation.x = -swing;
           rig.armLPivot.rotation.set(-swing * 0.75, 0, 0);
           rig.armRPivot.rotation.set(swing * 0.75, 0, 0);
           rig.headPivot.rotation.set(0, Math.sin(time * 1.6) * 0.22, 0);
 
+          // While walking around near a pond shoreline, sometimes stop right at the water's edge to set up his chair and fish!
+          if (!activeChasingLion && voxelHuman.routineTimer > 4.5 && Math.random() < dt * 0.42) {
+            const fishHeading = findNearbyFishingWaterHeading(voxelHuman.x, voxelHuman.z);
+            if (fishHeading !== null && waterDepth < 0.025) {
+              startVoxelHumanFishingRoutine(fishHeading);
+            }
+          }
+
         } else if (voxelHuman.routine === 'SURVEY_HORIZON') {
-          // Shades eyes with right hand, looking left & right across the desert vista
-          rig.chairGroup.visible = false;
           rig.bodyGroup.position.y = 0.0;
           rig.legLPivot.rotation.x = 0.0;
           rig.legRPivot.rotation.x = 0.0;
@@ -9670,7 +10230,6 @@
           rig.headPivot.rotation.set(-0.08, scanYaw, 0);
 
         } else if (voxelHuman.routine === 'CAMP_REST') {
-          // Unfolds the small folding chair and sits down for a rest
           rig.chairGroup.visible = true;
           rig.bodyGroup.position.y = -0.22;
           rig.legLPivot.rotation.x = -Math.PI * 0.46;
@@ -9680,8 +10239,6 @@
           rig.headPivot.rotation.set(-0.12 + Math.sin(time * 1.2) * 0.08, Math.sin(time * 0.9) * 0.30, 0);
 
         } else if (voxelHuman.routine === 'NATURE_OBSERVE') {
-          // Leans forward slightly to admire nearby flora or wildlife
-          rig.chairGroup.visible = false;
           rig.bodyGroup.position.y = -0.05;
           rig.legLPivot.rotation.x = -0.18;
           rig.legRPivot.rotation.x = 0.18;
@@ -9695,11 +10252,13 @@
           voxelHuman.routineTimer = 0.0;
           voxelHuman.routinesSinceLastPaint++;
 
-          // Every so often (after 2-3 short routines, or 45% chance after 1 routine), launch the 1-3 minute LANDSCAPE_PAINTING routine!
+          const fishHeadingHere = (waterDepth < 0.025) ? findNearbyFishingWaterHeading(voxelHuman.x, voxelHuman.z) : null;
+
+          // Every so often, launch the 1-3 minute LANDSCAPE_PAINTING routine!
           if (
             waterDepth < 0.03 &&
             localLava < 0.05 &&
-            (voxelHuman.routinesSinceLastPaint >= 3 || (voxelHuman.routinesSinceLastPaint >= 2 && Math.random() < 0.65))
+            (voxelHuman.routinesSinceLastPaint >= 4 || (voxelHuman.routinesSinceLastPaint >= 2 && Math.random() < 0.50))
           ) {
             startVoxelHumanPaintingRoutine();
           } else if (voxelHuman.routine !== 'WANDER') {
@@ -9707,13 +10266,17 @@
             voxelHuman.routineDuration = 11.0 + Math.random() * 11.0;
             voxelHuman.targetHeading = voxelHuman.heading + (Math.random() - 0.5) * 2.2;
             if (Math.random() < 0.55) setVoxelHumanBubble('🧭', 3.0);
+          } else if (fishHeadingHere !== null && Math.random() < 0.55) {
+            startVoxelHumanFishingRoutine(fishHeadingHere);
           } else {
             const pickR = Math.random();
-            if (pickR < 0.36) {
+            if (pickR < 0.34) {
+              startVoxelHumanKiteRoutine();
+            } else if (pickR < 0.58) {
               voxelHuman.routine = 'SURVEY_HORIZON';
               voxelHuman.routineDuration = 7.0 + Math.random() * 5.0;
               setVoxelHumanBubble('🔭', 3.8);
-            } else if (pickR < 0.68) {
+            } else if (pickR < 0.80) {
               voxelHuman.routine = 'CAMP_REST';
               voxelHuman.routineDuration = 8.0 + Math.random() * 6.0;
               const hr = ((params.timeOfDay % 24) + 24) % 24;
@@ -9742,6 +10305,10 @@
           valVoxelHumanStatusEl.textContent = `🎨 Painting (${pct}%)`;
         } else if (voxelHuman.routine === 'PAINTING_READY') {
           valVoxelHumanStatusEl.textContent = `🖼️ Ready (${Math.ceil(voxelHuman.paintReadyTimer)}s)`;
+        } else if (voxelHuman.routine === 'POND_FISHING') {
+          valVoxelHumanStatusEl.textContent = voxelHuman.fishCaughtDisplayTimer > 0 ? '🐟 Caught Fish!' : '🎣 Fishing';
+        } else if (voxelHuman.routine === 'FLY_KITE') {
+          valVoxelHumanStatusEl.textContent = '🪁 Flying Kite';
         } else if (voxelHuman.routine === 'SURVEY_HORIZON') {
           valVoxelHumanStatusEl.textContent = '🔭 Surveying';
         } else if (voxelHuman.routine === 'CAMP_REST') {
@@ -9749,7 +10316,7 @@
         } else if (voxelHuman.routine === 'NATURE_OBSERVE') {
           valVoxelHumanStatusEl.textContent = '🌿 Observing';
         } else {
-          valVoxelHumanStatusEl.textContent = '🚶 Wandering';
+          valVoxelHumanStatusEl.textContent = activeChasingLion ? '🦁 Fleeing Lion!' : '🚶 Wandering';
         }
       }
 
@@ -10395,6 +10962,15 @@
       spawnExplosionShards(tx, ty, tz, 16, [0xff6a00, 0xfde047, 0x3b2f2f, 0x1c1917]);
       if (typeof destroyPlacedItemsNearWorld === 'function') {
         destroyPlacedItemsNearWorld(tx, tz, 8.5, true);
+      }
+      if (typeof voxelHuman !== 'undefined' && voxelHuman.active) {
+        // If lightning strikes near the Voxel Human (or while he is flying a kite in the storm), destroy him!
+        const distH = Math.hypot(voxelHuman.x - tx, voxelHuman.z - tz);
+        if (voxelHuman.routine === 'FLY_KITE') {
+          electrocuteVoxelHumanThroughKite();
+        } else if (distH < 7.8) {
+          destroyVoxelHuman('lightning');
+        }
       }
 
       // 1. Blow up or ignite Animals within the lightning strike radius
@@ -14109,6 +14685,17 @@
                 }
               }
             }
+
+            // 4C. Check collision against the Wandering Voxel Human & his setup -> hitting him destroys him and anything he's working on!
+            if (typeof voxelHuman !== 'undefined' && voxelHuman.active) {
+              const relHX = voxelHuman.x - it.x;
+              const relHZ = voxelHuman.z - it.z;
+              const localHFwd = relHX * fwdX + relHZ * fwdZ;
+              const localHSide = relHX * rightX + relHZ * rightZ;
+              if (Math.abs(localHFwd) < 2.45 && Math.abs(localHSide) < 1.45 && Math.abs(voxelHuman.y - avgWheelGroundY) < 2.6) {
+                destroyVoxelHuman('truck');
+              }
+            }
           }
 
           // 5. Continuous Offroad Sand & Dust Rooster-Tails (Always thrown up when driving offroad — NEVER white steam!)
@@ -14999,6 +15586,17 @@
             a.skeletonTimer = 0;
             hitAnimal = true;
             break;
+          }
+        }
+
+        // 1B. Check collision against the Wandering Voxel Human!
+        if (!hitAnimal && typeof voxelHuman !== 'undefined' && voxelHuman.active) {
+          const dxH = pos.x - voxelHuman.x;
+          const dzH = pos.z - voxelHuman.z;
+          const dyH = pos.y - (voxelHuman.y + 0.9);
+          if ((dxH * dxH + dzH * dzH) < (1.45 * 1.45) && Math.abs(dyH) < 1.8) {
+            destroyVoxelHuman('arrow');
+            hitAnimal = true;
           }
         }
 
@@ -16374,6 +16972,11 @@
       }
       if (params.tool === 'erase') {
         destroyPlacedItemsNearWorld(wx, wz, params.brushRadius, true);
+        if (typeof voxelHuman !== 'undefined' && voxelHuman.active) {
+          if (Math.hypot(voxelHuman.x - wx, voxelHuman.z - wz) <= params.brushRadius) {
+            destroyVoxelHuman('erase');
+          }
+        }
       }
 
       const cx = Math.round(((wx / WORLD_SIZE) + 0.5) * (GRID - 1));
