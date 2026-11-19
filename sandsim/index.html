@@ -1959,9 +1959,9 @@
         <div class="control-row">
           <div class="control-label">
             <span>Upward Slope Air-Boost</span>
-            <span class="control-val" id="val-truck-air-boost">78% · High Boost</span>
+            <span class="control-val" id="val-truck-air-boost">38% · Balanced</span>
           </div>
-          <input type="range" id="slider-truck-air-boost" min="0" max="100" step="1" value="78" title="Detects when the truck is climbing an upward dune slope and boosts uphill punch, launch height &amp; hang-time!" />
+          <input type="range" id="slider-truck-air-boost" min="0" max="100" step="1" value="38" title="Detects when the truck is climbing an upward dune slope and boosts uphill punch &amp; launch pop!" />
         </div>
 
         <div class="zone-label" style="color:#fcd34d; margin-top:4px;">
@@ -2248,7 +2248,7 @@
       truckCounterweight: 0.85,      // 0.00 (Top-heavy easy rollover) .. 1.00 (Heavy low-CG anti-roll counterweight, never flips at 1.0)
       truckTireTracking: 1.00,       // 0.10 (Loose sideways drift) .. 1.00 (Locked-in tire tracking & fast slip recovery)
       truckJumpLift: 0.69,           // 0.00 (Glued to terrain) .. 1.00 (Big dune-crest air launches)
-      truckAirBoost: 0.78,           // 0.00 (Off) .. 1.00 (Detects upward slope travel & boosts climb punch + big-air launch!)
+      truckAirBoost: 0.38,           // 0.00 (Off) .. 1.00 (Detects upward slope travel & boosts climb punch + big-air launch!)
       truckGear1Tune: 98.0,          // Peak engine pitch in 1st Gear (Hz)
       truckGear2Tune: 108.0,         // Peak engine pitch in 2nd Gear (Hz)
       truckGear3Tune: 114.0,         // Peak engine pitch in 3rd Gear (Hz)
@@ -12358,7 +12358,7 @@
           const counterweight = clamp(params.truckCounterweight ?? 0.85, 0.0, 1.0);
           const tireTracking = clamp(params.truckTireTracking ?? 1.00, 0.10, 1.0);
           const jumpLift = clamp(params.truckJumpLift ?? 0.69, 0.0, 1.0);
-          const airBoost = clamp(params.truckAirBoost ?? 0.78, 0.0, 1.0);
+          const airBoost = clamp(params.truckAirBoost ?? 0.38, 0.0, 1.0);
 
           const targetSteer = steerInput * 0.50;
           it.steerAngle = (it.steerAngle || 0.0) + (targetSteer - (it.steerAngle || 0.0)) * Math.min(1.0, dt * (8.5 + tireTracking * 5.0));
@@ -12459,11 +12459,10 @@
               it.suspRoll = 0.0;
             }
           } else if (it.isAirborne) {
-            // Airborne Jump Physics: parabolic flight + upward air-boost hang-time + counterweight self-righting stabilization!
-            // When rising in the air (velY > 0), airBoost reduces upward gravity pull so big dune jumps float higher and longer!
+            // Airborne Jump Physics: snappy parabolic flight with heavy downward gravity on descent + counterweight self-righting!
             const gravityAccel = ((it.velY || 0.0) > 0.0)
-              ? (16.8 - airBoost * 5.2 - Math.max(0.0, throttleInput) * airBoost * 2.2)
-              : 18.2;
+              ? (22.5 - airBoost * 3.0)
+              : 31.5;
             it.velY = (it.velY || 0.0) - gravityAccel * dt;
             it.y = (it.y ?? avgWheelGroundY) + it.velY * dt;
 
@@ -12562,12 +12561,16 @@
 
             if (jumpLift > 0.03 && absSpd > minJumpSpd && (prevClimbVel > minClimbVel || (it.upwardClimbCharge || 0.0) > 0.42) && crestDropRate > minCrestDrop) {
               // Catch Big Air off the dune crest, amplified by both Dune Jump / Air Lift AND Upward Slope Air-Boost!
-              const liftScale = 0.65 + jumpLift * 1.45 + airBoost * 0.95 * clamp(it.upwardClimbCharge || 0.35, 0.25, 1.4);
-              const upwardKick = (it.upwardClimbCharge || 0.0) * airBoost * 4.2;
+              const liftScale = 0.55 + jumpLift * 1.05 + airBoost * 0.60 * clamp(it.upwardClimbCharge || 0.35, 0.25, 1.2);
+              const upwardKick = (it.upwardClimbCharge || 0.0) * airBoost * 2.5;
+              const maxLaunchVelY = 6.8 + jumpLift * 2.8 + airBoost * 2.6;
               it.isAirborne = true;
-              it.velY = Math.max(
-                prevClimbVel * (1.10 + jumpLift * 0.65 + airBoost * 0.55) + upwardKick,
-                (2.4 + absSpd * 0.19) * liftScale + upwardKick * 0.6
+              it.velY = Math.min(
+                maxLaunchVelY,
+                Math.max(
+                  prevClimbVel * (0.95 + jumpLift * 0.48 + airBoost * 0.38) + upwardKick,
+                  (2.1 + absSpd * 0.14) * liftScale + upwardKick * 0.5
+                )
               );
               // Give a forward air-boost surge off the lip of the jump!
               if (throttleInput > 0.0 && airBoost > 0.05 && spd > 0.0) {
