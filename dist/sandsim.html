@@ -4013,8 +4013,8 @@
                   }
                 }
 
-                // Gentle sediment transport on steep hillsides scaled by stepScale
-                if (pass === 0 && maxDrop > 0.55 && sand[i] > 0.02 && w < 0.25) {
+                // Gentle sediment transport on steep hillsides scaled by stepScale (only erodes loose sand, not compacted dirt/roads/bricks)
+                if (pass === 0 && maxDrop > 0.55 && sand[i] > 0.02 && w < 0.25 && surfaceMaterial[i] === 0) {
                   const rootProtection = getRootErosionResistance(veg[i]);
                   const wash = Math.min(sand[i] * 0.025, maxOutflow * 0.06 * (1.0 - rootProtection)) * stepScale;
                   if (wash > 1e-7) {
@@ -4105,8 +4105,9 @@
           } else {
             // Sand Water Absorption: scales from 0% (current baseline shallow film soak)
             // up to 100% Loose Sand (water of any depth sinks rapidly into underlying sand!)
+            // Dirt (1), Paved Road (2), and Brick Road (3) are impervious to water absorption — water above them never drains into the ground!
             const soakStep = Math.max(stepScale * 4.0, 0.04);
-            if (water[i] > 0 && sand[i] > 0.01 && iceCover[i] < 0.25) {
+            if (water[i] > 0 && sand[i] > 0.01 && iceCover[i] < 0.25 && surfaceMaterial[i] === 0) {
               const baseSoak = (water[i] < 0.085) ? (0.00055 * stepScale) : 0.0;
               // Deeper loose sand beds & drier sand absorb surface water faster
               const sandDepthFactor = clamp(sand[i] / 0.40, 0.18, 1.65);
