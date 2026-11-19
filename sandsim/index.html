@@ -7261,8 +7261,9 @@
             if (bestFeederDist > 3.2) {
               steerToward(Math.atan2(bestFeeder.x - a.x, bestFeeder.z - a.z), 4.2 * coldSpeedMult);
             } else {
-              // Gather around the feeder trough to nibble hay/grain
+              // Gather around the feeder trough to nibble hay/grain (consumes food from the feeder!)
               steerToward(Math.atan2(bestFeeder.x - a.x, bestFeeder.z - a.z), 2.5 * coldSpeedMult);
+              bestFeeder.foodRemaining = Math.max(0.0, (bestFeeder.foodRemaining ?? 1.0) - dt * 0.015);
             }
           } else {
             a.heading += a.turnRate * dt * 1.3 * coldSpeedMult;
@@ -7312,9 +7313,11 @@
               steerToward(targetAngle, 3.8 * coldSpeedMult);
               feederSpeedMult = 1.12;
             } else {
-              // Gathered around the feeder trough: face the feeder and pause to eat!
+              // Gathered around the feeder trough: face the feeder, pause to eat, and consume its food!
               steerToward(targetAngle, 3.0 * coldSpeedMult);
               feederSpeedMult = (Math.sin(time * 1.4 + a.phase) > -0.35) ? 0.0 : 0.30;
+              const eatRate = a.type === 'camel' ? 0.028 : (a.type === 'oryx' ? 0.022 : 0.014);
+              bestFeeder.foodRemaining = Math.max(0.0, (bestFeeder.foodRemaining ?? 1.0) - dt * eatRate);
             }
           } else {
             a.heading += a.turnRate * dt * (a.type === 'fennec' ? 1.15 : 0.7) * coldSpeedMult;
@@ -10152,12 +10155,13 @@
       troughBase.receiveShadow = true;
       root.add(troughBase);
 
-      // 3. Golden hay, grain & forage mound piled inside the trough
+      // 3. Golden hay, grain & forage mound piled inside the trough (shrinks as animals eat the food!)
       const hayMound = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 1), itemHayFeedMat);
       hayMound.scale.set(1.55, 0.52, 0.78);
       hayMound.position.set(0, 1.06, 0);
       hayMound.castShadow = true;
       root.add(hayMound);
+      root.userData.hayMound = hayMound;
 
       // 4. Two vertical roof support posts & pitched shade roof
       for (const px of [-0.85, 0.85]) {
@@ -10345,9 +10349,11 @@
         z: pz,
         yaw,
         phase: Math.random() * Math.PI * 2,
-        // For Water Tap: random small artesian spurt rate that fluctuates organically over time
+        // For Water Tap: pressurized artesian well spurt rate that fluctuates organically & keeps a pond filled!
         spurtTimer: 0.0,
-        spurtStrength: 0.55 + Math.random() * 0.90,
+        spurtStrength: 0.85 + Math.random() * 0.90,
+        // For Animal Feeder: food supply (1.0 -> 0.0) that depletes as animals eat and disappears when empty!
+        foodRemaining: 1.0,
         mesh
       });
 
@@ -10386,17 +10392,17 @@
         it.mesh.position.y = groundY;
 
         if (it.type === 'item-tap') {
-          // Artesian Water Tap: Spurts water like an artesian well at a small but random fluctuating rate!
+          // Artesian Water Tap: Gushes a strong artesian stream at a randomly fluctuating rate — produces plenty of water to fill and keep a pond full!
           it.spurtTimer -= dt;
           if (it.spurtTimer <= 0.0) {
-            // Randomly vary the artesian pressure every 0.8 - 2.4 seconds (from a gentle trickle to a lively spurt)
-            it.spurtTimer = 0.8 + Math.random() * 1.6;
-            it.spurtStrength = 0.35 + Math.random() * 1.15;
+            // Randomly vary the artesian wellhead pressure every 0.8 - 2.2 seconds
+            it.spurtTimer = 0.8 + Math.random() * 1.4;
+            it.spurtStrength = 0.75 + Math.random() * 1.05;
           }
 
-          const gurglePulse = Math.max(0.15, it.spurtStrength + Math.sin(time * 7.5 + it.phase) * 0.32);
+          const gurglePulse = Math.max(0.45, it.spurtStrength + Math.sin(time * 7.5 + it.phase) * 0.30);
           if (it.mesh.userData.valveWheel) {
-            it.mesh.userData.valveWheel.rotation.z = Math.sin(time * 3.0 + it.phase) * 0.15;
+            it.mesh.userData.valveWheel.rotation.z = Math.sin(time * 3.5 + it.phase) * 0.18;
           }
 
           // Spurt direction out of the curved brass faucet nozzle
@@ -10406,33 +10412,70 @@
           const nozzleY = groundY + 1.82;
           const nozzleZ = it.z + dirZ * 0.46;
 
-          // Emit 1-2 arcing 3D water droplets from the spout
-          const dropCount = Math.random() < (0.55 + gurglePulse * 0.35) ? 2 : 1;
+          // Emit 4-6 vigorous arcing 3D water droplets from the spout
+          const dropCount = 4 + Math.floor(gurglePulse * 2.2);
           for (let d = 0; d < dropCount; d++) {
-            const jetSpd = (1.6 + gurglePulse * 2.1) + (Math.random() - 0.5) * 0.7;
-            const upSpd = (1.4 + gurglePulse * 2.2) + (Math.random() - 0.5) * 0.8;
+            const jetSpd = (2.4 + gurglePulse * 2.8) + (Math.random() - 0.5) * 1.1;
+            const upSpd = (2.0 + gurglePulse * 2.5) + (Math.random() - 0.5) * 1.0;
             emitTapWaterDroplet(
-              nozzleX + (Math.random() - 0.5) * 0.06,
-              nozzleY + (Math.random() - 0.5) * 0.06,
-              nozzleZ + (Math.random() - 0.5) * 0.06,
-              dirX * jetSpd + (Math.random() - 0.5) * 0.65,
+              nozzleX + (Math.random() - 0.5) * 0.09,
+              nozzleY + (Math.random() - 0.5) * 0.09,
+              nozzleZ + (Math.random() - 0.5) * 0.09,
+              dirX * jetSpd + (Math.random() - 0.5) * 1.15,
               upSpd,
-              dirZ * jetSpd + (Math.random() - 0.5) * 0.65
+              dirZ * jetSpd + (Math.random() - 0.5) * 1.15
             );
           }
 
-          // Add a small random amount of water & capillary soil moisture to the grid cell beneath the tap spout
-          const landingX = it.x + dirX * 0.95;
-          const landingZ = it.z + dirZ * 0.95;
-          const gx = clamp(Math.round(((landingX / WORLD_SIZE) + 0.5) * (GRID - 1)), 2, GRID - 3);
-          const gz = clamp(Math.round(((landingZ / WORLD_SIZE) + 0.5) * (GRID - 1)), 2, GRID - 3);
-          const ci = idx(gx, gz);
-          const smallRandomAdd = (0.045 + Math.random() * 0.095) * gurglePulse * dt;
-          const maxWaterDepth = Math.max(0, MAX_TERRAIN_HEIGHT - (bedrock[ci] + sand[ci]));
-          water[ci] = Math.min(maxWaterDepth, water[ci] + smallRandomAdd);
-          lavaFrac[ci] = 0.0;
-          soilMoisture[ci] = Math.min(1.0, soilMoisture[ci] + smallRandomAdd * 2.2);
+          // Pour substantial artesian water & soil moisture into a 5x5 cell splash basin beneath the tap spout
+          // (~25x higher output so a single spigot fills and maintains a thriving oasis pond!)
+          const landingX = it.x + dirX * 1.15;
+          const landingZ = it.z + dirZ * 1.15;
+          const gx = clamp(Math.round(((landingX / WORLD_SIZE) + 0.5) * (GRID - 1)), 3, GRID - 4);
+          const gz = clamp(Math.round(((landingZ / WORLD_SIZE) + 0.5) * (GRID - 1)), 3, GRID - 4);
+          const tapFlowRate = (0.38 + Math.random() * 0.48) * gurglePulse * dt;
+
+          for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+              const distC = Math.hypot(dx, dy);
+              if (distC > 2.3) continue;
+              const falloff = Math.pow(1.0 - distC / 2.5, 1.15);
+              const ci = idx(gx + dx, gz + dy);
+              const cellAdd = tapFlowRate * falloff;
+              if (water[ci] > 0.025 && lavaFrac[ci] >= 0.25) {
+                solidifyLavaCellToRock(ci, Math.max(water[ci], cellAdd));
+              } else {
+                const maxWaterDepth = Math.max(0, MAX_TERRAIN_HEIGHT - (bedrock[ci] + sand[ci]));
+                water[ci] = Math.min(maxWaterDepth, water[ci] + cellAdd);
+                lavaFrac[ci] = 0.0;
+                soilMoisture[ci] = Math.min(1.0, soilMoisture[ci] + cellAdd * 3.5);
+                waterProximity[ci] = Math.min(1.0, waterProximity[ci] + cellAdd * 2.5);
+              }
+            }
+          }
           waterAddedByTaps = true;
+
+        } else if (it.type === 'item-feeder') {
+          // Animal Feeder: Depletes its food supply over time (and faster as deer/oryx, rabbits, camels & fennec foxes eat from it),
+          // visibly shrinking the golden hay mound and disappearing once it runs out of food!
+          it.foodRemaining = (it.foodRemaining ?? 1.0) - dt * 0.011;
+          const foodFrac = clamp(it.foodRemaining, 0.0, 1.0);
+          const hayMound = it.mesh.userData.hayMound;
+          if (hayMound) {
+            hayMound.visible = foodFrac > 0.03;
+            hayMound.scale.set(
+              1.55 * (0.30 + 0.70 * foodFrac),
+              0.52 * Math.max(0.05, foodFrac),
+              0.78 * (0.30 + 0.70 * foodFrac)
+            );
+            hayMound.position.y = 0.90 + 0.16 * foodFrac;
+          }
+          if (it.foodRemaining <= 0.0) {
+            // Ran out of food -> puff of chaff/dust and disappear!
+            spawnSteamPuffAtWorld(it.x, it.y + 0.75, it.z, 5);
+            destroyPlacedItemAtIndex(i, false);
+            continue;
+          }
 
         } else if (it.type === 'item-lantern') {
           // Hanging Night Lantern: Swings gently in the wind and illuminates the area at night only!
