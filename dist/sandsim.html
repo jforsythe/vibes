@@ -758,6 +758,96 @@
       border-left: 1px solid rgba(255,255,255,0.1);
     }
 
+    /* Bottom-Right Developer Mode Stat Bar (Nearby Animal Distances & Audio Range) */
+    .dev-stats-bar {
+      position: absolute;
+      bottom: 14px;
+      right: 68px;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      background: rgba(16, 15, 13, 0.90);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      padding: 9px 13px;
+      border-radius: 13px;
+      z-index: 19;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65);
+      min-width: 245px;
+      max-width: 320px;
+      font-size: 11px;
+      pointer-events: auto;
+      transition: right 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .dev-stats-bar.active {
+      display: flex;
+    }
+
+    body.panel-open .dev-stats-bar {
+      right: 354px;
+    }
+
+    .dev-bar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #38bdf8;
+    }
+
+    .dev-bar-sub {
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 9.5px;
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+
+    .dev-animal-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 11px;
+    }
+
+    .dev-animal-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 2px 5px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .dev-animal-row.in-audio-range {
+      background: rgba(16, 185, 129, 0.14);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+    }
+
+    .dev-animal-name {
+      color: var(--text);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .dev-animal-dist {
+      color: var(--accent-bright);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .dev-animal-row.in-audio-range .dev-animal-dist {
+      color: #6ee7b7;
+    }
+
     kbd {
       background: rgba(255,255,255,0.1);
       border: 1px solid rgba(255,255,255,0.18);
@@ -1266,6 +1356,18 @@
     </span>
   </div>
 
+  <!-- Bottom-Right Developer Mode Stat Bar (Shows Camera Distance to Nearby Animals & Audio Proximity Range) -->
+  <div class="dev-stats-bar" id="dev-stats-bar">
+    <div class="dev-bar-header">
+      <span>🛠️ Dev Mode · Animal Proximity</span>
+      <span class="dev-bar-sub" id="dev-audio-range-label">🔊 &le; 65m</span>
+    </div>
+    <div class="dev-bar-sub" id="dev-camera-pos-label">Cam: (0, 0, 0) · Ground: 0.0m</div>
+    <div class="dev-animal-list" id="dev-animal-list">
+      <div class="dev-animal-row"><span class="dev-animal-name">Scanning fauna...</span></div>
+    </div>
+  </div>
+
   <!-- Right Control Sidebar (Collapsed to Small Icons by Default, Auto-Collapses after 20s Inactivity) -->
   <aside class="control-panel collapsed" id="control-panel">
     <!-- Compact Icon Strip (Shown when Collapsed) -->
@@ -1277,6 +1379,7 @@
       <button class="panel-icon-btn" data-section="sec-biome" title="3. Biome Flora & Wildlife">🌴</button>
       <button class="panel-icon-btn" data-section="sec-wind" title="4. Wind, Rain & Evaporation">💨</button>
       <button class="panel-icon-btn" data-section="sec-sim" title="5. Simulation & Overlays">🎛️</button>
+      <button class="panel-icon-btn" id="btn-icon-dev-mode" title="Toggle Developer Mode Stat Bar (Nearby Animal Distances)">🛠️</button>
       <button class="panel-icon-btn" data-section="sec-actions" title="6. Ecosystem & Reset Actions">🌊</button>
     </div>
 
@@ -1513,6 +1616,7 @@
           <button id="btn-toggle-shadow-vis" title="Highlight leeward wind-shadow drift zones">👁️ Wind Shadow</button>
           <button id="btn-toggle-moisture-vis" title="Highlight underground capillary soil moisture">💧 Moisture Map</button>
           <button id="btn-toggle-particles" title="Toggle blowing sand & rain particles">✨ Particles</button>
+          <button id="btn-toggle-dev-mode" title="Toggle bottom-right Developer Mode stat bar showing exact distances to nearby animals & audio range">🛠️ Dev Mode</button>
         </div>
       </div>
 
@@ -1618,6 +1722,8 @@
       fpvEquip: 'sculpt',     // 'sculpt' | 'none' | 'bow' | 'torch'
       isUnderwater: false,
       audioEnabled: true,
+      devMode: false,
+      animalAudioMaxDist: 65.0, // Only play animal sounds when the camera is within 65m of the animal!
       skyColorHex: 0xd5a87a,
       skyFogDensity: 0.0020
     };
@@ -9038,7 +9144,7 @@
       };
     }
 
-    // 3. 3D Spatial Nocturnal Coquí Frog Call ("CO-QUÍ!") Synthesizer (Louder, pure two-note whistle-chirp at night)
+    // 3. 3D Spatial Nocturnal Coquí Frog Call ("CO-QUÍ!") Synthesizer (Only plays when camera is close to the frog at night!)
     let lastFrogSoundMs = 0;
     let activeFrogAudioVoices = 0;
     function playFrogRibbitSound(wx, wy, wz, forceImmediate = false) {
@@ -9048,7 +9154,8 @@
 
       _audioTmpVec.set(wx, wy, wz);
       const dist = camera.position.distanceTo(_audioTmpVec);
-      if (!forceImmediate && dist > 180.0) return;
+      const maxAudibleDist = params.animalAudioMaxDist || 65.0;
+      if (!forceImmediate && dist > maxAudibleDist) return;
 
       const ctx = ensureAudioContext();
       if (!ctx) return;
@@ -9056,8 +9163,10 @@
       lastFrogSoundMs = nowMs;
       activeFrogAudioVoices++;
       const now = ctx.currentTime;
-      const { distGain, pan } = computeWorldAudioSpatial(wx, wy, wz);
+      const { pan } = computeWorldAudioSpatial(wx, wy, wz);
       const outBus = createSpatialPanner(ctx, pan);
+      // Smooth proximity falloff: full volume very close, fading smoothly to 0 at maxAudibleDist (65m)
+      const proxGain = forceImmediate ? 0.85 : Math.pow(clamp(1.0 - dist / maxAudibleDist, 0.05, 1.0), 1.35);
 
       // Authentic Puerto Rican Coquí Frog ("CO-QUÍ!") acoustic profile:
       // - Note 1 ("CO"): ~1,130 - 1,240 Hz steady resonant whistle tone (~0.10s)
@@ -9091,7 +9200,7 @@
       const harmGain = ctx.createGain();
       harmGain.gain.setValueAtTime(0.18, now);
 
-      // Vocal-sac peaking filter so the "CO-QUÍ!" rings out clearly across the oasis at night
+      // Vocal-sac peaking filter so the "CO-QUÍ!" rings out clearly when you are close to the pond at night
       const vocalPeak = ctx.createBiquadFilter();
       vocalPeak.type = 'peaking';
       vocalPeak.frequency.setValueAtTime(2150, now);
@@ -9099,9 +9208,8 @@
       vocalPeak.gain.setValueAtTime(2.0, now);
 
       const envGain = ctx.createGain();
-      const loudGain = clamp(distGain, 0.24, 0.88);
-      const coVol = 0.11 * loudGain;
-      const quiVol = 0.17 * loudGain; // "QUÍ!" syllable is slightly brighter than "CO"
+      const coVol = 0.12 * proxGain;
+      const quiVol = 0.18 * proxGain; // "QUÍ!" syllable is slightly brighter than "CO"
 
       envGain.gain.setValueAtTime(0.0001, now);
       // Syllable 1: "CO"
@@ -9241,7 +9349,7 @@
       };
     }
 
-    // 4B. Very Low Guttural Alligator / Crocodile Sub-Bass Rumble & Water-Vibrating Bellow (32 - 64 Hz)
+    // 4B. Very Low Guttural Alligator / Crocodile Sub-Bass Rumble & Water-Vibrating Bellow (32 - 64 Hz, only when camera is close!)
     let activeCrocRumbleVoices = 0;
     let lastCrocRumbleMs = 0;
     function playCrocLowRumbleSound(wx, wy, wz) {
@@ -9251,7 +9359,8 @@
 
       _audioTmpVec.set(wx, wy, wz);
       const dist = camera.position.distanceTo(_audioTmpVec);
-      if (dist > 165.0) return;
+      const maxAudibleDist = params.animalAudioMaxDist || 65.0;
+      if (dist > maxAudibleDist) return;
 
       const ctx = ensureAudioContext();
       if (!ctx || !pinkNoiseBuffer) return;
@@ -9259,8 +9368,9 @@
       lastCrocRumbleMs = nowMs;
       activeCrocRumbleVoices++;
       const now = ctx.currentTime;
-      const { distGain, pan } = computeWorldAudioSpatial(wx, wy, wz);
+      const { pan } = computeWorldAudioSpatial(wx, wy, wz);
       const outBus = createSpatialPanner(ctx, pan);
+      const proxGain = Math.pow(clamp(1.0 - dist / maxAudibleDist, 0.08, 1.0), 1.25);
       const rumbleDur = 2.15 + Math.random() * 0.55;
 
       // Deep guttural vocal-cord sawtooth (42 -> 54 -> 33 Hz) + sub-octave water-vibration sine (21 -> 27 -> 17 Hz)
@@ -9303,7 +9413,7 @@
       noiseGain.connect(chestLP);
 
       const envGain = ctx.createGain();
-      const peakVol = 0.36 * clamp(distGain * 1.15, 0.30, 0.95);
+      const peakVol = 0.40 * proxGain;
       envGain.gain.setValueAtTime(0.0001, now);
       envGain.gain.linearRampToValueAtTime(peakVol, now + 0.32);
       envGain.gain.setValueAtTime(peakVol * 0.92, now + rumbleDur * 0.62);
@@ -11674,6 +11784,122 @@
       btnParticles.classList.toggle('active', params.showParticles);
     });
 
+    // Developer Mode Toggle (Bottom-Right Animal Proximity & Distance Stat Bar)
+    const devStatsBar = document.getElementById('dev-stats-bar');
+    const btnToggleDevMode = document.getElementById('btn-toggle-dev-mode');
+    const btnIconDevMode = document.getElementById('btn-icon-dev-mode');
+    const devAnimalListEl = document.getElementById('dev-animal-list');
+    const devCameraPosLabelEl = document.getElementById('dev-camera-pos-label');
+    const devAudioRangeLabelEl = document.getElementById('dev-audio-range-label');
+
+    const DEV_SPECIES_META = {
+      frog:     { icon: '🐸', label: 'Coquí Frog', hasAudio: true },
+      croc:     { icon: '🐊', label: 'Alligator',  hasAudio: true },
+      lion:     { icon: '🦁', label: 'Desert Lion', hasAudio: false },
+      jaguar:   { icon: '🐆', label: 'Cheetah/Jaguar', hasAudio: false },
+      rabbit:   { icon: '🐇', label: 'Rabbit',     hasAudio: false },
+      camel:    { icon: '🐪', label: 'Camel',      hasAudio: false },
+      oryx:     { icon: '🦌', label: 'Oryx',       hasAudio: false },
+      fennec:   { icon: '🦊', label: 'Fennec Fox', hasAudio: false },
+      flamingo: { icon: '🦩', label: 'Flamingo',   hasAudio: false },
+      macaw:    { icon: '🦜', label: 'Macaw',      hasAudio: false },
+      bat:      { icon: '🦇', label: 'Fruit Bat',  hasAudio: false },
+      hawk:     { icon: '🦅', label: 'Hawk',       hasAudio: false },
+      owl:      { icon: '🦉', label: 'Night Owl',  hasAudio: false },
+      fish:     { icon: '🐠', label: 'Oasis Koi',  hasAudio: false }
+    };
+
+    function setDeveloperModeEnabled(enabled) {
+      params.devMode = !!enabled;
+      if (devStatsBar) devStatsBar.classList.toggle('active', params.devMode);
+      if (btnToggleDevMode) btnToggleDevMode.classList.toggle('active', params.devMode);
+      if (btnIconDevMode) {
+        btnIconDevMode.style.background = params.devMode ? 'rgba(56, 189, 248, 0.28)' : '';
+        btnIconDevMode.style.borderColor = params.devMode ? '#38bdf8' : '';
+      }
+      if (params.devMode) {
+        updateDevStatsBar();
+      }
+    }
+
+    if (btnToggleDevMode) {
+      btnToggleDevMode.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setDeveloperModeEnabled(!params.devMode);
+      });
+    }
+    if (btnIconDevMode) {
+      btnIconDevMode.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setDeveloperModeEnabled(!params.devMode);
+      });
+    }
+
+    function updateDevStatsBar() {
+      if (!params.devMode || !devAnimalListEl) return;
+      const cx = camera.position.x;
+      const cy = camera.position.y;
+      const cz = camera.position.z;
+      const maxAud = params.animalAudioMaxDist || 65.0;
+
+      if (devAudioRangeLabelEl) {
+        devAudioRangeLabelEl.textContent = `🔊 Audio \u2264 ${Math.round(maxAud)}m`;
+      }
+      if (devCameraPosLabelEl) {
+        const camGround = sampleHeightsAtWorld(cx, cz).groundY;
+        const altAboveGround = Math.max(0, cy - camGround);
+        devCameraPosLabelEl.textContent =
+          `Cam: (${Math.round(cx)}, ${Math.round(cy)}, ${Math.round(cz)}) · Alt: ${altAboveGround.toFixed(1)}m`;
+      }
+
+      // Compute 3D camera distance to every living animal & nearest distance per species
+      const nearestBySpecies = new Map();
+      const nearestIndividuals = [];
+
+      for (let i = 0; i < faunaAgents.length; i++) {
+        const a = faunaAgents[i];
+        if (a.state !== 'alive') continue;
+        const dist = Math.hypot(a.x - cx, a.y - cy, a.z - cz);
+        nearestIndividuals.push({ type: a.type, dist, phase: a.apexPhase });
+
+        const prev = nearestBySpecies.get(a.type);
+        if (!prev || dist < prev.dist) {
+          nearestBySpecies.set(a.type, { type: a.type, dist, count: (prev ? prev.count + 1 : 1) });
+        } else {
+          prev.count++;
+        }
+      }
+
+      if (nearestBySpecies.size === 0) {
+        devAnimalListEl.innerHTML = `<div class="dev-animal-row"><span class="dev-animal-name">No active animals</span></div>`;
+        return;
+      }
+
+      // Sort species by closest distance to camera (and show top 7 closest species, always including Frog & Alligator if present)
+      const sortedSpecies = Array.from(nearestBySpecies.values()).sort((a, b) => a.dist - b.dist);
+      const topList = sortedSpecies.slice(0, 7);
+      for (const s of sortedSpecies) {
+        if ((s.type === 'frog' || s.type === 'croc') && !topList.includes(s)) {
+          topList.push(s);
+        }
+      }
+
+      let html = '';
+      for (const item of topList) {
+        const meta = DEV_SPECIES_META[item.type] || { icon: '🐾', label: item.type, hasAudio: false };
+        const inRange = item.dist <= maxAud;
+        const audioTag = meta.hasAudio
+          ? (inRange ? ' 🔊' : ' 🔇')
+          : '';
+        const rowClass = (meta.hasAudio && inRange) ? 'dev-animal-row in-audio-range' : 'dev-animal-row';
+        html += `<div class="${rowClass}">` +
+          `<span class="dev-animal-name">${meta.icon} ${meta.label} <span style="opacity:0.6;font-weight:400;">(\u00d7${item.count})</span>${audioTag}</span>` +
+          `<span class="dev-animal-dist">${item.dist.toFixed(1)} m</span>` +
+          `</div>`;
+      }
+      devAnimalListEl.innerHTML = html;
+    }
+
     const btnAudioToggle = document.getElementById('btn-audio-toggle');
     if (btnAudioToggle) {
       btnAudioToggle.addEventListener('click', (e) => {
@@ -12332,6 +12558,9 @@
         document.getElementById('stat-jungle').textContent = `${params.junglePlantCount.toLocaleString()}`;
         document.getElementById('stat-desert-flora').textContent = `${params.desertPlantCount.toLocaleString()}`;
         document.getElementById('stat-fauna').textContent = `${faunaAgents.length.toLocaleString()}`;
+        if (params.devMode) {
+          updateDevStatsBar();
+        }
       }
 
       if (!params.fpvMode) {
