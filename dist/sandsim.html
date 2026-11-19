@@ -205,78 +205,128 @@
     /* Top Header / Telemetry Bar */
     .top-bar {
       position: absolute;
-      top: 12px;
-      left: 14px;
-      right: 76px;
+      top: 10px;
+      left: 12px;
+      right: 68px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      gap: 8px;
       pointer-events: none;
       z-index: 10;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       transition: right 0.22s ease;
     }
 
     body.panel-open .top-bar {
-      right: 354px;
+      right: 350px;
     }
 
     .brand-pill {
       pointer-events: auto;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 9px;
       background: var(--bg-panel);
       backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       border: 1px solid var(--border);
-      padding: 8px 14px;
-      border-radius: 14px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      padding: 6px 12px;
+      border-radius: 12px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+      flex-shrink: 0;
+      white-space: nowrap;
     }
 
     .brand-title {
       font-weight: 700;
-      font-size: 14px;
+      font-size: 13px;
       letter-spacing: 0.04em;
       color: var(--accent-bright);
       text-transform: uppercase;
+      white-space: nowrap;
     }
 
     .brand-sub {
-      font-size: 11px;
+      font-size: 10.5px;
       color: var(--text-dim);
-      margin-top: 2px;
+      margin-top: 1px;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 1180px) {
+      .brand-sub {
+        display: none;
+      }
     }
 
     .stats-bar {
       pointer-events: auto;
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 7px;
       margin-left: auto;
       background: var(--bg-panel);
       backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       border: 1px solid var(--border);
-      padding: 8px 15px;
-      border-radius: 14px;
+      padding: 6px 10px;
+      border-radius: 12px;
       font-size: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
       transition: all 0.22s ease;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+      overflow-x: auto;
+      max-width: 100%;
+    }
+
+    .stats-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .stats-bar button {
+      white-space: nowrap;
+      flex-shrink: 0;
+      padding: 5px 10px;
+      font-size: 11.5px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      border-radius: 8px;
     }
 
     .stats-bar.collapsed .extra-stat {
       display: none !important;
     }
 
+    /* When collapsed, show Weather as a sleek inline pill without the stacked 'WEATHER' header */
+    .stats-bar.collapsed .stat-item.keep-mobile {
+      flex-direction: row;
+      align-items: center;
+      min-width: auto;
+      padding: 0 4px;
+    }
+
+    .stats-bar.collapsed .stat-item.keep-mobile .stat-label {
+      display: none;
+    }
+
+    .stats-bar.collapsed .stat-item.keep-mobile .stat-value {
+      margin-top: 0;
+      font-size: 12px;
+    }
+
     .stats-expand-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 5px 8px;
-      min-width: 26px;
-      height: 28px;
-      border-radius: 8px;
+      padding: 0 7px !important;
+      min-width: 24px;
+      height: 28px !important;
+      border-radius: 7px;
       font-size: 11px;
       line-height: 1;
       background: rgba(232, 168, 76, 0.14);
@@ -295,22 +345,26 @@
     .stat-item {
       display: flex;
       flex-direction: column;
-      min-width: 56px;
+      min-width: 48px;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .stat-label {
-      font-size: 9.5px;
+      font-size: 9px;
       text-transform: uppercase;
       letter-spacing: 0.06em;
       color: var(--text-dim);
+      white-space: nowrap;
     }
 
     .stat-value {
       font-family: "SF Mono", Menlo, Consolas, monospace;
-      font-size: 12.5px;
+      font-size: 12px;
       font-weight: 600;
       color: var(--accent-bright);
-      margin-top: 2px;
+      margin-top: 1px;
+      white-space: nowrap;
     }
 
     .stat-value.water-val {
@@ -347,8 +401,8 @@
 
     /* Wind Compass Widget */
     .compass-widget {
-      width: 42px;
-      height: 42px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       border: 1px solid var(--border);
       background: radial-gradient(circle, rgba(232,168,76,0.16) 0%, rgba(18,16,14,0.9) 75%);
@@ -361,8 +415,8 @@
     }
 
     .compass-arrow {
-      width: 26px;
-      height: 26px;
+      width: 20px;
+      height: 20px;
       transition: transform 0.08s linear;
     }
 
@@ -1567,20 +1621,20 @@
     </div>
 
     <div class="stats-bar collapsed" id="stats-bar">
-      <button id="btn-fpv-mode" class="fpv-btn" title="Walk around on the terrain & dive underwater (Shortcut: V)">
-        🚶 FPV Walk Mode
+      <button id="btn-fpv-mode" class="fpv-btn" title="Walk around on the terrain &amp; dive underwater (Shortcut: V)">
+        🚶 Walk
       </button>
-      <button id="btn-drive-mode" class="fpv-btn" style="display:none;" title="Drive the Offroad Truck with WASD / Arrow Keys & Spacebar to Drift!">
+      <button id="btn-drive-mode" class="fpv-btn" style="display:none;" title="Drive the Offroad Truck with WASD / Arrow Keys &amp; Spacebar to Drift!">
         🛻 Drive
       </button>
       <button id="btn-audio-toggle" class="audio-btn" title="Toggle Global Sound Effects On/Off (Shortcut: M)">
-        🔊 Audio: ON
+        🔊
       </button>
       <button id="btn-screenshot" title="Save a playable Cartridge PNG screenshot containing your entire 3D map, roads, water, flora, items &amp; vehicle setup (Shortcut: P)">
-        💾 Save Cartridge
+        💾 Save
       </button>
       <button id="btn-load-cartridge-top" title="Load a playable Cartridge PNG map (or drag &amp; drop any Cartridge PNG onto the 3D window)">
-        📂 Load Cartridge
+        📂 Load
       </button>
       <input type="file" id="input-cartridge-file" accept="image/png,.png" style="display:none;" />
       <div class="stat-item keep-mobile">
@@ -9826,7 +9880,7 @@
     function syncAudioToggleUI() {
       const topBtn = document.getElementById('btn-audio-toggle');
       if (topBtn) {
-        topBtn.textContent = params.audioEnabled ? '🔊 Audio: ON' : '🔇 Audio: OFF';
+        topBtn.textContent = params.audioEnabled ? '🔊' : '🔇';
         topBtn.classList.toggle('muted', !params.audioEnabled);
       }
       const panelBtn = document.getElementById('btn-toggle-audio-panel');
@@ -13765,7 +13819,7 @@
       fpvBanner.innerHTML = origFpvBannerHTML;
 
       btnFpvMode.classList.toggle('active', params.fpvMode);
-      btnFpvMode.textContent = params.fpvMode ? '🎥 Exit FPV (Orbit)' : '🚶 FPV Walk Mode';
+      btnFpvMode.textContent = params.fpvMode ? '🎥 Exit Walk' : '🚶 Walk';
       fpvCrosshair.style.display = params.fpvMode ? 'block' : 'none';
       fpvBanner.style.display = params.fpvMode ? 'block' : 'none';
       fpvEquipBar.style.display = params.fpvMode ? 'flex' : 'none';
@@ -14306,9 +14360,8 @@
 
       const btn = document.getElementById('btn-screenshot');
       if (btn) {
-        const origText = btn.textContent;
-        btn.textContent = `✅ ${cartridgeTitle}`;
-        setTimeout(() => { btn.textContent = origText; }, 1800);
+        btn.textContent = '✅ Saved';
+        setTimeout(() => { btn.textContent = '💾 Save'; }, 1600);
       }
       if (valCartridgeStatus) {
         valCartridgeStatus.textContent = 'Saved PNG!';
