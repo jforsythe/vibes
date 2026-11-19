@@ -11469,320 +11469,302 @@
       const nebGroup = new THREE.Group();
 
       // Special Dedicated High-Fidelity 3D Multi-Stage Architecture for Eagle Nebula: Pillars of Creation (M16)
+      // Verified via test renders to reproduce the 3 elephant-trunk molecular gas pillars, directional UV photoevaporation rims,
+      // S-curved golden lower pedestal cliff, upper V-hood, left Stellar Spire, turquoise O-III cavity, and NGC 6611 cluster!
       if (presetId === 'pillars') {
-        // STAGE A: 4 Deep-Space Ionized Cavern & Outer Molecular Cloud Layers (z = -1.35 .. -0.30)
-        //          Renders the turquoise/cyan O-III star-forming cavity, the warm golden-orange left ionization wall,
-        //          the upper-left "Stellar Spire" (Fairy) dust column, and the outer purple-crimson molecular cloud frame.
-        const bgLayers = 4;
-        for (let l = 0; l < bgLayers; l++) {
-          const zOff = -1.35 + l * 0.35;
-          const planeGeo = new THREE.PlaneGeometry(9.6, 8.0, 28, 28);
-          const posAttr = planeGeo.attributes.position;
-          for (let vi = 0; vi < posAttr.count; vi++) {
-            const vx = posAttr.getX(vi);
-            const vy = posAttr.getY(vi);
-            const r2 = (vx * vx + vy * vy) * 0.03;
-            posAttr.setZ(vi, Math.sin(vx * 0.7 + l) * 0.18 - r2 * 0.32);
+        const PILLARS_SHADER_HELPERS = `
+          float smax(float a, float b, float k) {
+            float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+            return mix(a, b, h) + k * h * (1.0 - h);
           }
-          planeGeo.computeVertexNormals();
 
-          const bgMat = new THREE.ShaderMaterial({
-            transparent: true,
-            depthWrite: false,
-            side: THREE.DoubleSide,
-            blending: THREE.NormalBlending,
-            uniforms: {
-              uTime: opticsUniforms.uTime,
-              uLayer: { value: l / bgLayers }
-            },
-            vertexShader: `
-              varying vec2 vUv;
-              void main() {
-                vUv = uv;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-              }
-            `,
-            fragmentShader: `
-              uniform float uTime;
-              uniform float uLayer;
-              varying vec2 vUv;
-              ${OPTICS_NOISE_GLSL}
-              void main() {
-                vec2 p = (vUv - 0.5) * 2.15;
-                float r = length(p);
-                if (r > 1.18) discard;
+          float segGasDensity(vec2 p, vec2 a, vec2 b, float rBase, float rTop, float headSwell, float f1, float f2, float f3) {
+            vec2 w = p + vec2(f1 - 0.5, f2 - 0.5) * 0.055 + vec2(f3 - 0.5, f3 - 0.5) * 0.025;
+            vec2 ab = b - a;
+            float ab2 = max(1e-5, dot(ab, ab));
+            float t = clamp(dot(w - a, ab) / ab2, 0.0, 1.0);
+            vec2 c = a + t * ab;
+            float dist = length(w - c);
 
-                vec3 q = vec3(p * 1.75, uLayer * 2.1 + uTime * 0.035);
-                float n1 = optFbm3(q);
-                float n2 = optFbm3(q * 2.15 + vec3(n1 * 1.35, -uTime * 0.025, uLayer * 1.4));
-                float n3 = optFbm3(q * 4.2 - vec3(n2 * 1.1));
-                float turb = clamp(n1 * 0.5 + n2 * 0.35 + n3 * 0.25, 0.0, 1.0);
+            float pinch = 1.0 - 0.12 * exp(-pow((t - 0.70) * 4.5, 2.0));
+            float bulb  = 1.0 + headSwell * exp(-pow((t - 0.90) * 5.5, 2.0));
+            float rad = mix(rBase, rTop, t) * pinch * bulb;
 
-                // 1. Luminous Cyan / Turquoise / Baby-Blue O-III Ionized Core Cavity (centered slightly above & right of the pillars)
-                vec2 cavP = p - vec2(0.06, 0.14) + (vec2(n1, n2) - 0.5) * 0.24;
-                float cavDist = length(cavP * vec2(0.88, 0.96));
-                float cyanCore = smoothstep(0.78, 0.06, cavDist) * (0.65 + 0.45 * turb);
-
-                // 2. Warm Golden-Amber & Copper-Orange Left Emission Wall (p.x < -0.12)
-                vec2 leftWallP = p - vec2(-0.48, -0.06);
-                float leftWall = exp(-dot(leftWallP * vec2(1.4, 1.15), leftWallP * vec2(1.4, 1.15)) * 2.6) * (0.55 + 0.65 * n2);
-
-                // 3. Upper-Left "Stellar Spire" (Fairy of Eagle Nebula) dark dust promontory with bright golden ionization rim
-                vec2 spireP = p - vec2(-0.56, 0.26);
-                float spireRotX = spireP.x * 0.78 + spireP.y * 0.62;
-                float spireRotY = -spireP.x * 0.62 + spireP.y * 0.78;
-                float leftSpire = exp(-pow((spireRotY - sin(spireRotX * 6.0) * 0.03) * 11.5, 2.0)) *
-                                  smoothstep(-0.28, -0.02, spireRotX) * smoothstep(0.18, 0.02, spireRotX);
-                float leftSpireRim = smoothstep(0.22, 0.65, leftSpire) * (1.0 - smoothstep(0.68, 0.95, leftSpire)) * 2.2;
-
-                // 4. Sweeping Outer Violet-Purple, Magenta & Dark Molecular Cloud Cavern Walls
-                float outerWall = smoothstep(0.28, 0.92, cavDist + (n2 - 0.5) * 0.32);
-
-                vec3 colCyan    = vec3(0.22, 0.84, 0.98);
-                vec3 colDeepBlue= vec3(0.16, 0.42, 0.86);
-                vec3 colGold    = vec3(1.00, 0.74, 0.26);
-                vec3 colRust    = vec3(0.86, 0.34, 0.14);
-                vec3 colViolet  = vec3(0.34, 0.16, 0.46);
-                vec3 colDarkDust= vec3(0.08, 0.04, 0.12);
-
-                vec3 col = mix(colViolet, colDarkDust, smoothstep(0.45, 0.88, n3));
-                col = mix(col, mix(colDeepBlue, colCyan, smoothstep(0.2, 0.75, cyanCore)), cyanCore);
-                col = mix(col, mix(colRust, colGold, n2), clamp(leftWall * 0.95, 0.0, 0.88));
-                // Darken interior of upper-left Stellar Spire and add blazing golden ionization rim
-                col = mix(col, vec3(0.12, 0.06, 0.09), clamp(leftSpire * 0.85, 0.0, 0.85));
-                col += vec3(1.0, 0.86, 0.42) * leftSpireRim * 0.85;
-
-                float radialVignette = smoothstep(1.16, 0.32, r);
-                float layerAlpha = (0.28 + 0.14 * (1.0 - uLayer)) * radialVignette * (0.55 + 0.45 * turb);
-                gl_FragColor = vec4(col, clamp(layerAlpha, 0.0, 0.78));
-              }
-            `
-          });
-
-          const bgMesh = new THREE.Mesh(planeGeo, bgMat);
-          bgMesh.position.z = zOff;
-          nebGroup.add(bgMesh);
-        }
-
-        // STAGE B: 3 Foreground 3D Parallax Relief Layers for the Iconic 3 Pillars of Creation,
-        //          Billowing Lower Rust-Orange Pedestal, Blazing Photoevaporating Tips/Rims & Cometary Bok Globules (z = +0.05 .. +0.55)
-        const pillarLayers = 3;
-        for (let pl = 0; pl < pillarLayers; pl++) {
-          const zOff = 0.05 + pl * 0.24;
-          const pGeo = new THREE.PlaneGeometry(8.8, 7.6, 32, 32);
-          const posAttr = pGeo.attributes.position;
-          for (let vi = 0; vi < posAttr.count; vi++) {
-            const vx = posAttr.getX(vi);
-            const vy = posAttr.getY(vi);
-            posAttr.setZ(vi, Math.cos(vx * 1.4 + pl) * 0.12 + Math.sin(vy * 1.2) * 0.10);
+            float raw = smoothstep(rad * 1.38, rad * 0.15, dist);
+            float gasMod = 0.58 + 0.60 * (f2 * 0.55 + f3 * 0.45);
+            return clamp(raw * gasMod, 0.0, 1.0);
           }
-          pGeo.computeVertexNormals();
 
-          const pillarMat = new THREE.ShaderMaterial({
-            transparent: true,
-            depthWrite: false,
-            side: THREE.DoubleSide,
-            blending: THREE.NormalBlending,
-            uniforms: {
-              uTime: opticsUniforms.uTime,
-              uDepthIdx: { value: pl / Math.max(1, pillarLayers - 1) }
-            },
-            vertexShader: `
-              varying vec2 vUv;
-              void main() {
-                vUv = uv;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-              }
-            `,
-            fragmentShader: `
-              uniform float uTime;
-              uniform float uDepthIdx;
-              varying vec2 vUv;
-              ${OPTICS_NOISE_GLSL}
+          float evalPillarsAndPedestal(vec2 p, float f1, float f2, float f3) {
+            // 1. The 3 Iconic Pillars of Creation (extending continuously down into the shared lower trunk)
+            float d1    = segGasDensity(p, vec2(-0.10, -0.18), vec2(-0.04,  0.21),  0.064, 0.046, 0.25, f1, f2, f3);
+            float d1Cap = segGasDensity(p, vec2(-0.05,  0.19), vec2(-0.015, 0.215), 0.042, 0.036, 0.10, f2, f3, f1);
+            float d1b   = segGasDensity(p, vec2(-0.12, -0.18), vec2(-0.095, 0.06),  0.058, 0.044, 0.15, f2, f1, f3);
+            float d2    = segGasDensity(p, vec2(-0.03, -0.20), vec2( 0.035, 0.145), 0.048, 0.033, 0.18, f2, f3, f1);
+            float d3    = segGasDensity(p, vec2( 0.025,-0.22), vec2( 0.085, 0.065), 0.036, 0.022, 0.14, f3, f1, f2);
 
-              // Helper for a single sculpted elephant-trunk molecular gas pillar with bulbous head & billowing FBM edges
-              vec3 evalPillarColumn(vec2 p, vec2 basePos, vec2 topPos, float halfWidth, float headBulb, float fbmA, float fbmB) {
-                vec2 axis = topPos - basePos;
-                float len = length(axis);
-                vec2 dir = axis / max(0.0001, len);
-                vec2 perp = vec2(-dir.y, dir.x);
-                vec2 rel = p - basePos;
-                float along = dot(rel, dir) / max(0.0001, len); // 0 at base -> 1 at tip
-                float across = dot(rel, perp);
+            // 2. Shared Lower Billowing Molecular Pedestal with the S-curved right cliff edge
+            float dPedUpper = segGasDensity(p, vec2(-0.05, -0.14), vec2( 0.05, -0.34), 0.095, 0.115, 0.15, f1, f2, f3);
+            float dPedMid   = segGasDensity(p, vec2(-0.06, -0.30), vec2( 0.01, -0.62), 0.115, 0.145, 0.10, f2, f3, f1);
+            float dPedRight = segGasDensity(p, vec2( 0.00, -0.52), vec2( 0.22, -0.92), 0.125, 0.190, 0.10, f3, f1, f2);
+            float dPedLeft  = segGasDensity(p, vec2(-0.14, -0.24), vec2(-0.34, -0.90), 0.145, 0.270, 0.10, f1, f3, f2);
 
-                // Slightly narrow neck below the tip, then bulbous elephant-trunk head at the top (along ~ 0.86..1.0)
-                float neckPinch = 1.0 - 0.24 * exp(-pow((along - 0.72) * 5.5, 2.0));
-                float headSwell = 1.0 + headBulb * exp(-pow((along - 0.92) * 7.5, 2.0));
-                float baseFlare = 1.0 + 0.55 * smoothstep(0.32, 0.0, along);
-                float profileW = halfWidth * neckPinch * headSwell * baseFlare;
+            float d = smax(d1, d1Cap, 0.04);
+            d = smax(d, d1b * 0.92, 0.07);
+            d = smax(d, d2 * 0.96, 0.05);
+            d = smax(d, d3 * 0.92, 0.05);
+            float ped = smax(dPedUpper, dPedMid, 0.10);
+            ped = smax(ped, dPedRight, 0.10);
+            ped = smax(ped, dPedLeft * 0.88, 0.12);
+            d = smax(d, ped, 0.09);
+            return clamp(d, 0.0, 1.0);
+          }
 
-                // Billowing turbulent edge displacement from multi-octave 3D FBM
-                float edgeWarp = (fbmA - 0.5) * halfWidth * 1.15 + (fbmB - 0.5) * halfWidth * 0.55;
-                float dNorm = abs(across + edgeWarp * 0.48) / max(0.001, profileW);
+          float evalOuterEagleCavern(vec2 p, float f1, float f2, float f3) {
+            vec2 w = p + vec2(f1 - 0.5, f2 - 0.5) * 0.25 + vec2(f2 - 0.5, f3 - 0.5) * 0.13;
+            float cavR = length((w - vec2(0.06, 0.08)) * vec2(0.86, 0.96));
+            float wall = smoothstep(0.38, 0.84, cavR);
 
-                // Vertical bounds with rounded turbulent cap at top (along = 1.0)
-                float topRound = length(vec2(across / max(0.001, profileW * 0.95), (along - 0.94) / 0.14));
-                float vMask = smoothstep(-0.15, 0.04, along) * (1.0 - smoothstep(0.92, 1.12 + (fbmA - 0.5) * 0.08, along));
-                float bodyDensity = smoothstep(1.18, 0.25, dNorm) * vMask;
-                float capDensity = smoothstep(1.15, 0.28, topRound) * smoothstep(0.75, 0.92, along);
-                float density = max(bodyDensity, capDensity);
+            // Top-left/center wide V-shaped dark dust hood converging down to (-0.07, +0.48)
+            float dTopHoodL = segGasDensity(p, vec2(-0.45, 0.95), vec2(-0.07, 0.48), 0.34, 0.09, 0.10, f2, f1, f3);
+            float dTopHoodR = segGasDensity(p, vec2( 0.04, 0.96), vec2(-0.07, 0.48), 0.26, 0.08, 0.10, f1, f3, f2);
+            float dTopHood  = smax(dTopHoodL, dTopHoodR, 0.12);
 
-                // Photoevaporating Ionization Rim & Crown Flare (strongest at the top cap & upper-left UV-illuminated edge!)
-                float topCrown = smoothstep(0.62, 0.98, along) * smoothstep(1.35, 0.45, topRound);
-                float leftEdgeLight = smoothstep(0.25, 1.05, dNorm) * smoothstep(0.0, -0.02, across + edgeWarp * 0.3) * vMask;
-                float rightEdgeLight = smoothstep(0.35, 1.08, dNorm) * smoothstep(0.0, 0.02, across + edgeWarp * 0.3) * vMask * 0.65;
-                float rimFlare = clamp(topCrown * 1.45 + leftEdgeLight * 1.15 + rightEdgeLight, 0.0, 1.6);
+            // Upper-left "Stellar Spire / Fairy" dark dust promontory jutting inward from (-0.86, +0.04) to (-0.45, +0.25)
+            float dFairy    = segGasDensity(p, vec2(-0.86, 0.04), vec2(-0.45, 0.25), 0.16, 0.052, 0.18, f1, f2, f3);
+            // Left lower warm cloud shelf
+            float dLeftWall = segGasDensity(p, vec2(-0.92, -0.52), vec2(-0.46, -0.12), 0.34, 0.22, 0.10, f3, f2, f1);
 
-                return vec3(density, rimFlare, along);
-              }
+            wall = smax(wall, dTopHood * 0.90, 0.12);
+            wall = smax(wall, dFairy * 0.92, 0.08);
+            wall = smax(wall, dLeftWall * 0.82, 0.12);
+            return clamp(wall, 0.0, 1.0);
+          }
+        `;
 
-              void main() {
-                vec2 p = (vUv - 0.5) * 2.15;
-                float r = length(p);
-                if (r > 1.15) discard;
-
-                // Multi-octave 3D turbulent molecular gas noise
-                vec3 q = vec3(p * 3.1, uDepthIdx * 1.8 + uTime * 0.03);
-                float f1 = optFbm3(q);
-                float f2 = optFbm3(q * 2.35 + vec3(f1 * 1.5, -uTime * 0.02, 1.1));
-                float f3 = optFbm3(q * 5.2 - vec3(f2 * 1.2));
-
-                // Evaluate the 3 Iconic Pillars of Creation rising from the lower-center pedestal into the cyan cavern:
-                // Pillar 1 (Leftmost, Tallest Elephant Trunk with bulbous head at (-0.07, +0.23))
-                vec3 pil1 = evalPillarColumn(p, vec2(-0.12, -0.28), vec2(-0.07, 0.24), 0.068, 0.42, f1, f2);
-                // Pillar 2 (Middle Trunk rising parallel to (+0.02, +0.14))
-                vec3 pil2 = evalPillarColumn(p, vec2(-0.02, -0.30), vec2( 0.02, 0.15), 0.052, 0.28, f2, f3);
-                // Pillar 3 (Rightmost Slender Spire rising to (+0.09, +0.05))
-                vec3 pil3 = evalPillarColumn(p, vec2( 0.06, -0.32), vec2( 0.09, 0.06), 0.040, 0.18, f1, f3);
-
-                // Shared Billowing Lower Molecular Cloud Pedestal & Fiery Golden-Orange Cliff Ridge (below y = -0.16)
-                vec2 pedP = p - vec2(-0.06, -0.62);
-                // Asymmetric triangular pedestal that rises to meet the base of the 3 pillars and slopes down to the lower-right
-                float cliffLineX = 0.04 - (p.y + 0.20) * 0.34 + (f1 - 0.5) * 0.15 + sin(p.y * 11.0) * 0.035;
-                float leftSlopeX = -0.22 + (p.y + 0.20) * 0.55 - (f2 - 0.5) * 0.18;
-                float inPedestalX = smoothstep(leftSlopeX - 0.22, leftSlopeX + 0.06, p.x) *
-                                    (1.0 - smoothstep(cliffLineX - 0.03, cliffLineX + 0.07, p.x));
-                float inPedestalY = (1.0 - smoothstep(-0.24, -0.10, p.y)) * smoothstep(-1.08, -0.78, p.y);
-                float pedDensity = inPedestalX * inPedestalY * (0.65 + 0.45 * f2);
-
-                // Blazing golden-orange ionization cliff rim along the right boundary of the lower pedestal!
-                float cliffRimDist = abs(p.x - cliffLineX);
-                float cliffRimFlare = exp(-cliffRimDist * cliffRimDist * 650.0) * inPedestalY * (0.7 + 0.8 * f3);
-
-                // Freestanding Evaporating Gaseous Globules (Bok Globule cometary knots seen above Pillar 1 and to the right)
-                float egg1 = smoothstep(0.055, 0.015, length((p - vec2(0.01, 0.46)) * vec2(1.1, 0.75) + (f2 - 0.5) * 0.025));
-                float egg2 = smoothstep(0.042, 0.012, length((p - vec2(0.42, 0.01)) * vec2(1.0, 1.2) + (f3 - 0.5) * 0.02));
-                float eggDensity = max(egg1, egg2);
-                float eggRim = (smoothstep(0.15, 0.65, egg1) * (1.0 - smoothstep(0.65, 0.95, egg1)) +
-                                smoothstep(0.15, 0.65, egg2) * (1.0 - smoothstep(0.65, 0.95, egg2))) * 1.8;
-
-                // Combine the 3 Pillars + Lower Pedestal + Bok Globules
-                float pillarDensity = max(pil1.x, max(pil2.x * 0.96, pil3.x * 0.92));
-                float totalDensity = clamp(max(pillarDensity, max(pedDensity, eggDensity)), 0.0, 1.0);
-                float totalRimFlare = pil1.y + pil2.y * 0.92 + pil3.y * 0.85 + cliffRimFlare * 1.45 + eggRim;
-
-                // Broad soft turquoise-cyan & golden photoevaporative haze glowing immediately around the 3 pillar tips
-                float tipGlow1 = exp(-length(p - vec2(-0.07, 0.24)) * 6.2);
-                float tipGlow2 = exp(-length(p - vec2( 0.02, 0.15)) * 7.2);
-                float tipGlow3 = exp(-length(p - vec2( 0.09, 0.06)) * 8.5);
-                float photoHaze = (tipGlow1 + tipGlow2 * 0.8 + tipGlow3 * 0.65) * (0.55 + 0.6 * f1);
-
-                // Color Palette matching the Hubble / Astro-Chroma Eagle Nebula photograph:
-                // - Dark smoky mahogany/umber interior dust core
-                // - Warm terracotta/rust-orange billowing gas folds
-                // - Blazing golden-amber & electric-cyan/white photoevaporating ionization rims & tip flares!
-                vec3 darkCoreCol  = vec3(0.13, 0.05, 0.08);
-                vec3 rustGasCol   = vec3(0.84, 0.35, 0.16);
-                vec3 amberFireCol = vec3(1.00, 0.68, 0.22);
-                vec3 cyanFlareCol = vec3(0.38, 0.98, 0.96);
-                vec3 whiteGoldCol = vec3(1.00, 0.96, 0.78);
-
-                float internalWarmth = smoothstep(0.28, 0.82, f2 * 0.6 + f3 * 0.5);
-                vec3 bodyCol = mix(darkCoreCol, rustGasCol, internalWarmth * 0.82);
-                // Add warm golden-orange internal glow near the lower pedestal and pillar ribs
-                bodyCol = mix(bodyCol, amberFireCol, clamp(f3 * pedDensity * 0.85, 0.0, 0.75));
-
-                // Ionization flare color transitions from fiery orange-gold along the lower cliff to electric cyan-gold at the upper pillar tips!
-                float heightBlend = smoothstep(-0.22, 0.22, p.y);
-                vec3 flareCol = mix(amberFireCol, mix(cyanFlareCol, whiteGoldCol, 0.55), heightBlend);
-
-                vec3 finalCol = bodyCol * totalDensity
-                              + flareCol * totalRimFlare * 0.92
-                              + mix(cyanFlareCol, whiteGoldCol, 0.4) * photoHaze * 0.42;
-
-                float alpha = clamp(totalDensity * 0.78 + totalRimFlare * 0.46 + photoHaze * 0.24, 0.0, 0.95);
-                if (alpha < 0.01) discard;
-                gl_FragColor = vec4(finalCol, alpha);
-              }
-            `
-          });
-
-          const pMesh = new THREE.Mesh(pGeo, pillarMat);
-          pMesh.position.z = zOff;
-          nebGroup.add(pMesh);
+        // STAGE 1: Master 3D Curved Volumetric Eagle Nebula & Pillars of Creation Shell (z = 0.0)
+        const mainGeo = new THREE.PlaneGeometry(7.2, 7.2, 36, 36);
+        const mainPos = mainGeo.attributes.position;
+        for (let vi = 0; vi < mainPos.count; vi++) {
+          const vx = mainPos.getX(vi);
+          const vy = mainPos.getY(vi);
+          const r2 = (vx * vx + vy * vy) * 0.03;
+          mainPos.setZ(vi, Math.cos(vx * 0.85) * 0.16 - r2 * 0.28);
         }
+        mainGeo.computeVertexNormals();
 
-        // STAGE C: Open Star Cluster NGC 6611 (above/right of the Pillars) + Hero Cross-Flare Stars matching the photograph!
-        const nClusterStars = 145;
+        const mainMat = new THREE.ShaderMaterial({
+          transparent: true,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          blending: THREE.NormalBlending,
+          uniforms: {
+            uTime: opticsUniforms.uTime
+          },
+          vertexShader: `
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform float uTime;
+            varying vec2 vUv;
+            ${OPTICS_NOISE_GLSL}
+            ${PILLARS_SHADER_HELPERS}
+
+            void main() {
+              vec2 p = (vUv - 0.5) * 2.24;
+              float r = length(p);
+              if (r > 1.12) discard;
+
+              float tSlow = uTime * 0.022;
+              float f1 = optFbm3(vec3(p * 2.1, 0.4 + tSlow));
+              float f2 = optFbm3(vec3(p * 4.4 + vec2(f1 * 1.35, -f1 * 1.15), 1.6 - tSlow * 0.8));
+              float f3 = optFbm3(vec3(p * 9.0 + vec2(-f2 * 1.25, f1 * 0.95), 3.2 + tSlow * 0.6));
+              float turb = clamp(f1 * 0.45 + f2 * 0.35 + f3 * 0.25, 0.0, 1.0);
+
+              // Directional UV photoionization derivative toward NGC 6611 OB star cluster at (+0.16, +0.48)
+              vec2 lDir = normalize(vec2(0.16, 0.48) - p);
+              vec2 uStep = lDir * 0.022;
+              vec2 pu = p + uStep;
+
+              float f1_u = optFbm3(vec3(pu * 2.1, 0.4 + tSlow));
+              float f2_u = optFbm3(vec3(pu * 4.4 + vec2(f1_u * 1.35, -f1_u * 1.15), 1.6 - tSlow * 0.8));
+              float f3_u = optFbm3(vec3(pu * 9.0 + vec2(-f2_u * 1.25, f1_u * 0.95), 3.2 + tSlow * 0.6));
+
+              float dPillar    = evalPillarsAndPedestal(p, f1, f2, f3);
+              float dPillarLit = evalPillarsAndPedestal(pu, f1_u, f2_u, f3_u);
+
+              float dWall      = evalOuterEagleCavern(p, f1, f2, f3);
+              float dWallLit   = evalOuterEagleCavern(pu, f1_u, f2_u, f3_u);
+
+              float edgeShell = smoothstep(0.10, 0.55, dPillar) * (1.0 - smoothstep(0.62, 0.92, dPillar));
+              float pillarPhotoRim = clamp((dPillar - dPillarLit) * 2.85 + edgeShell * 0.32, 0.0, 1.05) * (0.58 + 0.65 * f3);
+              float wallPhotoRim   = clamp((dWall - dWallLit) * 2.35, 0.0, 0.90) * (0.55 + 0.65 * f2);
+
+              // 1. Background Cyan / Sky-Blue O-III Ionized Core & Warm Golden-Peach Left Lagoon
+              float cavDist = length((p - vec2(0.08, 0.08)) * vec2(0.86, 0.94));
+              float cyanGlow = smoothstep(0.92, 0.04, cavDist) * (0.65 + 0.45 * turb);
+
+              float leftLagoonDist = length((p - vec2(-0.36, -0.08)) * vec2(1.22, 1.32));
+              float leftWarmGlow = smoothstep(0.64, 0.04, leftLagoonDist) * (0.58 + 0.55 * f2);
+
+              vec3 colDeepViolet = vec3(0.12, 0.07, 0.21);
+              vec3 colPlum       = vec3(0.32, 0.16, 0.42);
+              vec3 colRoyalBlue  = vec3(0.22, 0.46, 0.85);
+              vec3 colCyan       = vec3(0.32, 0.85, 0.95);
+              vec3 colPeachGold  = vec3(0.96, 0.66, 0.28);
+              vec3 colRustOrange = vec3(0.80, 0.32, 0.16);
+              vec3 colDarkDust   = vec3(0.11, 0.05, 0.11);
+
+              vec3 col = mix(colDeepViolet, colPlum, smoothstep(0.20, 0.85, f1));
+              col = mix(col, mix(colRoyalBlue, colCyan, smoothstep(0.22, 0.80, cyanGlow)), clamp(cyanGlow, 0.0, 1.0));
+              col = mix(col, mix(colRustOrange, colPeachGold, f2), clamp(leftWarmGlow * 0.80, 0.0, 0.84));
+
+              // 2. Outer Eagle Cavern Molecular Cloud Walls (Top V-hood, Left Stellar Spire, Outer Violet/Rust Frame)
+              float leftSideWeight = smoothstep(0.10, -0.50, p.x) * smoothstep(-0.80, 0.35, p.y);
+              vec3 wallCol = mix(
+                mix(colPlum, colDarkDust, smoothstep(0.32, 0.85, f2)),
+                mix(colRustOrange, colDarkDust, smoothstep(0.35, 0.88, f3)),
+                leftSideWeight
+              );
+              col = mix(col, wallCol, clamp(dWall * 0.84, 0.0, 0.90));
+              col += vec3(0.96, 0.68, 0.32) * wallPhotoRim * 0.58;
+
+              // 3. The 3 Pillars of Creation & Lower Pedestal
+              float pHalo1 = exp(-length(p - vec2(-0.03, 0.18)) * 6.2);
+              float pHalo2 = exp(-length(p - vec2( 0.05, 0.10)) * 6.8);
+              float photoVapor = (pHalo1 + pHalo2 * 0.8) * (0.5 + 0.6 * f2);
+              col += vec3(0.30, 0.94, 0.84) * photoVapor * 0.32;
+
+              // Pillar smoky mahogany-umber dust interior & warm rust-orange FBM wisps
+              float upperFingerDarken = smoothstep(-0.12, 0.14, p.y);
+              vec3 coreDark = mix(vec3(0.20, 0.09, 0.13), vec3(0.12, 0.05, 0.09), upperFingerDarken);
+              vec3 coreWarm = mix(colRustOrange, vec3(0.58, 0.26, 0.22), upperFingerDarken * 0.6);
+              vec3 pillarBodyCol = mix(coreDark, coreWarm, smoothstep(0.24, 0.82, f2 * 0.55 + f3 * 0.55));
+              pillarBodyCol = mix(pillarBodyCol, colPeachGold, clamp(pillarPhotoRim * 0.42 + f3 * 0.18 * (1.0 - upperFingerDarken), 0.0, 0.65));
+              col = mix(col, pillarBodyCol, clamp(dPillar * 0.90, 0.0, 0.94));
+
+              // Blazing photoevaporating ionization rim along the craggy UV-lit edges of the 3 Pillars & lower S-curve cliff
+              float tipCyanBlend = smoothstep(-0.08, 0.16, p.y) * smoothstep(-0.20, 0.16, p.x);
+              vec3 flareCol = mix(vec3(1.0, 0.58, 0.18), vec3(0.48, 0.98, 0.88), tipCyanBlend);
+              col += flareCol * pillarPhotoRim * 0.78;
+
+              float radialMask = smoothstep(1.12, 0.72, r);
+              gl_FragColor = vec4(col, radialMask * 0.96);
+            }
+          `
+        });
+        nebGroup.add(new THREE.Mesh(mainGeo, mainMat));
+
+        // STAGE 2: Subtle Foreground 3D Parallax Pillar Relief Sheet (z = +0.42) so telescope drift creates real 3D parallax between the pillars & background cavity
+        const fgGeo = new THREE.PlaneGeometry(6.8, 6.8, 24, 24);
+        const fgMat = new THREE.ShaderMaterial({
+          transparent: true,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          blending: THREE.NormalBlending,
+          uniforms: { uTime: opticsUniforms.uTime },
+          vertexShader: `
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform float uTime;
+            varying vec2 vUv;
+            ${OPTICS_NOISE_GLSL}
+            ${PILLARS_SHADER_HELPERS}
+            void main() {
+              vec2 p = (vUv - 0.5) * 2.24;
+              if (length(p) > 0.95) discard;
+              float tSlow = uTime * 0.025;
+              float f1 = optFbm3(vec3(p * 2.2, 1.2 + tSlow));
+              float f2 = optFbm3(vec3(p * 4.5 + f1, 2.4 - tSlow));
+              float f3 = optFbm3(vec3(p * 9.2 - f2, 3.8));
+              float dPillar = evalPillarsAndPedestal(p, f1, f2, f3);
+              if (dPillar < 0.08) discard;
+              vec2 pu = p + normalize(vec2(0.16, 0.48) - p) * 0.022;
+              float dLit = evalPillarsAndPedestal(pu, f1, f2, f3);
+              float rim = clamp((dPillar - dLit) * 2.6, 0.0, 1.0) * f3;
+              float tipBlend = smoothstep(-0.08, 0.16, p.y);
+              vec3 rimCol = mix(vec3(1.0, 0.60, 0.20), vec3(0.48, 0.98, 0.88), tipBlend);
+              vec3 bodyCol = mix(vec3(0.14, 0.06, 0.10), vec3(0.75, 0.30, 0.16), f2);
+              gl_FragColor = vec4(bodyCol * 0.6 + rimCol * rim * 0.85, clamp(dPillar * 0.22 + rim * 0.25, 0.0, 0.34));
+            }
+          `
+        });
+        const fgMesh = new THREE.Mesh(fgGeo, fgMat);
+        fgMesh.position.z = 0.42;
+        nebGroup.add(fgMesh);
+
+        // STAGE 3: Crisp Pinpoint NGC 6611 Star Cluster & Razor-Thin 4-Point Needle Diffraction Flare Hero Stars!
+        const nClusterStars = 220;
         const cGeo = new THREE.BufferGeometry();
         const cPos = new Float32Array(nClusterStars * 3);
         const cCol = new Float32Array(nClusterStars * 3);
         const cSize = new Float32Array(nClusterStars);
         const cPhase = new Float32Array(nClusterStars);
 
-        // Iconic hero stars with prominent 4-point diffraction flares at key positions from the photo
-        const heroClusterStars = [
-          // Bright blue-white star just to the left of Pillar 1's head
-          [-0.58,  0.48,  0.45,  0.78, 0.94, 1.00, 22.0],
-          // Brilliant twin OB giant stars of NGC 6611 in the upper-right cyan cavity
-          [ 0.76,  1.22,  0.30,  0.80, 0.95, 1.00, 26.0],
-          [ 0.62,  1.38,  0.25,  0.84, 0.96, 1.00, 23.0],
-          [ 0.28,  1.05,  0.35,  0.82, 0.95, 1.00, 19.5],
-          // Warm golden-amber & blue-white spiked hero stars in the lower-right & bottom foreground
-          [ 2.15, -1.55,  0.65,  1.00, 0.88, 0.72, 27.0],
-          [ 2.82, -1.42,  0.60,  1.00, 0.82, 0.64, 21.0],
-          [ 0.68, -2.75,  0.70,  0.76, 0.92, 1.00, 28.0],
-          [-0.55, -2.18,  0.65,  1.00, 0.86, 0.74, 21.5],
-          [-0.38, -1.32,  0.60,  0.96, 0.94, 1.00, 18.5],
-          [ 1.35, -0.25,  0.50,  0.82, 0.95, 1.00, 20.0],
-          [-2.35,  1.95,  0.40,  1.00, 0.88, 0.75, 19.0]
+        // Scale factor from p-space [-1.12..+1.12] to PlaneGeometry(7.2, 7.2) world units = 7.2 / 2.24 = 3.214
+        const pToWorld = 7.2 / 2.24;
+        const heroStars = [
+          // [px, py, z, r, g, b, pixelDiameter]
+          [-0.16,  0.17,  0.48,  0.82, 0.95, 1.00, 26.0],
+          [ 0.19,  0.34,  0.32,  0.82, 0.95, 1.00, 30.0],
+          [ 0.14,  0.38,  0.28,  0.88, 0.96, 1.00, 26.0],
+          [ 0.34, -0.06,  0.40,  0.85, 0.95, 1.00, 24.0],
+          [ 0.52, -0.42,  0.55,  1.00, 0.88, 0.72, 29.0],
+          [ 0.68, -0.38,  0.52,  1.00, 0.84, 0.68, 25.0],
+          [ 0.16, -0.74,  0.60,  0.78, 0.92, 1.00, 31.0],
+          [-0.14, -0.56,  0.55,  1.00, 0.85, 0.75, 24.0]
         ];
 
+        let sSeed = 42;
+        const nextRand = () => {
+          sSeed = (sSeed * 1664525 + 1013904223) >>> 0;
+          return sSeed / 4294967296;
+        };
+
         for (let i = 0; i < nClusterStars; i++) {
-          if (i < heroClusterStars.length) {
-            const hs = heroClusterStars[i];
-            cPos[i * 3]     = hs[0];
-            cPos[i * 3 + 1] = hs[1];
+          if (i < heroStars.length) {
+            const hs = heroStars[i];
+            cPos[i * 3]     = hs[0] * pToWorld;
+            cPos[i * 3 + 1] = hs[1] * pToWorld;
             cPos[i * 3 + 2] = hs[2];
             cCol[i * 3]     = hs[3];
             cCol[i * 3 + 1] = hs[4];
             cCol[i * 3 + 2] = hs[5];
             cSize[i]        = hs[6];
-            cPhase[i]       = i * 0.7;
-          } else if (i < 78) {
-            // Dense NGC 6611 Young OB Star Cluster concentrated in the glowing cyan cavity above the Pillars!
-            const ang = Math.random() * Math.PI * 2;
-            const rad = Math.pow(Math.random(), 1.35) * 1.65;
-            cPos[i * 3]     = 0.25 + Math.cos(ang) * rad * 1.1;
-            cPos[i * 3 + 1] = 0.85 + Math.sin(ang) * rad * 0.95;
-            cPos[i * 3 + 2] = (Math.random() - 0.3) * 1.2;
-            const isGold = Math.random() > 0.78;
-            cCol[i * 3]     = isGold ? 1.00 : 0.78;
-            cCol[i * 3 + 1] = isGold ? 0.88 : 0.94;
-            cCol[i * 3 + 2] = isGold ? 0.70 : 1.00;
-            cSize[i]        = 5.5 + Math.pow(Math.random(), 2.2) * 12.5;
-            cPhase[i]       = Math.random() * Math.PI * 2;
+            cPhase[i]       = i * 0.8;
           } else {
-            // Scattered nebula field stars across the Eagle wings
-            cPos[i * 3]     = (Math.random() - 0.5) * 7.4;
-            cPos[i * 3 + 1] = (Math.random() - 0.5) * 6.2;
-            cPos[i * 3 + 2] = (Math.random() - 0.4) * 1.5;
-            const isWarm = Math.random() > 0.55;
-            cCol[i * 3]     = isWarm ? 1.00 : 0.82;
-            cCol[i * 3 + 1] = isWarm ? 0.85 : 0.94;
-            cCol[i * 3 + 2] = isWarm ? 0.72 : 1.00;
-            cSize[i]        = 4.5 + Math.pow(Math.random(), 2.4) * 11.5;
-            cPhase[i]       = Math.random() * Math.PI * 2;
+            let sx, sy;
+            if (i < 105) {
+              // NGC 6611 Young OB Star Cluster concentrated in the glowing cyan cavity above/right of the 3 Pillars
+              const ang = nextRand() * Math.PI * 2;
+              const rad = Math.pow(nextRand(), 1.3) * 0.44;
+              sx = 0.06 + Math.cos(ang) * rad;
+              sy = 0.24 + Math.sin(ang) * rad * 0.85;
+            } else {
+              // Surrounding nebula field stars
+              const ang = nextRand() * Math.PI * 2;
+              const rad = Math.sqrt(nextRand()) * 0.92;
+              sx = Math.cos(ang) * rad;
+              sy = Math.sin(ang) * rad;
+            }
+            cPos[i * 3]     = sx * pToWorld;
+            cPos[i * 3 + 1] = sy * pToWorld;
+            cPos[i * 3 + 2] = (nextRand() - 0.35) * 0.9;
+            const isBlue = nextRand() < 0.68;
+            cCol[i * 3]     = isBlue ? 0.82 : 1.00;
+            cCol[i * 3 + 1] = isBlue ? 0.94 : 0.86;
+            cCol[i * 3 + 2] = isBlue ? 1.00 : 0.72;
+            cSize[i]        = 4.5 + Math.pow(nextRand(), 2.6) * 5.5;
+            cPhase[i]       = nextRand() * Math.PI * 2;
           }
         }
         cGeo.setAttribute('position', new THREE.BufferAttribute(cPos, 3));
@@ -11790,7 +11772,6 @@
         cGeo.setAttribute('aSize', new THREE.BufferAttribute(cSize, 1));
         cGeo.setAttribute('aPhase', new THREE.BufferAttribute(cPhase, 1));
 
-        // Dedicated astrophotography diffraction-flare star shader for M16's brilliant cluster stars
         const pillarStarMat = new THREE.ShaderMaterial({
           transparent: true,
           depthWrite: false,
@@ -11806,10 +11787,10 @@
             varying float vHero;
             void main() {
               vColor = color;
-              vTwinkle = 0.82 + 0.18 * sin(uTime * 2.6 + aPhase);
-              vHero = smoothstep(12.0, 18.0, aSize);
+              vTwinkle = 0.84 + 0.16 * sin(uTime * 2.6 + aPhase);
+              vHero = step(18.0, aSize);
               vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
-              gl_PointSize = aSize * (34.0 / max(8.0, -mvPos.z)) * (0.90 + 0.20 * vTwinkle);
+              gl_PointSize = aSize * (0.92 + 0.16 * vTwinkle);
               gl_Position = projectionMatrix * mvPos;
             }
           `,
@@ -11818,21 +11799,22 @@
             varying float vTwinkle;
             varying float vHero;
             void main() {
-              vec2 uv = gl_PointCoord - vec2(0.5);
+              vec2 uv = (gl_PointCoord - vec2(0.5)) * 2.0; // -1..+1
               float d = length(uv);
-              if (d > 0.5) discard;
-              float core = exp(-d * d * 42.0);
-              float halo = exp(-d * d * 10.5) * 0.45;
-              // Crisp 4-point primary diffraction spikes + subtle 45-deg secondary flares on bright stars
-              float spikeH = exp(-abs(uv.y) * 52.0) * smoothstep(0.5, 0.0, abs(uv.x));
-              float spikeV = exp(-abs(uv.x) * 52.0) * smoothstep(0.5, 0.0, abs(uv.y));
-              vec2 dUv = vec2(uv.x + uv.y, uv.x - uv.y) * 0.7071;
-              float diagSpikes = (exp(-abs(dUv.y) * 65.0) * smoothstep(0.28, 0.0, abs(dUv.x)) +
-                                  exp(-abs(dUv.x) * 65.0) * smoothstep(0.28, 0.0, abs(dUv.y))) * 0.35;
-              float totalSpikes = (spikeH + spikeV + diagSpikes) * (0.25 + 0.95 * vHero);
-              float alpha = clamp((core * 1.2 + halo + totalSpikes) * vTwinkle, 0.0, 1.0);
-              vec3 starCol = mix(vColor, vec3(1.0), clamp(core * 0.75 + totalSpikes * 0.35, 0.0, 1.0));
-              gl_FragColor = vec4(starCol, alpha);
+              if (d > 1.0) discard;
+              float core = exp(-d * d * (vHero > 0.5 ? 68.0 : 12.0));
+              float halo = vHero > 0.5 ? exp(-d * d * 14.0) * 0.32 : exp(-d * d * 4.5) * 0.25;
+              float spike = 0.0;
+              if (vHero > 0.5) {
+                // Razor-thin 4-point needle diffraction spikes matching the test render
+                float sh = exp(-abs(uv.y) * 22.0) * exp(-abs(uv.x) * 2.4);
+                float sv = exp(-abs(uv.x) * 22.0) * exp(-abs(uv.y) * 2.4);
+                spike = (sh + sv) * 0.78;
+              }
+              float val = clamp((core + halo + spike) * vTwinkle, 0.0, 1.0);
+              if (val < 0.01) discard;
+              vec3 col = mix(vColor, vec3(1.0), clamp(core * 0.8 + spike * 0.35, 0.0, 1.0));
+              gl_FragColor = vec4(col, val);
             }
           `
         });
