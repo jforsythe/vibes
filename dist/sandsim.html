@@ -3398,7 +3398,8 @@
             }
 
           } else if (preset === 'craters') {
-            bedrock[i] = 4.5 + fbm(nx * 4.0 + 9.2, ny * 4.0 + 1.7, 4) * 3.2;
+            // Smooth, gently rolling desert floor around the crater lakes
+            bedrock[i] = 4.6 + fbm(nx * 2.0 + 9.2, ny * 2.0 + 1.7, 2) * 1.05;
             const craters = [
               { cx: -30, cy: -16, r: 28, depth: 8.5, fillWater: true },
               { cx: 26, cy: 18, r: 30, depth: 9.2, fillWater: true },
@@ -3414,13 +3415,16 @@
                   bedrock[i] += (bowl - 1.0) * c.depth;
                 } else {
                   const rim = Math.sin(((dist - 0.85) / 0.5) * Math.PI);
-                  bedrock[i] += rim * (c.depth * 0.48);
-                  if (rim > 0.4) obstacleType[i] = 1;
+                  bedrock[i] += rim * (c.depth * 0.42);
+                  if (rim > 0.48) obstacleType[i] = 1;
                 }
               }
             }
             bedrock[i] = Math.max(0.2, bedrock[i]);
-            sand[i] = 1.4 + fbm(nx * 7, ny * 7, 3) * 1.6;
+            sand[i] = 1.35 + fbm(nx * 2.2, ny * 2.2, 2) * 0.50;
+            // Smooth sweeping crescent dunes in the open desert plains outside the craters
+            seedBarchanAt(x, y, -56, 14, 18, 4.0);
+            seedBarchanAt(x, y, 54, -24, 19, 4.2);
 
             for (const c of craters) {
               const dist = Math.hypot(wx - c.cx, wy - c.cy) / c.r;
@@ -4040,7 +4044,8 @@
 
       for (let i = 0; i < MAX_CELLS; i++) {
         shadow[i] = 0;
-        const canopyHeight = veg[i] > 0.5 ? veg[i] * 1.15 : 0.0;
+        const isDenseJungleCanopy = waterProximity[i] >= 0.38 && veg[i] > 0.8;
+        const canopyHeight = isDenseJungleCanopy ? veg[i] * 0.45 : 0.0;
         sandNext[i] = bedrock[i] + sand[i] + canopyHeight;
       }
 
@@ -4055,7 +4060,8 @@
       for (let y = startY; y !== endY; y += stepY) {
         for (let x = startX; x !== endX; x += stepX) {
           const i = idx(x, y);
-          const totalH = bedrock[i] + sand[i] + (veg[i] > 0.5 ? veg[i] * 1.15 : 0.0);
+          const isDenseJungleCanopy = waterProximity[i] >= 0.38 && veg[i] > 0.8;
+          const totalH = bedrock[i] + sand[i] + (isDenseJungleCanopy ? veg[i] * 0.45 : 0.0);
 
           const upX = clamp(Math.round(x - wx), 0, GRID - 1);
           const upY = clamp(Math.round(y - wy), 0, GRID - 1);
@@ -4155,7 +4161,7 @@
             depX = nx;
             depY = ny;
 
-            if (shadow[ni] > 0.25 || water[ni] > 0.02 || veg[ni] > 0.35) {
+            if (shadow[ni] > 0.25 || water[ni] > 0.02 || (waterProximity[ni] >= 0.38 && veg[ni] > 0.45)) {
               if (veg[ni] > 0 && veg[ni] < 1.8 && pickup > 0.015 * stepScale) {
                 veg[ni] = Math.max(0, veg[ni] - pickup * 0.35);
               }
@@ -4234,8 +4240,9 @@
           const s = sand[i];
           if (s <= 0.001) continue;
 
-          const rootBonus = getRootErosionResistance(veg[i]) * 0.95;
-          const moistureBonus = soilMoisture[i] * 0.30;
+          const isJungleCell = waterProximity[i] >= 0.38;
+          const rootBonus = getRootErosionResistance(veg[i]) * (isJungleCell ? 0.26 : 0.04);
+          const moistureBonus = soilMoisture[i] * (isJungleCell ? 0.22 : 0.10);
           const localMaxDelta = (baseReposeTan + moistureBonus + rootBonus) * CELL_SIZE;
 
           const hCenter = bedrock[i] + s;
@@ -5874,16 +5881,25 @@
       rig.root.scale.setScalar(a.scale);
 
       if (a.type === 'croc') {
-        // --- NILE CROCODILE SKELETAL ANIMATION ---
-        const isSwimming = !isColdSlow && (waterDepth > 0.18);
-        const swimWaveFreq = (mode === 'CHARGE' ? 18.0 : (mode === 'POUNCE' ? 24.0 : (isSwimming ? 9.5 : 6.0))) * (isColdSlow ? 0.25 : 1.0);
-        const swimWaveAmp = mode === 'CHARGE' ? 0.42 : (mode === 'POUNCE' ? 0.55 : (isSwimming ? 0.28 : 0.16));
+        // --- NILE CROCODILE / ALLIGATOR SKELETAL ANIMATION ---
+        const isNightResting = (mode === 'NIGHT_REST');
+        const isRumblingNow = (a.isRumblingTimer || 0) > 0.0;
+        const isSwimming = !isColdSlow && (waterDepth > 0.12 || isNightResting);
+        const swimWaveFreq = isNightResting
+          ? 0.0
+          : (mode === 'CHARGE' ? 18.0 : (mode === 'POUNCE' ? 24.0 : (isSwimming ? 9.5 : 6.0))) * (isColdSlow ? 0.25 : 1.0);
+        const swimWaveAmp = isNightResting
+          ? 0.0
+          : (mode === 'CHARGE' ? 0.42 : (mode === 'POUNCE' ? 0.55 : (isSwimming ? 0.28 : 0.16)));
 
         let bodyY = rig.baseBodyY;
         let bodyPitch = 0;
-        let bodyRoll = -a.turnRate * 0.18;
+        let bodyRoll = isNightResting ? 0 : (-a.turnRate * 0.18);
 
-        if (mode === 'STALK' && isSwimming) {
+        if (isNightResting) {
+          const rumbleVib = isRumblingNow ? Math.sin(time * 34.0) * 0.012 : 0.0;
+          bodyY = rig.baseBodyY - 0.10 + Math.sin(time * 1.4 + a.phase) * 0.006 + rumbleVib;
+        } else if (mode === 'STALK' && isSwimming) {
           bodyY = rig.baseBodyY - 0.10;
         } else if (mode === 'POUNCE') {
           const pNorm = clamp(a.pounceTimer / 0.55, 0, 1);
@@ -5897,32 +5913,42 @@
         }
 
         rig.bodyPivot.position.y = bodyY;
-        rig.bodyPivot.rotation.set(bodyPitch, Math.sin(time * swimWaveFreq + a.phase) * 0.06, bodyRoll);
+        rig.bodyPivot.rotation.set(
+          bodyPitch,
+          isNightResting ? 0 : (Math.sin(time * swimWaveFreq + a.phase) * 0.06),
+          bodyRoll
+        );
 
         for (let s = 0; s < rig.tail.length; s++) {
           const seg = rig.tail[s];
-          const wave = Math.sin(time * swimWaveFreq - s * 0.85 + a.phase);
-          seg.rotation.y = wave * swimWaveAmp * (1.0 + s * 0.22);
+          if (isNightResting) {
+            seg.rotation.y = 0;
+          } else {
+            const wave = Math.sin(time * swimWaveFreq - s * 0.85 + a.phase);
+            seg.rotation.y = wave * swimWaveAmp * (1.0 + s * 0.22);
+          }
         }
 
-        let jawOpen = 0.04;
-        let headYaw = clamp(a.lookYawOffset || 0, -0.45, 0.45);
-        let headPitch = 0;
-        if (mode === 'STALK') {
-          jawOpen = 0.08;
-        } else if (mode === 'CHARGE') {
-          jawOpen = 0.38 + Math.sin(time * 12.0) * 0.10;
-        } else if (mode === 'POUNCE') {
-          const pNorm = clamp(a.pounceTimer / 0.55, 0, 1);
-          jawOpen = pNorm < 0.65 ? 0.72 : 0.05;
-          headPitch = -0.18;
-        } else if (mode === 'FEAST') {
-          if (a.huntCooldown > 6.5) {
-            jawOpen = 0.15 + Math.abs(Math.sin(time * 14.0)) * 0.35;
-            headYaw = Math.sin(time * 18.0) * 0.28;
-          } else {
-            jawOpen = 0.42;
-            headPitch = -0.14;
+        let jawOpen = isRumblingNow ? (0.14 + Math.sin(time * 32.0) * 0.04) : 0.03;
+        let headYaw = isNightResting ? 0 : clamp(a.lookYawOffset || 0, -0.45, 0.45);
+        let headPitch = isRumblingNow ? -0.06 : 0;
+        if (!isNightResting) {
+          if (mode === 'STALK') {
+            jawOpen = 0.08;
+          } else if (mode === 'CHARGE') {
+            jawOpen = 0.38 + Math.sin(time * 12.0) * 0.10;
+          } else if (mode === 'POUNCE') {
+            const pNorm = clamp(a.pounceTimer / 0.55, 0, 1);
+            jawOpen = pNorm < 0.65 ? 0.72 : 0.05;
+            headPitch = -0.18;
+          } else if (mode === 'FEAST') {
+            if (a.huntCooldown > 6.5) {
+              jawOpen = 0.15 + Math.abs(Math.sin(time * 14.0)) * 0.35;
+              headYaw = Math.sin(time * 18.0) * 0.28;
+            } else {
+              jawOpen = 0.42;
+              headPitch = -0.14;
+            }
           }
         }
         rig.neckPivot.rotation.set(headPitch, headYaw, 0);
@@ -5930,7 +5956,7 @@
         rig.jawPivot.rotation.x = jawOpen * 0.75;
 
         const { fl, fr, rl, rr } = rig.legs;
-        if (isSwimming && mode !== 'FEAST') {
+        if ((isSwimming && mode !== 'FEAST') || isNightResting) {
           fl.hipPivot.rotation.set(0.75, -0.35, 0);
           fr.hipPivot.rotation.set(0.75,  0.35, 0);
           rl.hipPivot.rotation.set(0.80, -0.35, 0);
@@ -5945,16 +5971,34 @@
         return;
       }
 
-      // --- FELINE APEX PREDATOR SKELETAL ANIMATION (DESERT LION & RAINFOREST JAGUAR) ---
+      // --- FELINE APEX PREDATOR SKELETAL ANIMATION (DESERT LION & RAINFOREST JAGUAR / CHEETAH) ---
       const { fl, fr, rl, rr } = rig.legs;
       let bodyY = rig.baseBodyY;
       let spinePitch = 0;
-      let bankRoll = clamp(-a.turnRate * 0.32, -0.35, 0.35);
-      let headYaw = clamp(a.lookYawOffset || 0, -0.65, 0.65);
+      let bankRoll = mode === 'NIGHT_REST' ? 0 : clamp(-a.turnRate * 0.32, -0.35, 0.35);
+      let headYaw = mode === 'NIGHT_REST' ? 0 : clamp(a.lookYawOffset || 0, -0.65, 0.65);
       let headPitch = 0;
       let jawOpen = 0.03;
 
-      if (mode === 'PROWL') {
+      if (mode === 'NIGHT_REST') {
+        // Calm motionless sphinx resting posture under a tree at night
+        const breath = Math.sin(time * 2.0 + a.phase) * 0.014;
+        bodyY = rig.baseBodyY - 0.36 + breath;
+        spinePitch = 0.0;
+        headPitch = -0.04;
+        headYaw = 0.0;
+        jawOpen = 0.02;
+
+        fl.hipPivot.rotation.x = -0.75; fl.kneePivot.rotation.x = 1.25;
+        fr.hipPivot.rotation.x = -0.75; fr.kneePivot.rotation.x = 1.25;
+        rl.hipPivot.rotation.x = -0.65; rl.kneePivot.rotation.x = 1.35;
+        rr.hipPivot.rotation.x = -0.65; rr.kneePivot.rotation.x = 1.35;
+
+        rig.tail[0].rotation.set(-0.25, 0, 0);
+        rig.tail[1].rotation.set(0.15, 0, 0);
+        rig.tail[2].rotation.set(0.10, 0, 0);
+
+      } else if (mode === 'PROWL') {
         const walkPhase = animTime * 6.2 + a.phase;
         const strideAmp = 0.48;
         bodyY = rig.baseBodyY + Math.abs(Math.sin(walkPhase * 2.0)) * 0.04;
@@ -6563,12 +6607,139 @@
           }
         }
 
-        // --- 5-STAGE APEX PREDATOR MOVEMENT & HUNTING CHOREOGRAPHY (PROWL -> STALK -> CHARGE -> POUNCE -> FEAST) ---
+        // --- 5-STAGE APEX PREDATOR MOVEMENT & HUNTING CHOREOGRAPHY (PROWL -> STALK -> CHARGE -> POUNCE -> FEAST + NIGHT_REST) ---
         let isChasingPrey = false;
         let apexSpeedMult = 1.0;
         const isApex = (a.type === 'jaguar' || a.type === 'lion' || a.type === 'croc');
         if (isApex) {
-          if (a.huntCooldown > 0) {
+          // At night:
+          // - Alligators/Crocodiles ('croc') sit still in the water
+          // - Lions ('lion') and Cheetahs/Jaguars ('jaguar') sit still under trees
+          if (isNightTime && !isLavaHazardAhead && !isInMoltenLava) {
+            isChasingPrey = false;
+            a.huntCooldown = 0;
+            a.stalkTimer = 0;
+            a.pounceTimer = 0;
+            a.lookYawOffset = 0;
+            a.turnRate = 0;
+
+            if (a.type === 'croc') {
+              if (waterDepth >= 0.07) {
+                // In the water at night -> sit completely still!
+                a.apexPhase = 'NIGHT_REST';
+                apexSpeedMult = 0.0;
+              } else {
+                // Find the nearest water pool and place/move the alligator into the water so it sits still in water at night
+                let bestWaterI = -1;
+                let bestWaterD2 = 999999;
+                for (let wy = 4; wy < GRID - 4; wy += 2) {
+                  for (let wx = 4; wx < GRID - 4; wx += 2) {
+                    const ci = idx(wx, wy);
+                    if (water[ci] >= 0.14 && lavaFrac[ci] < 0.15) {
+                      const candX = ((wx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+                      const candZ = ((wy / (GRID - 1)) - 0.5) * WORLD_SIZE;
+                      const d2 = (candX - a.x) * (candX - a.x) + (candZ - a.z) * (candZ - a.z);
+                      if (d2 < bestWaterD2) {
+                        bestWaterD2 = d2;
+                        bestWaterI = ci;
+                      }
+                    }
+                  }
+                }
+                if (bestWaterI !== -1) {
+                  const wgx = bestWaterI % GRID;
+                  const wgy = Math.floor(bestWaterI / GRID);
+                  const targetWx = ((wgx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+                  const targetWz = ((wgy / (GRID - 1)) - 0.5) * WORLD_SIZE;
+                  if (bestWaterD2 > 64.0) {
+                    a.x = targetWx;
+                    a.z = targetWz;
+                    a.apexPhase = 'NIGHT_REST';
+                    apexSpeedMult = 0.0;
+                  } else {
+                    steerToward(Math.atan2(targetWx - a.x, targetWz - a.z), 10.0);
+                    a.apexPhase = 'PROWL';
+                    apexSpeedMult = 0.85;
+                  }
+                } else {
+                  a.apexPhase = 'NIGHT_REST';
+                  apexSpeedMult = 0.0;
+                }
+              }
+            } else {
+              // Lion ('lion') or Cheetah/Jaguar ('jaguar') -> rest under a tree sitting still at night!
+              let validTree = false;
+              if (a.nightTreePos) {
+                const tci = idx(a.nightTreePos.gx, a.nightTreePos.gz);
+                if (veg[tci] >= 1.1 && water[tci] < 0.04 && lavaFrac[tci] < 0.15 && grassMask[tci] === 0) {
+                  validTree = true;
+                }
+              }
+              if (!validTree) {
+                let bestTreeI = -1;
+                let bestTreeScore = -999999;
+                for (let ty = 3; ty < GRID - 3; ty++) {
+                  for (let tx = 3; tx < GRID - 3; tx++) {
+                    const ci = idx(tx, ty);
+                    const vHere = veg[ci];
+                    if (vHere < 1.2 || water[ci] >= 0.035 || lavaFrac[ci] >= 0.15 || grassMask[ci] === 1) continue;
+                    const candX = ((tx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+                    const candZ = ((ty / (GRID - 1)) - 0.5) * WORLD_SIZE;
+                    const dist = Math.hypot(candX - a.x, candZ - a.z);
+                    // Prefer tall trees / saguaros (vHere >= 2.15) in the cat's preferred biome
+                    const heightBonus = vHere >= 2.15 ? 45.0 : 12.0;
+                    const biomeMatch = (a.type === 'jaguar' && waterProximity[ci] >= 0.35)
+                      ? 25.0
+                      : ((a.type === 'lion' && waterProximity[ci] < 0.55) ? 20.0 : 0.0);
+                    const score = heightBonus + biomeMatch - dist * 0.85;
+                    if (score > bestTreeScore) {
+                      bestTreeScore = score;
+                      bestTreeI = ci;
+                    }
+                  }
+                }
+                if (bestTreeI !== -1) {
+                  const tgx = bestTreeI % GRID;
+                  const tgy = Math.floor(bestTreeI / GRID);
+                  const treeWx = ((tgx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+                  const treeWz = ((tgy / (GRID - 1)) - 0.5) * WORLD_SIZE;
+                  const offsetAng = a.phase;
+                  a.nightTreePos = {
+                    gx: tgx,
+                    gz: tgy,
+                    wx: clamp(treeWx + Math.cos(offsetAng) * 0.82, -halfBound, halfBound),
+                    wz: clamp(treeWz + Math.sin(offsetAng) * 0.82, -halfBound, halfBound)
+                  };
+                  validTree = true;
+                }
+              }
+
+              if (validTree && a.nightTreePos) {
+                const distToTree = Math.hypot(a.x - a.nightTreePos.wx, a.z - a.nightTreePos.wz);
+                if (distToTree <= 1.25) {
+                  // Under the tree -> sit completely still!
+                  a.apexPhase = 'NIGHT_REST';
+                  apexSpeedMult = 0.0;
+                } else if (distToTree > 10.0) {
+                  // Snap under the nearest tree when night begins so lions & cheetahs are immediately resting under trees
+                  a.x = a.nightTreePos.wx;
+                  a.z = a.nightTreePos.wz;
+                  a.apexPhase = 'NIGHT_REST';
+                  apexSpeedMult = 0.0;
+                } else {
+                  steerToward(Math.atan2(a.nightTreePos.wx - a.x, a.nightTreePos.wz - a.z), 9.0);
+                  a.apexPhase = 'PROWL';
+                  apexSpeedMult = 0.75;
+                }
+              } else {
+                // No trees on map -> still sit still in place at night
+                a.apexPhase = 'NIGHT_REST';
+                apexSpeedMult = 0.0;
+              }
+            }
+          } else {
+            a.nightTreePos = null;
+            if (a.huntCooldown > 0) {
             a.huntCooldown = Math.max(0, a.huntCooldown - dt);
             a.apexPhase = a.huntCooldown > 0 ? 'FEAST' : 'PROWL';
             a.stalkTimer = 0;
@@ -6646,6 +6817,7 @@
               a.lookYawOffset = 0;
               apexSpeedMult = 1.0;
             }
+          }
           }
         }
 
@@ -6739,42 +6911,70 @@
           a.y = Math.min(waterSurfaceY - ceilingOffset, targetY);
 
         } else if (a.type === 'croc') {
+          // Periodic deep sub-bass alligator / crocodile low rumble sound effect!
+          a.isRumblingTimer = Math.max(0.0, (a.isRumblingTimer || 0.0) - dt);
+          a.rumbleTimer = (a.rumbleTimer !== undefined ? a.rumbleTimer : (2.5 + Math.random() * 5.0)) - dt;
+          if (a.rumbleTimer <= 0.0) {
+            a.rumbleTimer = 7.0 + Math.random() * 6.5;
+            a.isRumblingTimer = 1.9;
+            if (typeof playCrocLowRumbleSound === 'function') {
+              playCrocLowRumbleSound(a.x, a.y, a.z);
+            }
+          }
+
           if (isLavaHazardAhead || isInMoltenLava || probeH.localLava > 0.12) {
             steerToHighDryGround(14.5);
+          } else if (a.apexPhase === 'NIGHT_REST') {
+            // Sitting completely still in the water at night
+            a.turnRate = 0;
           } else if (probeH.waterDepth < 0.02 && waterProximity[pIdx] < 0.65) {
             a.heading += 1.8 * coldSpeedMult * dt;
           } else if (!isChasingPrey) {
             a.heading += a.turnRate * dt * 0.9 * coldSpeedMult;
           }
-          a.x += Math.sin(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
-          a.z += Math.cos(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
-          // When lake water freezes hard, crocodiles crawl on top of the hard ice sheet!
-          a.y = isHardIceSurface ? waterSurfaceY : (waterDepth > 0.25 ? (waterSurfaceY - 0.18) : groundY);
+          if (a.apexPhase !== 'NIGHT_REST' || isLavaHazardAhead || isInMoltenLava) {
+            a.x += Math.sin(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
+            a.z += Math.cos(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
+          }
+          // When lake water freezes hard, crocodiles crawl on top of the hard ice sheet; at night or in water, float low in the water!
+          a.y = isHardIceSurface ? waterSurfaceY : (waterDepth > 0.07 ? (waterSurfaceY - 0.18) : groundY);
 
         } else if (a.type === 'jaguar') {
           const pWp = waterProximity[pIdx];
           if (isLavaHazardAhead || isInHazardousWetArea || probeEffWater > fleeThreshold) {
             steerToHighDryGround(14.5);
+          } else if (a.apexPhase === 'NIGHT_REST') {
+            a.turnRate = 0;
           } else if (pWp < 0.22 || obstacleType[pIdx] === 2) {
             a.heading += 1.8 * coldSpeedMult * dt;
           } else if (!isChasingPrey) {
             a.heading += a.turnRate * dt * 0.85 * coldSpeedMult;
           }
-          a.x += Math.sin(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
-          a.z += Math.cos(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
-          a.y = walkSurfaceY + Math.abs(Math.sin(time * 10.0 * coldSpeedMult + a.phase)) * 0.14 * coldSpeedMult;
+          if (a.apexPhase !== 'NIGHT_REST' || isLavaHazardAhead || isInHazardousWetArea) {
+            a.x += Math.sin(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
+            a.z += Math.cos(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
+            a.y = walkSurfaceY + Math.abs(Math.sin(time * 10.0 * coldSpeedMult + a.phase)) * 0.14 * coldSpeedMult;
+          } else {
+            a.y = walkSurfaceY;
+          }
 
         } else if (a.type === 'lion') {
           if (isLavaHazardAhead || isInHazardousWetArea || probeEffWater > fleeThreshold) {
             steerToHighDryGround(14.5);
+          } else if (a.apexPhase === 'NIGHT_REST') {
+            a.turnRate = 0;
           } else if (obstacleType[pIdx] === 2 || (probeH.groundY - groundY) > 1.8) {
             a.heading += 1.8 * coldSpeedMult * dt;
           } else if (!isChasingPrey) {
             a.heading += a.turnRate * dt * 0.75 * coldSpeedMult;
           }
-          a.x += Math.sin(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
-          a.z += Math.cos(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
-          a.y = walkSurfaceY + Math.abs(Math.sin(time * 9.5 * coldSpeedMult + a.phase)) * 0.15 * coldSpeedMult;
+          if (a.apexPhase !== 'NIGHT_REST' || isLavaHazardAhead || isInHazardousWetArea) {
+            a.x += Math.sin(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
+            a.z += Math.cos(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
+            a.y = walkSurfaceY + Math.abs(Math.sin(time * 9.5 * coldSpeedMult + a.phase)) * 0.15 * coldSpeedMult;
+          } else {
+            a.y = walkSurfaceY;
+          }
 
         } else if (a.type === 'flamingo') {
           const pWp = waterProximity[pIdx];
@@ -8936,53 +9136,161 @@
       crackGain.connect(outBus);
       crackSrc.start(clapStart, Math.random() * 0.8, 0.28);
 
-      // B. Loud Chest-Rattling Sub-Bass Thunder Clap Shockwave
+      // B. Loud Chest-Rattling Sub-Bass Thunder Clap Shockwave + Long 5.5s Sub-Bass Rolling Rumble
       const subOsc = ctx.createOscillator();
       subOsc.type = 'triangle';
       subOsc.frequency.setValueAtTime(118 + Math.random() * 18, clapStart);
-      subOsc.frequency.exponentialRampToValueAtTime(36, clapStart + 0.28);
-      subOsc.frequency.exponentialRampToValueAtTime(21, clapStart + 0.85);
+      subOsc.frequency.exponentialRampToValueAtTime(38, clapStart + 0.32);
+      subOsc.frequency.linearRampToValueAtTime(52, clapStart + 1.15);
+      subOsc.frequency.linearRampToValueAtTime(31, clapStart + 2.40);
+      subOsc.frequency.linearRampToValueAtTime(42, clapStart + 3.60);
+      subOsc.frequency.exponentialRampToValueAtTime(20, clapStart + 5.60);
       const subGain = ctx.createGain();
       subGain.gain.setValueAtTime(0.0001, now);
       subGain.gain.setValueAtTime(0.001, clapStart);
       subGain.gain.linearRampToValueAtTime(0.84 * clapGainScale, clapStart + 0.010);
-      subGain.gain.exponentialRampToValueAtTime(0.32 * clapGainScale, clapStart + 0.24);
-      subGain.gain.exponentialRampToValueAtTime(0.0001, clapStart + 0.90);
+      subGain.gain.exponentialRampToValueAtTime(0.28 * clapGainScale, clapStart + 0.30);
+      subGain.gain.linearRampToValueAtTime(0.36 * clapGainScale, clapStart + 1.10);
+      subGain.gain.exponentialRampToValueAtTime(0.16 * clapGainScale, clapStart + 2.20);
+      subGain.gain.linearRampToValueAtTime(0.24 * clapGainScale, clapStart + 3.45);
+      subGain.gain.exponentialRampToValueAtTime(0.0001, clapStart + 5.65);
       subOsc.connect(subGain);
       subGain.connect(outBus);
       subOsc.start(clapStart);
-      subOsc.stop(clapStart + 0.92);
+      subOsc.stop(clapStart + 5.70);
 
-      // C. Loud Broadband Thunder Boom + 2.3-Second Multi-Peak Rolling After-Rumble
+      // C. Loud Broadband Thunder Boom + Long 6.6-Second Multi-Wave Rolling Canyon After-Rumble
+      const rumbleDur = 6.6;
       const rumbleSrc = ctx.createBufferSource();
       rumbleSrc.buffer = pinkNoiseBuffer;
+      rumbleSrc.loop = true;
       const rumbleLP = ctx.createBiquadFilter();
       rumbleLP.type = 'lowpass';
       rumbleLP.frequency.setValueAtTime(980, clapStart);
-      rumbleLP.frequency.exponentialRampToValueAtTime(165, clapStart + 0.35);
-      rumbleLP.frequency.exponentialRampToValueAtTime(62, clapStart + 2.25);
-      rumbleLP.Q.setValueAtTime(1.6, clapStart);
+      rumbleLP.frequency.exponentialRampToValueAtTime(185, clapStart + 0.38);
+      rumbleLP.frequency.linearRampToValueAtTime(145, clapStart + 1.25);
+      rumbleLP.frequency.linearRampToValueAtTime(105, clapStart + 2.60);
+      rumbleLP.frequency.linearRampToValueAtTime(125, clapStart + 3.85);
+      rumbleLP.frequency.exponentialRampToValueAtTime(46, clapStart + rumbleDur);
+      rumbleLP.Q.setValueAtTime(1.85, clapStart);
 
       const rumbleGain = ctx.createGain();
       rumbleGain.gain.setValueAtTime(0.0001, now);
       rumbleGain.gain.setValueAtTime(0.001, clapStart);
       // Initial loud thunder clap blast
       rumbleGain.gain.linearRampToValueAtTime(0.92 * clapGainScale, clapStart + 0.012);
-      rumbleGain.gain.exponentialRampToValueAtTime(0.28 * clapGainScale, clapStart + 0.24);
-      // 1st canyon echo roll (+0.34s)
-      rumbleGain.gain.linearRampToValueAtTime(0.48 * clapGainScale, clapStart + 0.36);
-      rumbleGain.gain.exponentialRampToValueAtTime(0.18 * clapGainScale, clapStart + 0.72);
-      // 2nd distant horizon roll (+0.92s)
-      rumbleGain.gain.linearRampToValueAtTime(0.30 * clapGainScale, clapStart + 0.95);
-      rumbleGain.gain.exponentialRampToValueAtTime(0.0001, clapStart + 2.30);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.30 * clapGainScale, clapStart + 0.28);
+      // 1st canyon echo roll (+0.42s)
+      rumbleGain.gain.linearRampToValueAtTime(0.54 * clapGainScale, clapStart + 0.44);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.22 * clapGainScale, clapStart + 0.92);
+      // 2nd rolling thunder wave (+1.25s)
+      rumbleGain.gain.linearRampToValueAtTime(0.44 * clapGainScale, clapStart + 1.28);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.18 * clapGainScale, clapStart + 2.05);
+      // 3rd deep cloud-to-canyon roll (+2.55s)
+      rumbleGain.gain.linearRampToValueAtTime(0.34 * clapGainScale, clapStart + 2.60);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.14 * clapGainScale, clapStart + 3.55);
+      // 4th distant horizon thunder roll (+4.05s)
+      rumbleGain.gain.linearRampToValueAtTime(0.25 * clapGainScale, clapStart + 4.10);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.09 * clapGainScale, clapStart + 5.15);
+      // 5th lingering deep horizon rumble tail (+5.40s -> +6.60s)
+      rumbleGain.gain.linearRampToValueAtTime(0.14 * clapGainScale, clapStart + 5.45);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.0001, clapStart + rumbleDur);
 
       rumbleSrc.connect(rumbleLP);
       rumbleLP.connect(rumbleGain);
       rumbleGain.connect(outBus);
-      rumbleSrc.start(clapStart, Math.random() * 0.2, 2.35);
+      rumbleSrc.start(clapStart, Math.random() * 1.2);
+      rumbleSrc.stop(clapStart + rumbleDur + 0.05);
 
       rumbleSrc.onended = () => {
         activeThunderClapVoices = Math.max(0, activeThunderClapVoices - 1);
+      };
+    }
+
+    // 4B. Very Low Guttural Alligator / Crocodile Sub-Bass Rumble & Water-Vibrating Bellow (32 - 64 Hz)
+    let activeCrocRumbleVoices = 0;
+    let lastCrocRumbleMs = 0;
+    function playCrocLowRumbleSound(wx, wy, wz) {
+      if (!params.audioEnabled || activeCrocRumbleVoices >= 2) return;
+      const nowMs = performance.now();
+      if (nowMs - lastCrocRumbleMs < 2400) return;
+
+      _audioTmpVec.set(wx, wy, wz);
+      const dist = camera.position.distanceTo(_audioTmpVec);
+      if (dist > 165.0) return;
+
+      const ctx = ensureAudioContext();
+      if (!ctx || !pinkNoiseBuffer) return;
+
+      lastCrocRumbleMs = nowMs;
+      activeCrocRumbleVoices++;
+      const now = ctx.currentTime;
+      const { distGain, pan } = computeWorldAudioSpatial(wx, wy, wz);
+      const outBus = createSpatialPanner(ctx, pan);
+      const rumbleDur = 2.15 + Math.random() * 0.55;
+
+      // Deep guttural vocal-cord sawtooth (42 -> 54 -> 33 Hz) + sub-octave water-vibration sine (21 -> 27 -> 17 Hz)
+      const baseHz = 40 + Math.random() * 7;
+      const growlOsc = ctx.createOscillator();
+      growlOsc.type = 'sawtooth';
+      growlOsc.frequency.setValueAtTime(baseHz * 0.90, now);
+      growlOsc.frequency.linearRampToValueAtTime(baseHz * 1.25, now + rumbleDur * 0.38);
+      growlOsc.frequency.exponentialRampToValueAtTime(baseHz * 0.78, now + rumbleDur);
+
+      const subOsc = ctx.createOscillator();
+      subOsc.type = 'triangle';
+      subOsc.frequency.setValueAtTime(baseHz * 0.50, now);
+      subOsc.frequency.linearRampToValueAtTime(baseHz * 0.64, now + rumbleDur * 0.38);
+      subOsc.frequency.exponentialRampToValueAtTime(baseHz * 0.42, now + rumbleDur);
+
+      // Slow 15 Hz guttural throat-rattle pulse LFO
+      const rattleLfo = ctx.createOscillator();
+      rattleLfo.type = 'sine';
+      rattleLfo.frequency.setValueAtTime(14 + Math.random() * 4, now);
+      const rattleFmGain = ctx.createGain();
+      rattleFmGain.gain.setValueAtTime(11.0, now);
+      rattleLfo.connect(rattleFmGain);
+      rattleFmGain.connect(growlOsc.frequency);
+
+      // Deep resonant low-pass chest & water-cavity filter (110 Hz, Q = 2.8)
+      const chestLP = ctx.createBiquadFilter();
+      chestLP.type = 'lowpass';
+      chestLP.frequency.setValueAtTime(92, now);
+      chestLP.frequency.linearRampToValueAtTime(128, now + rumbleDur * 0.42);
+      chestLP.frequency.exponentialRampToValueAtTime(64, now + rumbleDur);
+      chestLP.Q.setValueAtTime(2.8, now);
+
+      // Subtle low-pass pink noise breath/water-bubble vibration layer
+      const noiseSrc = ctx.createBufferSource();
+      noiseSrc.buffer = pinkNoiseBuffer;
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.32, now);
+      noiseSrc.connect(noiseGain);
+      noiseGain.connect(chestLP);
+
+      const envGain = ctx.createGain();
+      const peakVol = 0.36 * clamp(distGain * 1.15, 0.30, 0.95);
+      envGain.gain.setValueAtTime(0.0001, now);
+      envGain.gain.linearRampToValueAtTime(peakVol, now + 0.32);
+      envGain.gain.setValueAtTime(peakVol * 0.92, now + rumbleDur * 0.62);
+      envGain.gain.exponentialRampToValueAtTime(0.0001, now + rumbleDur);
+
+      growlOsc.connect(chestLP);
+      subOsc.connect(chestLP);
+      chestLP.connect(envGain);
+      envGain.connect(outBus);
+
+      growlOsc.start(now);
+      subOsc.start(now);
+      rattleLfo.start(now);
+      noiseSrc.start(now, Math.random() * 0.3, rumbleDur);
+
+      growlOsc.stop(now + rumbleDur + 0.04);
+      subOsc.stop(now + rumbleDur + 0.04);
+      rattleLfo.stop(now + rumbleDur + 0.04);
+
+      growlOsc.onended = () => {
+        activeCrocRumbleVoices = Math.max(0, activeCrocRumbleVoices - 1);
       };
     }
 
