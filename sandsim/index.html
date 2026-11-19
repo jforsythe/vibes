@@ -7387,7 +7387,7 @@
           if (a.type === 'bat' && isNightTime && typeof placedWorldItems !== 'undefined') {
             for (let k = 0; k < placedWorldItems.length; k++) {
               const it = placedWorldItems[k];
-              if (it.type === 'item-lantern' && (it.mothsActive || (it.nightLitDuration || 0) >= 4.5)) {
+              if (it.type === 'item-lantern' && it.mothsActive && (it.mothSupply || 0) > 0.05) {
                 // World position of the hanging lantern globe
                 const lx = it.x + Math.cos(it.yaw) * 1.02;
                 const lz = it.z - Math.sin(it.yaw) * 1.02;
@@ -7404,20 +7404,29 @@
           let targetAlt = groundY + (a.type === 'bat' ? 4.4 : 4.8) + Math.sin(time * (a.type === 'bat' ? 3.2 : 2.1) + a.phase) * 1.8;
 
           if (swoopingLantern) {
-            // Bats are attracted to the moths fluttering around lit lanterns and swoop in to catch them!
+            // Bats are attracted to the moths fluttering around lit lanterns and swoop in to catch & deplete them!
             const angleToLantern = Math.atan2(swoopingLantern.lx - a.x, swoopingLantern.lz - a.z);
-            if (swoopDist > 3.4) {
+            if (swoopDist > 3.6) {
               steerToward(angleToLantern, 4.8);
               batSpeedMult = 1.18;
               // Begin descending into an attack dive as the bat approaches the lantern
-              const diveBlend = clamp(1.0 - (swoopDist - 3.4) / 18.0, 0.0, 1.0);
+              const diveBlend = clamp(1.0 - (swoopDist - 3.6) / 18.0, 0.0, 1.0);
               targetAlt = targetAlt * (1.0 - diveBlend) + (swoopingLantern.ly + 0.35 + Math.sin(time * 7.5 + a.phase) * 0.45) * diveBlend;
             } else {
-              // Tight acrobatic moth-catching swoop right around the hanging lantern globe!
+              // Tight acrobatic moth-catching swoop right around the hanging lantern globe — eats & depletes the moths!
               const orbitTangent = angleToLantern + Math.PI * 0.42;
               steerToward(orbitTangent, 7.5);
               batSpeedMult = 1.28;
               targetAlt = swoopingLantern.ly + Math.sin(time * 9.0 + a.phase) * 0.42;
+              const lan = swoopingLantern.it;
+              lan.mothSupply = Math.max(0.0, (lan.mothSupply || 0.0) - dt * 1.25);
+              if (lan.mothSupply <= 0.05) {
+                // Bats ate all the moths! Start a random cooldown (10 to 24 seconds) before the lantern attracts moths again!
+                lan.mothSupply = 0.0;
+                lan.mothsActive = false;
+                lan.mothSpawning = false;
+                lan.mothCooldown = 10.0 + Math.random() * 14.0;
+              }
             }
           } else if (waterProximity[pIdx] < 0.25) {
             a.heading += 1.5 * dt;
@@ -10524,8 +10533,10 @@
         spurtStrength: 0.85 + Math.random() * 0.90,
         // For Animal Feeder: food supply (1.0 -> 0.0) that depletes as animals eat and disappears when empty!
         foodRemaining: 1.0,
-        // For Lantern: tracks how long it has been lit at night so moths eventually gather around it and attract bats!
-        nightLitDuration: 0.0,
+        // For Lantern: moth swarm state — moths gather after a random cooldown, bats swoop in to deplete them, triggering a new random cooldown!
+        mothCooldown: 3.5 + Math.random() * 4.5,
+        mothSupply: 0.0,
+        mothSpawning: true,
         mothsActive: false,
         mesh
       });
@@ -10695,15 +10706,32 @@
               outerHaloSphere.scale.setScalar(pulseScale);
             }
 
-            // After the lantern has been lit at night for ~5 seconds, a small swarm of moths gathers to orbit the glowing lantern!
-            if (!isWeatherTooHarshForMoths) {
-              it.nightLitDuration = (it.nightLitDuration || 0.0) + dt;
-            } else {
-              it.nightLitDuration = Math.max(0.0, (it.nightLitDuration || 0.0) - dt * 2.0);
+            // Lantern Moth Lifecycle:
+            // 1. Wait out random mothCooldown (initial 3.5-8s or post-bat-depletion 10-24s)
+            // 2. Gradually gather up to 5 fluttering moths around the glowing lantern
+            // 3. Swooping bats eat & deplete mothSupply down to 0, triggering a new random cooldown!
+            if (isWeatherTooHarshForMoths) {
+              it.mothSupply = Math.max(0.0, (it.mothSupply || 0.0) - dt * 2.5);
+              if (it.mothSupply <= 0.05) {
+                it.mothSupply = 0.0;
+                it.mothSpawning = false;
+                it.mothCooldown = Math.max(it.mothCooldown || 0.0, 5.0 + Math.random() * 6.0);
+              }
+            } else if ((it.mothCooldown || 0.0) > 0.0) {
+              it.mothCooldown = Math.max(0.0, it.mothCooldown - dt);
+              it.mothSupply = 0.0;
+              if (it.mothCooldown <= 0.0) {
+                it.mothSpawning = true;
+              }
+            } else if (it.mothSpawning) {
+              it.mothSupply = Math.min(5.0, (it.mothSupply || 0.0) + dt * 1.6);
+              if (it.mothSupply >= 4.95) {
+                it.mothSupply = 5.0;
+                it.mothSpawning = false;
+              }
             }
-            const visibleMothCount = it.nightLitDuration >= 4.5
-              ? Math.min(5, Math.floor((it.nightLitDuration - 3.5) * 0.9))
-              : 0;
+
+            const visibleMothCount = Math.min(5, Math.ceil(it.mothSupply || 0.0));
             it.mothsActive = visibleMothCount > 0;
 
             if (mothsGroup && mothAgents) {
@@ -10728,8 +10756,10 @@
               }
             }
           } else {
-            // Daytime: lantern light and nocturnal moths turn off
-            it.nightLitDuration = 0.0;
+            // Daytime: lantern light and nocturnal moths turn off, resetting cooldown for the next nightfall
+            it.mothSupply = 0.0;
+            it.mothSpawning = false;
+            it.mothCooldown = 3.5 + Math.random() * 5.0;
             it.mothsActive = false;
             if (mothsGroup) mothsGroup.visible = false;
             if (haloSphere) haloSphere.visible = false;
