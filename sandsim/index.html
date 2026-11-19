@@ -2963,11 +2963,17 @@
     moonAmbientLight.position.set(-210, 280, -490);
     scene.add(moonAmbientLight);
 
-    // Dynamic Volcanic Lava PointLights (illuminate surrounding dunes, canyon walls, cacti & wildlife with a warm magma glow at night!)
-    const lavaNightLight = new THREE.PointLight(0xff4800, 0.0, 130.0, 1.25);
+    // Dynamic Volcanic Lava PointLights (4 quadrant lights that illuminate surrounding dunes, canyon walls, cacti, trees & wildlife with a warm magma glow!)
+    const lavaNightLight  = new THREE.PointLight(0xff4d00, 0.0, 88.0, 1.18);
     scene.add(lavaNightLight);
-    const lavaNightLight2 = new THREE.PointLight(0xff6a00, 0.0, 110.0, 1.30);
+    const lavaNightLight2 = new THREE.PointLight(0xff6200, 0.0, 88.0, 1.18);
     scene.add(lavaNightLight2);
+    const lavaNightLight3 = new THREE.PointLight(0xff5500, 0.0, 88.0, 1.18);
+    scene.add(lavaNightLight3);
+    const lavaNightLight4 = new THREE.PointLight(0xff6a00, 0.0, 88.0, 1.18);
+    scene.add(lavaNightLight4);
+    const lavaPointLights = [lavaNightLight, lavaNightLight2, lavaNightLight3, lavaNightLight4];
+    const lavaLightBaseIntensities = [0.0, 0.0, 0.0, 0.0];
 
     // ============================================================================
     // 2B. CELESTIAL SKYBOX, DAY/NIGHT CYCLE, MOVING SUN, STARFIELD & FIXED GLOWING MOONS
@@ -3931,8 +3937,8 @@
            float sheerRipple = smoothstep(0.42, 0.75, cellEdgeDist) * (1.0 - fineNoise * 0.7) * 0.18;
            lavaCol = mix(lavaCol, vec3(0.48, 0.04, 0.01), sheerRipple);
 
-           // Self-illuminating emissive radiance: glows brilliantly at night!
-           float emissiveBoost = 1.12 + uNightFactor * 0.88 + slowPulse * 0.16;
+           // Self-illuminating incandescent emissive radiance: glows like a liquid magma light source day & night!
+           float emissiveBoost = 1.42 + uNightFactor * 1.35 + slowPulse * 0.28;
            vec3 finalLavaRGB = lavaCol * emissiveBoost;
 
            float lavaBlend = smoothstep(0.02, 0.40, vLavaMask);
@@ -5568,6 +5574,9 @@
     // ============================================================================
     // 10. FAST TERRAIN & WATER VERTEX SYNC + COMPACTED FLORA INSTANCE PACKING
     // ============================================================================
+    const _lavaGlowBufA = new Float32Array(MAX_CELLS);
+    const _lavaGlowBufB = new Float32Array(MAX_CELLS);
+
     function syncTerrainAndWaterMeshes() {
       const tPos = terrainGeo.attributes.position.array;
       const tNorm = terrainGeo.attributes.normal.array;
@@ -5580,13 +5589,47 @@
 
       let totalW = 0;
       let totalL = 0;
-      let lavaW1 = 0, lavaX1 = 0, lavaY1 = 0, lavaZ1 = 0;
-      let lavaW2 = 0, lavaX2 = 0, lavaY2 = 0, lavaZ2 = 0;
+      const qLavaW = [0, 0, 0, 0];
+      const qLavaX = [0, 0, 0, 0];
+      const qLavaY = [0, 0, 0, 0];
+      const qLavaZ = [0, 0, 0, 0];
       const cellArea = CELL_SIZE * CELL_SIZE;
       const nightFactor = skyUniforms.uNightFactor.value || 0.0;
       const timeNow = uniforms.uTime.value || 0.0;
       const hrNow = ((params.timeOfDay % 24) + 24) % 24;
       const isNightTimeNow = (hrNow >= 18.2 || hrNow < 6.0) || (nightFactor > 0.35);
+
+      // Compute multi-cell Lava Thermal Radiance Halo field (_lavaGlowBufA) around all active molten lava cells
+      let anyLavaOnMap = false;
+      for (let i = 0; i < MAX_CELLS; i++) {
+        const w = water[i];
+        const lf = w > 0.025 ? lavaFrac[i] : 0.0;
+        if (lf >= 0.25) {
+          _lavaGlowBufA[i] = clamp(lf * (0.65 + Math.min(1.0, w / 0.45) * 0.35), 0.0, 1.0);
+          anyLavaOnMap = true;
+        } else {
+          _lavaGlowBufA[i] = 0.0;
+        }
+      }
+      if (anyLavaOnMap) {
+        // 5-pass spatial diffusion (~7.5m radial glow halo casting warm orange-red magma light across surrounding dunes, rocks & walls!)
+        for (let pass = 0; pass < 5; pass++) {
+          const src = (pass % 2 === 0) ? _lavaGlowBufA : _lavaGlowBufB;
+          const dst = (pass % 2 === 0) ? _lavaGlowBufB : _lavaGlowBufA;
+          for (let y = 1; y < GRID - 1; y++) {
+            const row = y * GRID;
+            for (let x = 1; x < GRID - 1; x++) {
+              const ci = row + x;
+              const maxOrth = Math.max(src[ci - 1], src[ci + 1], src[ci - GRID], src[ci + GRID]);
+              const maxDiag = Math.max(src[ci - GRID - 1], src[ci - GRID + 1], src[ci + GRID - 1], src[ci + GRID + 1]);
+              const spread = Math.max(maxOrth * 0.78, maxDiag * 0.68);
+              dst[ci] = Math.max(src[ci], spread);
+            }
+          }
+        }
+        // After 5 passes (odd count), latest result is in _lavaGlowBufB; copy back to _lavaGlowBufA
+        _lavaGlowBufA.set(_lavaGlowBufB);
+      }
 
       // Gather active offroad truck dual headlights once per sync so they project twin beams onto the terrain ahead at night
       const activeTruckHeadlights = [];
@@ -5648,11 +5691,11 @@
             const wx = tPos[i * 3];
             const wz = tPos[i * 3 + 2];
             const wy = b + s + w;
-            if (wx <= 0) {
-              lavaW1 += vol; lavaX1 += wx * vol; lavaY1 += wy * vol; lavaZ1 += wz * vol;
-            } else {
-              lavaW2 += vol; lavaX2 += wx * vol; lavaY2 += wy * vol; lavaZ2 += wz * vol;
-            }
+            const qIdx = (wx > 0 ? 1 : 0) + (wz > 0 ? 2 : 0);
+            qLavaW[qIdx] += vol;
+            qLavaX[qIdx] += wx * vol;
+            qLavaY[qIdx] += wy * vol;
+            qLavaZ[qIdx] += wz * vol;
           } else {
             totalW += vol;
           }
@@ -5797,30 +5840,23 @@
         let tb = bb * (1 - effectiveSandBlend) + sb * effectiveSandBlend;
 
         // Underneath translucent molten lava, make the basin floor glow bright molten red/orange/yellow
-        // so looking through the transparent lava surface reveals deep glowing liquid magma!
-        let nearLava = lf;
+        // so looking through the transparent lava surface reveals deep glowing liquid magma,
+        // AND bathe surrounding sand dunes, rocks, canyon walls & roads in a 7.5m warm volcanic radiance halo!
+        const nearLava = anyLavaOnMap ? _lavaGlowBufA[i] : lf;
         if (w > 0.045 && lf >= 0.30) {
           const lavaDepthHeat = clamp(w / 1.5, 0.0, 1.0);
-          const bedGlow = 0.85 + nightFactor * 0.55;
-          tr = (0.94 + lavaDepthHeat * 0.06) * bedGlow;
-          tg = (0.32 + lavaDepthHeat * 0.46) * bedGlow;
-          tb = (0.02 + lavaDepthHeat * 0.14) * bedGlow;
-        } else {
-          // Shoreline bank adjacent to lava glows with warm volcanic ember light
-          if (i >= GRID && i < MAX_CELLS - GRID) {
-            const nL = (water[i - 1] > 0.04 ? lavaFrac[i - 1] : 0);
-            const nR = (water[i + 1] > 0.04 ? lavaFrac[i + 1] : 0);
-            const nU = (water[i - GRID] > 0.04 ? lavaFrac[i - GRID] : 0);
-            const nD = (water[i + GRID] > 0.04 ? lavaFrac[i + GRID] : 0);
-            nearLava = Math.max(nearLava, Math.max(nL, nR, nU, nD) * 0.85);
-          }
-          if (nearLava > 0.12) {
-            const scorch = clamp(nearLava * 0.65, 0.0, 0.72);
-            const emberGlow = nearLava * (0.35 + nightFactor * 0.78);
-            tr = tr * (1 - scorch) + 0.22 * scorch + emberGlow * 0.92;
-            tg = tg * (1 - scorch) + 0.12 * scorch + emberGlow * 0.30;
-            tb = tb * (1 - scorch) + 0.10 * scorch + emberGlow * 0.04;
-          }
+          const bedGlow = 0.92 + nightFactor * 0.65;
+          tr = (0.98 + lavaDepthHeat * 0.04) * bedGlow;
+          tg = (0.36 + lavaDepthHeat * 0.48) * bedGlow;
+          tb = (0.04 + lavaDepthHeat * 0.16) * bedGlow;
+        } else if (nearLava > 0.03) {
+          // Immediate bank scorch + multi-cell radial glowing magma light across surrounding terrain!
+          const bankScorch = nearLava > 0.52 ? clamp((nearLava - 0.52) * 1.1, 0.0, 0.62) : 0.0;
+          const glowPulse = 0.92 + 0.08 * Math.sin(timeNow * 6.5 + (i % 19) * 0.3);
+          const magmaLight = Math.pow(nearLava, 1.25) * (0.48 + nightFactor * 1.15) * glowPulse;
+          tr = Math.min(1.15, tr * (1 - bankScorch) + 0.22 * bankScorch + magmaLight * 1.00);
+          tg = Math.min(1.05, tg * (1 - bankScorch) + 0.12 * bankScorch + magmaLight * 0.38);
+          tb = Math.min(1.00, tb * (1 - bankScorch) + 0.10 * bankScorch + magmaLight * 0.05);
         }
 
         // Accumulated Snow & Frost Layer on Terrain (higher elevations, leeward drifts & boulders hold snow longer)
@@ -5911,19 +5947,23 @@
       params.totalWaterVol = Math.round(totalW);
       params.totalLavaVol = Math.round(totalL);
 
-      // Update Dynamic Volcanic Lava PointLights (bathes dunes, rocks, flora & wildlife in flickering orange magma light at night!)
-      const lavaFlicker = 0.92 + 0.10 * Math.sin(timeNow * 7.3) + 0.06 * Math.cos(timeNow * 13.1);
-      if (lavaW1 > 1.0) {
-        lavaNightLight.position.set(lavaX1 / lavaW1, (lavaY1 / lavaW1) + 4.5, lavaZ1 / lavaW1);
-        lavaNightLight.intensity = (1.6 + nightFactor * 5.2) * clamp(lavaW1 / 240.0, 0.25, 1.5) * lavaFlicker;
-      } else {
-        lavaNightLight.intensity = 0.0;
-      }
-      if (lavaW2 > 1.0) {
-        lavaNightLight2.position.set(lavaX2 / lavaW2, (lavaY2 / lavaW2) + 4.5, lavaZ2 / lavaW2);
-        lavaNightLight2.intensity = (1.6 + nightFactor * 5.2) * clamp(lavaW2 / 240.0, 0.25, 1.5) * lavaFlicker;
-      } else {
-        lavaNightLight2.intensity = 0.0;
+      // Update 4-Quadrant Dynamic Volcanic Lava PointLights (bathes dunes, rocks, flora, items & wildlife in flickering orange-gold magma light!)
+      for (let q = 0; q < 4; q++) {
+        const qw = qLavaW[q];
+        const ptLight = lavaPointLights[q];
+        if (qw > 0.35) {
+          const lx = qLavaX[q] / qw;
+          const ly = (qLavaY[q] / qw) + 2.4;
+          const lz = qLavaZ[q] / qw;
+          ptLight.position.set(lx, ly, lz);
+          const baseInt = (3.8 + nightFactor * 12.5) * clamp(Math.sqrt(qw / 16.0), 0.52, 2.25);
+          lavaLightBaseIntensities[q] = baseInt;
+          const flk = 0.92 + 0.10 * Math.sin(timeNow * 7.8 + q * 1.7) + 0.06 * Math.cos(timeNow * 13.4 + q * 2.3);
+          ptLight.intensity = baseInt * flk;
+        } else {
+          lavaLightBaseIntensities[q] = 0.0;
+          ptLight.intensity = 0.0;
+        }
       }
 
       // Tint the boundary fluid cross-section skirt orange-red if lava dominates the pools
@@ -20153,12 +20193,20 @@
     }
 
     function updateLavaEmbers(dt) {
+      const time = uniforms.uTime.value;
+      // Continuously flicker the 4 quadrant volcanic lava PointLights whenever molten lava is active on the map
+      for (let q = 0; q < 4; q++) {
+        const baseInt = lavaLightBaseIntensities[q];
+        if (baseInt > 0.01) {
+          const flk = 0.90 + 0.12 * Math.sin(time * 8.2 + q * 1.7) + 0.07 * Math.cos(time * 14.1 + q * 2.3);
+          lavaPointLights[q].intensity = baseInt * flk;
+        }
+      }
       if (params.totalLavaVol < 3) {
         lavaEmberSystem.visible = false;
         return;
       }
       lavaEmberSystem.visible = true;
-      const time = uniforms.uTime.value;
       const nightFactor = skyUniforms.uNightFactor.value || 0.0;
       lavaEmberMat.size = 0.95 + nightFactor * 0.45;
 
