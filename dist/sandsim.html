@@ -1872,6 +1872,42 @@
           <input type="range" id="slider-truck-skid-thresh" min="0.5" max="9.0" step="0.1" value="6.5" title="Lower = tires squeal on gentle corners; Higher = only on hard high-speed turns & drifts" />
         </div>
 
+        <div class="zone-label" style="color:#86efac; margin-top:4px;">
+          <span>⚙️ Physics, Suspension &amp; Handling</span>
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>Suspension Stiffness</span>
+            <span class="control-val" id="val-truck-suspension">60% · Balanced</span>
+          </div>
+          <input type="range" id="slider-truck-suspension" min="10" max="100" step="1" value="60" title="Low = soft plush body lean &amp; deep bounce; High = stiff flat rally suspension" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>Counterweight (Anti-Roll CG)</span>
+            <span class="control-val" id="val-truck-counterweight">85% · Heavy Low CG</span>
+          </div>
+          <input type="range" id="slider-truck-counterweight" min="0" max="100" step="1" value="85" title="High = low center-of-gravity that strongly resists flipping &amp; self-levels in mid-air (100% = Never Flips); Low = top-heavy stunt rollovers" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>Tire Tracking (Lateral Grip)</span>
+            <span class="control-val" id="val-truck-tracking">68% · High Grip</span>
+          </div>
+          <input type="range" id="slider-truck-tracking" min="10" max="100" step="1" value="68" title="Low = loose sideways sand drifting; High = crisp on-rails tire tracking" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>Dune Jump / Air Lift</span>
+            <span class="control-val" id="val-truck-jump-lift">50% · Normal</span>
+          </div>
+          <input type="range" id="slider-truck-jump-lift" min="0" max="100" step="1" value="50" title="0% = Stay glued to ground; 100% = Big air launches off dune crests" />
+        </div>
+
         <div class="zone-label" style="color:#fcd34d; margin-top:4px;">
           <span>🎵 Engine Pitch Tune by Gear</span>
         </div>
@@ -2151,6 +2187,10 @@
       driveMode: false,
       truckSmokeIntensity: 0.60,     // 0.0 (Off) .. 1.0 (Heavy offroad sand & dust rooster-tails)
       truckSkidThreshold: 6.5,       // Cornering/drift threshold before tire squeal triggers (0.5 .. 9.0)
+      truckSuspension: 0.60,         // 0.10 (Soft plush body roll & bounce) .. 1.00 (Stiff flat rally suspension)
+      truckCounterweight: 0.85,      // 0.00 (Top-heavy easy rollover) .. 1.00 (Heavy low-CG anti-roll counterweight, never flips at 1.0)
+      truckTireTracking: 0.68,       // 0.10 (Loose sideways drift) .. 1.00 (Locked-in tire tracking & fast slip recovery)
+      truckJumpLift: 0.50,           // 0.00 (Glued to terrain) .. 1.00 (Big dune-crest air launches)
       truckGear1Tune: 98.0,          // Peak engine pitch in 1st Gear (Hz)
       truckGear2Tune: 108.0,         // Peak engine pitch in 2nd Gear (Hz)
       truckGear3Tune: 114.0,         // Peak engine pitch in 3rd Gear (Hz)
@@ -12207,27 +12247,36 @@
           }
           it.speed = spd;
 
-          // 2. Front Wheel Steering, Yaw & Spacebar Drift Oversteer Physics
+          // 2. Front Wheel Steering, Yaw, Tire Tracking & Spacebar Drift Oversteer Physics
+          const suspStiff = clamp(params.truckSuspension ?? 0.60, 0.10, 1.0);
+          const counterweight = clamp(params.truckCounterweight ?? 0.85, 0.0, 1.0);
+          const tireTracking = clamp(params.truckTireTracking ?? 0.68, 0.10, 1.0);
+          const jumpLift = clamp(params.truckJumpLift ?? 0.50, 0.0, 1.0);
+
           const targetSteer = steerInput * 0.50;
-          it.steerAngle = (it.steerAngle || 0.0) + (targetSteer - (it.steerAngle || 0.0)) * Math.min(1.0, dt * 11.0);
+          it.steerAngle = (it.steerAngle || 0.0) + (targetSteer - (it.steerAngle || 0.0)) * Math.min(1.0, dt * (8.5 + tireTracking * 5.0));
 
           const absSpd = Math.abs(spd);
           const speedDir = spd >= 0.0 ? 1.0 : -1.0;
           let targetSlip = 0.0;
           if (!it.isAirborne && !it.isFlipped) {
             if (isDrifting && absSpd > 2.2) {
-              // Spacebar breaks rear traction and swings the tail out into a wide power-slide drift!
-              targetSlip = steerInput * 0.72 * speedDir;
+              // Spacebar breaks rear traction and swings the tail out into a wide power-slide drift (scaled by inverse tire tracking)
+              const driftSlideFactor = 0.92 - tireTracking * 0.34;
+              targetSlip = steerInput * driftSlideFactor * speedDir;
               it.driftSlipAngle = (it.driftSlipAngle || 0.0) + (targetSlip - (it.driftSlipAngle || 0.0)) * Math.min(1.0, dt * 6.8);
             } else {
-              // High-speed cornering induces noticeable offroad yaw slip; otherwise tires regain grip
+              // High-speed cornering induces offroad yaw slip inversely proportional to Tire Tracking; tires snap back quickly at high tracking
               if (absSpd > 7.5 && Math.abs(it.steerAngle) > 0.14) {
-                targetSlip = steerInput * 0.26 * clamp((absSpd - 7.0) / 13.0, 0.0, 1.0) * speedDir;
+                const looseCornerSlip = (1.12 - tireTracking) * 0.48;
+                targetSlip = steerInput * looseCornerSlip * clamp((absSpd - 7.0) / 13.0, 0.0, 1.0) * speedDir;
               }
-              it.driftSlipAngle = (it.driftSlipAngle || 0.0) + (targetSlip - (it.driftSlipAngle || 0.0)) * Math.min(1.0, dt * 7.8);
+              const recoveryRate = 4.0 + tireTracking * 8.5;
+              it.driftSlipAngle = (it.driftSlipAngle || 0.0) + (targetSlip - (it.driftSlipAngle || 0.0)) * Math.min(1.0, dt * recoveryRate);
             }
             const turnFactor = clamp(absSpd / 7.5, 0.0, 1.25) * (1.0 - clamp(absSpd / 52.0, 0.0, 0.35));
-            const yawRate = (it.steerAngle * 1.92 + (it.driftSlipAngle || 0.0) * (isDrifting ? 1.40 : 0.55)) * turnFactor * speedDir;
+            const steerAuthority = 1.55 + tireTracking * 0.60;
+            const yawRate = (it.steerAngle * steerAuthority + (it.driftSlipAngle || 0.0) * (isDrifting ? 1.40 : 0.55)) * turnFactor * speedDir;
             it.yaw += yawRate * dt;
           } else if (it.isAirborne && !it.isFlipped) {
             // Mid-air yaw control when catching air off a dune!
@@ -12297,18 +12346,23 @@
               it.y = avgWheelGroundY + 0.55;
               it.airPitch = -terrainPitch;
               it.airPitchVel = 0.0;
-              it.airRoll = (it.flipRollDir || 1) * 0.52;
-              it.airRollVel = -(it.flipRollDir || 1) * 2.4;
+              it.airRoll = (it.flipRollDir || 1) * 0.35;
+              it.airRollVel = -(it.flipRollDir || 1) * 1.4;
               it.suspPitch = 0.0;
               it.suspRoll = 0.0;
             }
           } else if (it.isAirborne) {
-            // Airborne Jump Physics: parabolic flight + mid-air pitch & roll!
+            // Airborne Jump Physics: parabolic flight + counterweight self-righting stabilization!
             it.velY = (it.velY || 0.0) - 18.2 * dt;
             it.y = (it.y ?? avgWheelGroundY) + it.velY * dt;
 
-            it.airRollVel = (it.airRollVel || 0.0) - steerInput * 1.45 * dt;
-            it.airPitchVel = (it.airPitchVel || 0.0) + (throttleInput * 0.75 - 0.18) * dt;
+            // Counterweight produces a low-CG self-righting pendulum torque in mid-air that resists barrel-rolling
+            const airSteerRollTorque = -steerInput * (1.55 - counterweight * 1.10);
+            const rightingRollTorque = -(it.airRoll || 0.0) * counterweight * 8.5 - (it.airRollVel || 0.0) * (1.2 + counterweight * 4.8);
+            const rightingPitchTorque = (-(it.airPitch || 0.0) - terrainPitch * 0.5) * counterweight * 6.0 - (it.airPitchVel || 0.0) * (1.2 + counterweight * 4.0);
+
+            it.airRollVel = (it.airRollVel || 0.0) + (airSteerRollTorque + rightingRollTorque) * dt;
+            it.airPitchVel = (it.airPitchVel || 0.0) + ((throttleInput * 0.65 - 0.14) * (1.1 - counterweight * 0.55) + rightingPitchTorque) * dt;
             it.airPitch = clamp((it.airPitch || 0.0) + it.airPitchVel * dt, -1.35, 1.35);
             it.airRoll = (it.airRoll || 0.0) + it.airRollVel * dt;
 
@@ -12320,9 +12374,10 @@
               it.isAirborne = false;
               it.prevGroundVelY = 0.0;
 
-              // Compress suspension spring on landing
-              it.suspY = -clamp(impactVy * 0.038, 0.05, 0.30);
-              it.suspVelY = -impactVy * 0.25;
+              // Compress suspension spring on landing (softer suspension compresses deeper)
+              const compScale = 0.052 - suspStiff * 0.024;
+              it.suspY = -clamp(impactVy * compScale, 0.04, 0.34);
+              it.suspVelY = -impactVy * (0.34 - suspStiff * 0.16);
 
               // Landing sand/dust burst from all 4 tires
               if (!isRoadSurface && waterDepth < 0.08 && (params.truckSmokeIntensity ?? 0.60) > 0.02) {
@@ -12342,17 +12397,24 @@
               }
 
               // Check if awkward landing angle or high-slip sideways touchdown flips the vehicle!
-              const landingRollDelta = Math.abs((it.airRoll || 0.0) - terrainRoll);
-              const landingPitchDelta = Math.abs((it.airPitch || 0.0) + terrainPitch);
-              if (
-                landingRollDelta > 0.76 ||
-                landingPitchDelta > 0.95 ||
-                (impactVy > 3.5 && Math.abs(it.driftSlipAngle || 0.0) > 0.40 && landingRollDelta > 0.32)
-              ) {
-                it.isFlipped = true;
-                it.flipTimer = 0.0;
-                it.flipRollDir = ((it.airRoll || terrainRoll) >= 0 ? 1 : -1);
-                it.flipRollCurrent = it.airRoll || (it.flipRollDir * 0.85);
+              // High Counterweight makes the truck vastly harder to flip on landing (at >= 98% counterweight it never flips!)
+              if (counterweight < 0.98) {
+                const landingRollDelta = Math.abs((it.airRoll || 0.0) - terrainRoll);
+                const landingPitchDelta = Math.abs((it.airPitch || 0.0) + terrainPitch);
+                const rollFlipThreshold = 0.62 + counterweight * 0.95;   // At 85% counterweight: ~1.43 rad (~82 deg!)
+                const pitchFlipThreshold = 0.85 + counterweight * 0.85;  // At 85% counterweight: ~1.57 rad (~90 deg!)
+                const sideImpactRollThresh = 0.30 + counterweight * 0.72;
+                const sideImpactVyThresh = 3.6 + counterweight * 4.8;
+                if (
+                  landingRollDelta > rollFlipThreshold ||
+                  landingPitchDelta > pitchFlipThreshold ||
+                  (impactVy > sideImpactVyThresh && Math.abs(it.driftSlipAngle || 0.0) > 0.48 && landingRollDelta > sideImpactRollThresh)
+                ) {
+                  it.isFlipped = true;
+                  it.flipTimer = 0.0;
+                  it.flipRollDir = ((it.airRoll || terrainRoll) >= 0 ? 1 : -1);
+                  it.flipRollCurrent = it.airRoll || (it.flipRollDir * 0.85);
+                }
               }
             }
 
@@ -12367,38 +12429,55 @@
             const prevClimbVel = it.prevGroundVelY || 0.0;
             const crestDropRate = prevClimbVel - slopeClimbVel;
 
-            if (absSpd > 5.2 && prevClimbVel > 1.35 && crestDropRate > 1.55) {
-              // Catch Air off the dune crest!
+            const minJumpSpd = 9.2 - jumpLift * 5.2;
+            const minClimbVel = 2.2 - jumpLift * 1.15;
+            const minCrestDrop = 2.4 - jumpLift * 1.15;
+
+            if (jumpLift > 0.03 && absSpd > minJumpSpd && prevClimbVel > minClimbVel && crestDropRate > minCrestDrop) {
+              // Catch Air off the dune crest, scaled by Dune Jump / Air Lift slider!
+              const liftScale = 0.45 + jumpLift * 1.15;
               it.isAirborne = true;
-              it.velY = Math.max(prevClimbVel * 1.22, 2.3 + absSpd * 0.15);
+              it.velY = Math.max(prevClimbVel * (0.95 + jumpLift * 0.50), (1.7 + absSpd * 0.14) * liftScale);
               it.y = avgWheelGroundY + it.velY * dt;
               it.airPitch = -terrainPitch + (it.suspPitch || 0.0);
               it.airRoll = terrainRoll + (it.suspRoll || 0.0);
-              it.airPitchVel = clamp(it.velY * 0.05 - 0.25, -0.9, 0.65);
-              it.airRollVel = (terrainRoll * 1.5 - steerInput * 0.95 - (it.driftSlipAngle || 0.0) * 1.3) * clamp(absSpd / 13.0, 0.35, 1.5);
+              it.airPitchVel = clamp(it.velY * 0.04 - 0.18, -0.75, 0.55) * (1.05 - counterweight * 0.60);
+              // Counterweight strongly damps initial takeoff roll angular velocity so jumps don't accidentally barrel-roll!
+              const rollLaunchDamp = Math.max(0.08, 1.0 - counterweight * 0.86);
+              it.airRollVel = (terrainRoll * 1.15 - steerInput * 0.85 - (it.driftSlipAngle || 0.0) * 1.05) *
+                clamp(absSpd / 14.0, 0.30, 1.35) * rollLaunchDamp;
             } else {
               it.y = avgWheelGroundY;
               it.velY = curClimbVel;
               it.prevGroundVelY = curClimbVel;
             }
 
-            // Suspension vertical spring-damper bounce + pronounced cornering body lean & acceleration squat/dive
-            it.suspVelY = (it.suspVelY || 0.0) + (-(it.suspY || 0.0) * 42.0 - (it.suspVelY || 0.0) * 7.5) * dt;
-            it.suspY = clamp((it.suspY || 0.0) + it.suspVelY * dt, -0.32, 0.28);
+            // Suspension vertical spring-damper bounce + cornering body lean & acceleration squat/dive controlled by Suspension Stiffness!
+            const springK = 22.0 + suspStiff * 50.0;
+            const dampC = 4.5 + suspStiff * 7.2;
+            it.suspVelY = (it.suspVelY || 0.0) + (-(it.suspY || 0.0) * springK - (it.suspVelY || 0.0) * dampC) * dt;
+            it.suspY = clamp((it.suspY || 0.0) + it.suspVelY * dt, -0.34, 0.30);
 
-            const targetSuspPitch = (throttleInput > 0.0 ? -0.095 : (throttleInput < 0.0 || isDrifting ? 0.11 : 0.0));
+            const bodyFlex = 1.48 - suspStiff * 0.88; // Soft suspension = deep body lean/squat; Stiff = flat cornering
+            const targetSuspPitch = (throttleInput > 0.0 ? -0.095 : (throttleInput < 0.0 || isDrifting ? 0.11 : 0.0)) * bodyFlex;
             const cornerG = clamp((it.steerAngle * absSpd) / 11.0 + (it.driftSlipAngle || 0.0) * 0.85, -1.25, 1.25);
-            const targetSuspRoll = -cornerG * 0.21;
-            it.suspPitch = (it.suspPitch || 0.0) + (targetSuspPitch - (it.suspPitch || 0.0)) * Math.min(1.0, dt * 8.5);
-            it.suspRoll = (it.suspRoll || 0.0) + (targetSuspRoll - (it.suspRoll || 0.0)) * Math.min(1.0, dt * 8.5);
+            const targetSuspRoll = -cornerG * 0.21 * bodyFlex * (1.15 - counterweight * 0.35);
+            const suspResp = 5.8 + suspStiff * 6.5;
+            it.suspPitch = (it.suspPitch || 0.0) + (targetSuspPitch - (it.suspPitch || 0.0)) * Math.min(1.0, dt * suspResp);
+            it.suspRoll = (it.suspRoll || 0.0) + (targetSuspRoll - (it.suspRoll || 0.0)) * Math.min(1.0, dt * suspResp);
 
             // Check if extreme lateral cornering G on a steep dune slope tips & flips the truck!
-            const totalRollLean = terrainRoll + it.suspRoll * 1.55;
-            if (absSpd > 11.5 && Math.abs(totalRollLean) > 0.68 && (isDrifting || Math.abs(it.steerAngle) > 0.30)) {
-              it.isFlipped = true;
-              it.flipTimer = 0.0;
-              it.flipRollDir = (totalRollLean >= 0 ? 1 : -1);
-              it.flipRollCurrent = totalRollLean;
+            // Regulated by Counterweight: at default 85% counterweight, requires an extreme >1.34 rad (~77 deg) roll at high speed to tip over!
+            if (counterweight < 0.98) {
+              const totalRollLean = terrainRoll + it.suspRoll * (1.50 - counterweight * 0.65);
+              const groundFlipRollLimit = 0.62 + counterweight * 0.85; // 85% -> 1.34 rad
+              const groundFlipMinSpeed = 10.5 + counterweight * 5.0;   // 85% -> 14.75 m/s
+              if (absSpd > groundFlipMinSpeed && Math.abs(totalRollLean) > groundFlipRollLimit && (isDrifting || Math.abs(it.steerAngle) > 0.30)) {
+                it.isFlipped = true;
+                it.flipTimer = 0.0;
+                it.flipRollDir = (totalRollLean >= 0 ? 1 : -1);
+                it.flipRollCurrent = totalRollLean;
+              }
             }
 
             it.mesh.position.set(it.x, it.y, it.z);
@@ -14601,9 +14680,13 @@
       syncUILabels();
     });
 
-    // --- Offroad Vehicle Tuner Controls (Smoke Intensity, Skid Threshold, Per-Gear Engine Tune, Headlight Angle/Distance/Color) ---
+    // --- Offroad Vehicle Tuner Controls (Smoke Intensity, Skid Threshold, Physics/Suspension/Counterweight/Tracking/Jump, Per-Gear Engine Tune, Headlight Angle/Distance/Color) ---
     const sliderTruckSmoke = document.getElementById('slider-truck-smoke');
     const sliderTruckSkidThresh = document.getElementById('slider-truck-skid-thresh');
+    const sliderTruckSuspension = document.getElementById('slider-truck-suspension');
+    const sliderTruckCounterweight = document.getElementById('slider-truck-counterweight');
+    const sliderTruckTracking = document.getElementById('slider-truck-tracking');
+    const sliderTruckJumpLift = document.getElementById('slider-truck-jump-lift');
     const sliderTruckGear1 = document.getElementById('slider-truck-gear1');
     const sliderTruckGear2 = document.getElementById('slider-truck-gear2');
     const sliderTruckGear3 = document.getElementById('slider-truck-gear3');
@@ -14618,6 +14701,51 @@
       if (val <= 3.8) return `${val.toFixed(1)} · Balanced`;
       if (val <= 6.8) return `${val.toFixed(1)} · High`;
       return `${val.toFixed(1)} · Extreme Only`;
+    }
+
+    if (sliderTruckSuspension) {
+      sliderTruckSuspension.addEventListener('input', (e) => {
+        const pct = parseInt(e.target.value, 10);
+        params.truckSuspension = pct / 100.0;
+        const el = document.getElementById('val-truck-suspension');
+        if (el) {
+          const desc = pct < 35 ? 'Plush Soft' : (pct < 72 ? 'Balanced' : 'Stiff Rally');
+          el.textContent = `${pct}% · ${desc}`;
+        }
+      });
+    }
+    if (sliderTruckCounterweight) {
+      sliderTruckCounterweight.addEventListener('input', (e) => {
+        const pct = parseInt(e.target.value, 10);
+        params.truckCounterweight = pct / 100.0;
+        const el = document.getElementById('val-truck-counterweight');
+        if (el) {
+          const desc = pct >= 98 ? 'Never Flips' : (pct >= 70 ? 'Heavy Low CG' : (pct >= 35 ? 'Moderate' : 'Top-Heavy Stunt'));
+          el.textContent = `${pct}% · ${desc}`;
+        }
+      });
+    }
+    if (sliderTruckTracking) {
+      sliderTruckTracking.addEventListener('input', (e) => {
+        const pct = parseInt(e.target.value, 10);
+        params.truckTireTracking = pct / 100.0;
+        const el = document.getElementById('val-truck-tracking');
+        if (el) {
+          const desc = pct < 35 ? 'Loose Drift' : (pct < 75 ? 'High Grip' : 'Locked-In Rails');
+          el.textContent = `${pct}% · ${desc}`;
+        }
+      });
+    }
+    if (sliderTruckJumpLift) {
+      sliderTruckJumpLift.addEventListener('input', (e) => {
+        const pct = parseInt(e.target.value, 10);
+        params.truckJumpLift = pct / 100.0;
+        const el = document.getElementById('val-truck-jump-lift');
+        if (el) {
+          const desc = pct <= 3 ? 'Grounded' : (pct < 40 ? 'Low Hop' : (pct < 72 ? 'Normal' : 'Big Air'));
+          el.textContent = `${pct}% · ${desc}`;
+        }
+      });
     }
 
     function applyTruckLightColorHex(hexStr) {
