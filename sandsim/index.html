@@ -5207,20 +5207,6 @@
               barrelCactusInst.setColorAt(cBarrel, tempColor);
               cBarrel++;
 
-              if (!isPlantBurning) {
-                _cactusApexVec.set(0, 1.48, 0).applyMatrix4(dummy.matrix);
-                const perchObj = {
-                  cellIdx: i,
-                  x: _cactusApexVec.x,
-                  y: _cactusApexVec.y,
-                  z: _cactusApexVec.z,
-                  heightAboveGround: _cactusApexVec.y - hCenter,
-                  isSaguaro: false
-                };
-                activeCactusPerches.push(perchObj);
-                cactusPerchByCell.set(i, perchObj);
-              }
-
               // CACTUS BLOOM CHECK (Prickly Pear / Barrel Cactus blooms vibrant magenta, gold & coral flowers when healthy & moist!)
               const mHere = soilMoisture[i];
               const wpHere = waterProximity[i];
@@ -7697,7 +7683,8 @@
           const livePerch = (a.perchCellIdx >= 0) ? cactusPerchByCell.get(a.perchCellIdx) : null;
           const isPerchValid = Boolean(
             livePerch &&
-            veg[a.perchCellIdx] >= 1.15 &&
+            livePerch.isSaguaro &&
+            veg[a.perchCellIdx] >= 2.15 &&
             water[a.perchCellIdx] < 0.085 &&
             plantBurnTimer[a.perchCellIdx] <= 0.0
           );
@@ -7770,14 +7757,14 @@
 
             a.perchCooldown = (a.perchCooldown ?? 4.0) - dt;
             if (a.perchCooldown <= 0.0 && isNightTime && activeCactusPerches.length > 0) {
-              // Pick a nearby unoccupied cactus (preferring tall Saguaro cacti) to fly down and sit on!
+              // Pick a nearby unoccupied tall Saguaro cactus to fly down and sit on!
               let bestPerch = null;
               let bestScore = 1e9;
               const step = Math.max(1, Math.floor(activeCactusPerches.length / 40));
               const startOffset = Math.floor(Math.random() * step);
               for (let pIdx = startOffset; pIdx < activeCactusPerches.length; pIdx += step) {
                 const p = activeCactusPerches[pIdx];
-                if (water[p.cellIdx] >= 0.085) continue;
+                if (!p.isSaguaro || water[p.cellIdx] >= 0.085) continue;
                 let occupied = false;
                 for (let o = 0; o < faunaAgents.length; o++) {
                   const other = faunaAgents[o];
