@@ -574,6 +574,34 @@
       box-shadow: 0 0 16px rgba(255, 81, 0, 0.65);
     }
 
+    button.tool-btn[data-tool="volcano"] {
+      border-color: rgba(239, 68, 68, 0.55);
+      background: linear-gradient(135deg, rgba(153, 27, 27, 0.35) 0%, rgba(69, 10, 10, 0.55) 100%);
+      color: #fecaca;
+    }
+
+    button.tool-btn[data-tool="volcano"]:hover:not(.on-cooldown) {
+      background: linear-gradient(135deg, rgba(220, 38, 38, 0.45) 0%, rgba(127, 29, 29, 0.65) 100%);
+      border-color: #f87171;
+      color: #fff;
+    }
+
+    button.tool-btn[data-tool="volcano"].active {
+      background: linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%);
+      color: #fef2f2;
+      border-color: #fde047;
+      box-shadow: 0 0 18px rgba(239, 68, 68, 0.75);
+    }
+
+    button.tool-btn[data-tool="volcano"].on-cooldown {
+      opacity: 0.55;
+      cursor: not-allowed;
+      border-color: rgba(148, 163, 184, 0.3);
+      background: rgba(30, 27, 24, 0.6);
+      color: var(--text-dim);
+      box-shadow: none;
+    }
+
     button.plant-btn:hover {
       background: rgba(16, 185, 129, 0.22);
       border-color: var(--jungle);
@@ -1146,7 +1174,8 @@
   <div class="bottom-dock">
     <button id="btn-touch-mode" class="touch-mode-btn" title="Toggle 1-Finger Touch between Sculpting Terrain and Rotating Camera (2 fingers always pinch-zoom/orbit)">✋ Touch: Sculpt</button>
     <button class="tool-btn active" data-tool="water" title="Pour water that sheds down slopes and collects in the lowest basins">💧 Pour Water</button>
-    <button class="tool-btn" data-tool="lava" title="Pour glowing molten lava that flows down valleys, incinerates flora, melts snow & ice, and glows brightly at night">🌋 Pour Lava</button>
+    <button class="tool-btn" data-tool="lava" title="Pour glowing molten lava that flows down valleys, incinerates flora, melts snow & ice, and glows brightly at night">🔥 Pour Lava</button>
+    <button id="btn-tool-volcano" class="tool-btn" data-tool="volcano" title="Single-use cataclysmic Volcano (10-minute actual cooldown): Click terrain to raise a massive volcano that erupts lava, brimstone, smoke & ash for 30 seconds!">🌋 Volcano</button>
     <button class="tool-btn" data-tool="pour" title="Left-click + drag on terrain to pour sand">⏳ Pour Sand</button>
     <button class="tool-btn" data-tool="seed" title="Plant flora (grows Jungle near open water, Cacti & Scrub in the desert)">🌱 Plant Flora</button>
     <button class="tool-btn" data-tool="fauna" title="Spawn biome animals (Camels & Oryx in desert, Flamingos & Macaws in jungle, Fish in water)">🐪 Spawn Animals</button>
@@ -5945,33 +5974,66 @@
           a.heading += diff * Math.min(1.0, dt * turnSpeed);
         };
 
-        // Multi-ring radial search (7m, 16m, 28m across 12 directions) so animals actively flee wet/flooding or molten lava zones toward safe dry ground
-        const steerToHighDryGround = () => {
-          let bestAngle = a.heading;
-          let bestScore = -99999;
-          const rings = [7.0, 16.0, 28.0];
-          for (let dir = 0; dir < 12; dir++) {
-            const testAngle = (dir / 12) * Math.PI * 2;
+        // Multi-ring radial search (3.5m, 8m, 16m, 26m across 16 directions) so animals actively flee wet/flooding or molten lava zones toward safe dry ground
+        const steerToHighDryGround = (turnUrgency = 12.5) => {
+          let bestAngle = a.heading + Math.PI;
+          let bestScore = -999999;
+          const rings = [3.5, 8.0, 16.0, 26.0];
+          const volcActive = (typeof volcanoEruptionState !== 'undefined' && volcanoEruptionState.active);
+          for (let dir = 0; dir < 16; dir++) {
+            const testAngle = (dir / 16) * Math.PI * 2;
             const sinA = Math.sin(testAngle);
             const cosA = Math.cos(testAngle);
             let dirScore = 0;
-            for (let r = 0; r < 3; r++) {
+            for (let r = 0; r < 4; r++) {
               const dist = rings[r];
               const tx = clamp(a.x + sinA * dist, -halfBound, halfBound);
               const tz = clamp(a.z + cosA * dist, -halfBound, halfBound);
               const th = sampleHeightsAtWorld(tx, tz);
-              // Strongly reward dry ground (waterDepth == 0), higher elevation, and heavily penalize molten lava!
-              const dryBonus = (th.waterDepth < fleeThreshold && th.localLava < 0.15) ? 18.0 : 0.0;
-              const lavaPenalty = (th.waterDepth > 0.02 && th.localLava > 0.2) ? 95.0 : 0.0;
+              // Strongly reward dry ground, higher elevation, and MASSIVELY penalize any direction near molten lava!
+              const dryBonus = (th.waterDepth < fleeThreshold && th.localLava < 0.10) ? 24.0 : 0.0;
+              const lavaPenalty = (th.waterDepth > 0.015 && th.localLava > 0.12) ? (680.0 / (r + 1)) : 0.0;
               dirScore += dryBonus - th.waterDepth * 35.0 - lavaPenalty + Math.min(th.groundY - groundY, 3.0) * 2.5;
+              if (volcActive) {
+                const dVolc = Math.hypot(tx - volcanoEruptionState.wx, tz - volcanoEruptionState.wz);
+                if (dVolc < 42.0) dirScore -= (42.0 - dVolc) * 14.0;
+              }
             }
             if (dirScore > bestScore) {
               bestScore = dirScore;
               bestAngle = testAngle;
             }
           }
-          steerToward(bestAngle, 9.5);
+          steerToward(bestAngle, turnUrgency);
         };
+
+        // Proactive Wide-Cone Lava Hazard Scan ahead of the animal (5 rays x 3 distances + active volcano check)
+        // Ensures animals actively detect and steer away from lava BEFORE walking into its thermal ignition zone!
+        let isLavaHazardAhead = false;
+        if (!isFlyer && a.type !== 'fish') {
+          const scanAngles = [0.0, -0.42, 0.42, -0.88, 0.88];
+          const scanDists = [3.0, 6.2, 11.0];
+          outerScan:
+          for (let sa = 0; sa < scanAngles.length; sa++) {
+            const ang = a.heading + scanAngles[sa];
+            const sA = Math.sin(ang);
+            const cA = Math.cos(ang);
+            for (let sd = 0; sd < scanDists.length; sd++) {
+              const d = scanDists[sd];
+              const sx = clamp(a.x + sA * d, -halfBound, halfBound);
+              const sz = clamp(a.z + cA * d, -halfBound, halfBound);
+              const sh = sampleHeightsAtWorld(sx, sz);
+              if (sh.waterDepth > 0.015 && sh.localLava > 0.14) {
+                isLavaHazardAhead = true;
+                break outerScan;
+              }
+            }
+          }
+          if (!isLavaHazardAhead && typeof volcanoEruptionState !== 'undefined' && volcanoEruptionState.active) {
+            const dVolcNow = Math.hypot(a.x - volcanoEruptionState.wx, a.z - volcanoEruptionState.wz);
+            if (dVolcNow < 38.0) isLavaHazardAhead = true;
+          }
+        }
 
         // --- 5-STAGE APEX PREDATOR MOVEMENT & HUNTING CHOREOGRAPHY (PROWL -> STALK -> CHARGE -> POUNCE -> FEAST) ---
         let isChasingPrey = false;
@@ -6079,13 +6141,20 @@
         // During Snow & Ice, all remaining animals move very slowly (0.22x speed), and surface ice becomes hard so animals walk across it!
         const coldSpeedMult = isSnowAndIceActive ? 0.22 : 1.0;
 
-        // Animals wading in shallow/partial liquid water can move freely and sprint (1.55x) toward dry ground;
+        // If lava is detected ahead in the animal's path, immediately cancel any predator hunt and sprint away!
+        if (isLavaHazardAhead) {
+          isChasingPrey = false;
+        }
+
+        // Animals wading in shallow/partial liquid water or avoiding lava ahead can move freely and sprint (1.60x) toward safe dry ground;
         // even when fully submerged they keep moving (0.85x) while trying to reach shallower ground before the 4s drowning timer expires
-        const fleeSpeedMult = isInHazardousWetArea
-          ? (!isDrowning ? 1.55 : Math.max(0.85, 1.35 - (a.submergedTime / 4.0) * 0.50))
+        const fleeSpeedMult = (isInHazardousWetArea || isLavaHazardAhead)
+          ? (!isDrowning ? 1.60 : Math.max(0.85, 1.35 - (a.submergedTime / 4.0) * 0.50))
           : 1.0;
-        const sprintMult = (isApex ? apexSpeedMult : (isChasingPrey ? 1.38 : 1.0)) * coldSpeedMult;
+        const sprintMult = (isApex ? (isLavaHazardAhead ? 1.45 : apexSpeedMult) : (isChasingPrey ? 1.38 : 1.0)) * coldSpeedMult;
         const probeEffWater = (probeH.localIce >= 0.12 && probeH.waterDepth > 0.03) ? 0.0 : probeH.waterDepth;
+        const prevX = a.x;
+        const prevZ = a.z;
 
         if (a.type === 'fish') {
           // Active fish-to-fish repulsion so fish rapidly disperse across the full swimmable water boundary!
@@ -6142,20 +6211,22 @@
           a.y = Math.min(waterSurfaceY - ceilingOffset, targetY);
 
         } else if (a.type === 'croc') {
-          if (probeH.waterDepth < 0.02 && waterProximity[pIdx] < 0.65) {
+          if (isLavaHazardAhead || isInMoltenLava || probeH.localLava > 0.12) {
+            steerToHighDryGround(14.5);
+          } else if (probeH.waterDepth < 0.02 && waterProximity[pIdx] < 0.65) {
             a.heading += 1.8 * coldSpeedMult * dt;
           } else if (!isChasingPrey) {
             a.heading += a.turnRate * dt * 0.9 * coldSpeedMult;
           }
-          a.x += Math.sin(a.heading) * a.speed * sprintMult * dt;
-          a.z += Math.cos(a.heading) * a.speed * sprintMult * dt;
+          a.x += Math.sin(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
+          a.z += Math.cos(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
           // When lake water freezes hard, crocodiles crawl on top of the hard ice sheet!
           a.y = isHardIceSurface ? waterSurfaceY : (waterDepth > 0.25 ? (waterSurfaceY - 0.18) : groundY);
 
         } else if (a.type === 'jaguar') {
           const pWp = waterProximity[pIdx];
-          if (isInHazardousWetArea || probeEffWater > fleeThreshold) {
-            steerToHighDryGround();
+          if (isLavaHazardAhead || isInHazardousWetArea || probeEffWater > fleeThreshold) {
+            steerToHighDryGround(14.5);
           } else if (pWp < 0.22 || obstacleType[pIdx] === 2) {
             a.heading += 1.8 * coldSpeedMult * dt;
           } else if (!isChasingPrey) {
@@ -6166,8 +6237,8 @@
           a.y = walkSurfaceY + Math.abs(Math.sin(time * 10.0 * coldSpeedMult + a.phase)) * 0.14 * coldSpeedMult;
 
         } else if (a.type === 'lion') {
-          if (isInHazardousWetArea || probeEffWater > fleeThreshold) {
-            steerToHighDryGround();
+          if (isLavaHazardAhead || isInHazardousWetArea || probeEffWater > fleeThreshold) {
+            steerToHighDryGround(14.5);
           } else if (obstacleType[pIdx] === 2 || (probeH.groundY - groundY) > 1.8) {
             a.heading += 1.8 * coldSpeedMult * dt;
           } else if (!isChasingPrey) {
@@ -6179,22 +6250,22 @@
 
         } else if (a.type === 'flamingo') {
           const pWp = waterProximity[pIdx];
-          if (isInHazardousWetArea || probeEffWater > fleeThreshold) {
-            steerToHighDryGround();
+          if (isLavaHazardAhead || isInHazardousWetArea || probeEffWater > fleeThreshold) {
+            steerToHighDryGround(14.5);
           } else if (pWp < 0.35 || obstacleType[pIdx] === 2) {
             a.heading += 1.6 * coldSpeedMult * dt;
           } else {
             a.heading += a.turnRate * dt * coldSpeedMult;
           }
-          const feedingPause = (!isInHazardousWetArea && Math.sin(time * 1.1 + a.phase) > 0.35) ? 0.15 : 1.0;
+          const feedingPause = (!isInHazardousWetArea && !isLavaHazardAhead && Math.sin(time * 1.1 + a.phase) > 0.35) ? 0.15 : 1.0;
           a.x += Math.sin(a.heading) * a.speed * feedingPause * fleeSpeedMult * coldSpeedMult * dt;
-          a.z += Math.cos(a.heading) * a.speed * feedingPause * fleeSpeedMult * coldSpeedMult * dt;
+          a.z += Math.cos(a.heading) * a.speed * feedingPause * fleeSpeedMult * dt;
           a.y = walkSurfaceY + Math.abs(Math.sin(time * 7.0 * coldSpeedMult + a.phase)) * 0.08 * feedingPause;
 
         } else if (a.type === 'camel' || a.type === 'oryx' || a.type === 'fennec') {
-          if (isInHazardousWetArea || probeEffWater > fleeThreshold) {
-            // Immediately sprint & steer toward the nearest dry higher ground to escape drowning!
-            steerToHighDryGround();
+          if (isLavaHazardAhead || isInHazardousWetArea || probeEffWater > fleeThreshold) {
+            // Immediately sprint & steer toward the nearest dry higher ground to avoid lava or escape drowning!
+            steerToHighDryGround(14.5);
           } else if (obstacleType[pIdx] === 2 || (probeH.groundY - groundY) > 1.8) {
             a.heading += 1.8 * coldSpeedMult * dt;
           } else {
@@ -6228,6 +6299,29 @@
           const targetAlt = groundY + baseAlt + Math.sin(time * 0.85 + a.phase) * 4.2;
           a.y += (targetAlt - a.y) * Math.min(1.0, dt * 3.0);
           a.climbRate = (a.y - prevY) / Math.max(dt, 0.001);
+        }
+
+        // Step-Guard: If a ground animal was on safe ground, prevent it from voluntarily stepping onto a lava cell or into the lava thermal ring!
+        if (!isFlyer && a.type !== 'fish' && !isNearMoltenLava && !a.isBurning) {
+          const nextH = sampleHeightsAtWorld(a.x, a.z);
+          const ngx = clamp(Math.floor(((a.x / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+          const ngz = clamp(Math.floor(((a.z / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+          const nCellIdx = idx(ngx, ngz);
+          let stepTouchesLava = (nextH.waterDepth > 0.015 && nextH.localLava > 0.14);
+          if (!stepTouchesLava) {
+            for (let d = 0; d < 8; d++) {
+              const ni = nCellIdx + N8_OFFSETS[d];
+              if (water[ni] > 0.03 && lavaFrac[ni] >= 0.28) {
+                stepTouchesLava = true;
+                break;
+              }
+            }
+          }
+          if (stepTouchesLava) {
+            a.x = prevX;
+            a.z = prevZ;
+            steerToHighDryGround(22.0);
+          }
         }
 
         a.x = clamp(a.x, -halfBound, halfBound);
@@ -7162,6 +7256,456 @@
       }
     }
 
+    // ============================================================================
+    // 11E. SINGLE-USE CATACLYSMIC VOLCANO SCULPT TOOL
+    //      (10-Actual-Minute Cooldown · Rises Out of Ground · 30s Eruption of Lava, Brimstone, Smoke & Ash)
+    // ============================================================================
+    const VOLCANO_COOLDOWN_MS = 10 * 60 * 1000; // 10 actual wall-clock minutes (600,000 ms)
+    const VOLCANO_ERUPTION_DURATION = 30.0;     // 30 actual seconds of eruption
+    let volcanoCooldownUntil = 0;
+
+    const volcanoEruptionState = {
+      active: false,
+      elapsed: 0.0,
+      wx: 0.0,
+      wz: 0.0,
+      cx: 80,
+      cy: 80,
+      radiusMeters: 34.0,
+      bombTimer: 0.0,
+      cells: [] // Precomputed cone & crater target profile [{ i, distM, rNorm, targetBedrock, isCrater }]
+    };
+
+    const volcanoCraterLight = new THREE.PointLight(0xff3b00, 0.0, 220.0, 1.15);
+    scene.add(volcanoCraterLight);
+
+    // 3D Ballistic Brimstone & Molten Lava Bombs ejected from the volcano crater
+    const brimstoneBombsGroup = new THREE.Group();
+    scene.add(brimstoneBombsGroup);
+    const activeBrimstoneBombs = [];
+    const brimstoneBombGeo = new THREE.DodecahedronGeometry(0.62, 1);
+
+    // 3D Volcanic Smoke Plume & Falling Ash Particle System (1,800 particles)
+    const VOLCANO_ASH_COUNT = 1800;
+    const volcanoAshGeo = new THREE.BufferGeometry();
+    const volcanoAshPos = new Float32Array(VOLCANO_ASH_COUNT * 3);
+    const volcanoAshCol = new Float32Array(VOLCANO_ASH_COUNT * 3);
+    const volcanoAshVel = new Float32Array(VOLCANO_ASH_COUNT * 3);
+    const volcanoAshLife = new Float32Array(VOLCANO_ASH_COUNT);
+    const volcanoAshType = new Uint8Array(VOLCANO_ASH_COUNT); // 0 = rising dark crater smoke plume, 1 = falling landscape ash
+    for (let i = 0; i < VOLCANO_ASH_COUNT; i++) {
+      volcanoAshPos[i * 3 + 1] = -999;
+      volcanoAshLife[i] = 2.0;
+    }
+    volcanoAshGeo.setAttribute('position', new THREE.BufferAttribute(volcanoAshPos, 3));
+    volcanoAshGeo.setAttribute('color', new THREE.BufferAttribute(volcanoAshCol, 3));
+    const volcanoAshMat = new THREE.PointsMaterial({
+      size: 3.1,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.80,
+      depthWrite: false
+    });
+    const volcanoAshSystem = new THREE.Points(volcanoAshGeo, volcanoAshMat);
+    volcanoAshSystem.frustumCulled = false;
+    volcanoAshSystem.visible = false;
+    scene.add(volcanoAshSystem);
+    let volcanoAshHead = 0;
+
+    function spawnVolcanoSmokeAndAshParticles(craterX, craterY, craterZ) {
+      // 1. Spawn billowing dark volcanic smoke & glowing ash column shooting out of the summit crater
+      for (let k = 0; k < 6; k++) {
+        const idxP = volcanoAshHead;
+        volcanoAshHead = (volcanoAshHead + 1) % VOLCANO_ASH_COUNT;
+        const i3 = idxP * 3;
+        const r = Math.random() * 4.2;
+        const ang = Math.random() * Math.PI * 2;
+        volcanoAshPos[i3]     = craterX + Math.cos(ang) * r;
+        volcanoAshPos[i3 + 1] = craterY + 0.5 + Math.random() * 2.5;
+        volcanoAshPos[i3 + 2] = craterZ + Math.sin(ang) * r;
+
+        volcanoAshVel[i3]     = Math.cos(ang) * (1.2 + Math.random() * 3.5);
+        volcanoAshVel[i3 + 1] = 11.5 + Math.random() * 14.0;
+        volcanoAshVel[i3 + 2] = Math.sin(ang) * (1.2 + Math.random() * 3.5);
+
+        volcanoAshType[idxP] = 0; // Rising dark smoke plume
+        volcanoAshLife[idxP] = 0.01;
+      }
+
+      // 2. Spawn falling volcanic ash & cinders raining down across the landscape
+      for (let k = 0; k < 5; k++) {
+        const idxP = volcanoAshHead;
+        volcanoAshHead = (volcanoAshHead + 1) % VOLCANO_ASH_COUNT;
+        const i3 = idxP * 3;
+        const spreadR = 6.0 + Math.random() * 92.0;
+        const ang = Math.random() * Math.PI * 2;
+        volcanoAshPos[i3]     = clamp(craterX + Math.cos(ang) * spreadR, -WORLD_SIZE * 0.48, WORLD_SIZE * 0.48);
+        volcanoAshPos[i3 + 1] = craterY + 12.0 + Math.random() * 26.0;
+        volcanoAshPos[i3 + 2] = clamp(craterZ + Math.sin(ang) * spreadR, -WORLD_SIZE * 0.48, WORLD_SIZE * 0.48);
+
+        volcanoAshVel[i3]     = (Math.random() - 0.5) * 3.0;
+        volcanoAshVel[i3 + 1] = -(4.5 + Math.random() * 5.5);
+        volcanoAshVel[i3 + 2] = (Math.random() - 0.5) * 3.0;
+
+        volcanoAshType[idxP] = 1; // Raining volcanic ash
+        volcanoAshLife[idxP] = 0.01;
+      }
+    }
+
+    function launchBrimstoneBomb(craterX, craterY, craterZ) {
+      const isBrimstoneGold = Math.random() < 0.45;
+      const mat = new THREE.MeshStandardMaterial({
+        color: isBrimstoneGold ? 0xfacc15 : 0x29150c,
+        emissive: isBrimstoneGold ? 0xff6a00 : 0xff2a00,
+        emissiveIntensity: 1.35,
+        roughness: 0.55
+      });
+      const mesh = new THREE.Mesh(brimstoneBombGeo, mat);
+      const sc = 0.65 + Math.random() * 0.95;
+      mesh.scale.set(sc, sc * (0.75 + Math.random() * 0.5), sc);
+      mesh.position.set(
+        craterX + (Math.random() - 0.5) * 3.5,
+        craterY + 1.2,
+        craterZ + (Math.random() - 0.5) * 3.5
+      );
+      const launchAng = Math.random() * Math.PI * 2;
+      const horizSpeed = 7.5 + Math.random() * 23.0;
+      const vertSpeed = 17.0 + Math.random() * 16.5;
+
+      brimstoneBombsGroup.add(mesh);
+      activeBrimstoneBombs.push({
+        mesh,
+        mat,
+        vx: Math.cos(launchAng) * horizSpeed,
+        vy: vertSpeed,
+        vz: Math.sin(launchAng) * horizSpeed,
+        rx: (Math.random() - 0.5) * 10.0,
+        ry: (Math.random() - 0.5) * 10.0,
+        rz: (Math.random() - 0.5) * 10.0,
+        age: 0.0
+      });
+    }
+
+    function updateVolcanoButtonUI() {
+      const btn = document.getElementById('btn-tool-volcano');
+      if (!btn) return;
+      const now = Date.now();
+      if (volcanoEruptionState.active) {
+        const remErupt = Math.max(1, Math.ceil(VOLCANO_ERUPTION_DURATION - volcanoEruptionState.elapsed));
+        btn.textContent = `🌋 Erupting (${remErupt}s)`;
+        btn.classList.add('on-cooldown');
+      } else if (now < volcanoCooldownUntil) {
+        const remSec = Math.max(1, Math.ceil((volcanoCooldownUntil - now) / 1000));
+        const mm = Math.floor(remSec / 60);
+        const ss = String(remSec % 60).padStart(2, '0');
+        btn.textContent = `🌋 Volcano (${mm}:${ss})`;
+        btn.classList.add('on-cooldown');
+      } else {
+        btn.textContent = '🌋 Volcano';
+        btn.classList.remove('on-cooldown');
+      }
+    }
+
+    function triggerVolcanoEruptionAtWorld(clickWx, clickWz) {
+      const now = Date.now();
+      if (volcanoEruptionState.active || now < volcanoCooldownUntil) {
+        updateVolcanoButtonUI();
+        return;
+      }
+
+      // 1. Lock in the 10-actual-minute wall-clock cooldown immediately
+      volcanoCooldownUntil = now + VOLCANO_COOLDOWN_MS;
+      isPointerDown = false;
+
+      // Switch active sculpt tool back to 'lava' so dragging doesn't re-click the single-use volcano tool
+      params.tool = 'lava';
+      document.querySelectorAll('.tool-btn').forEach((b) => {
+        b.classList.toggle('active', b.dataset.tool === 'lava');
+      });
+      brushRingMat.color.setHex(0xff4500);
+
+      // 2. Clamp volcano center slightly inside map borders so the massive 68m-diameter cone fits cleanly
+      const margin = WORLD_SIZE * 0.33;
+      const vx = clamp(clickWx, -margin, margin);
+      const vz = clamp(clickWz, -margin, margin);
+      const cx = Math.round(((vx / WORLD_SIZE) + 0.5) * (GRID - 1));
+      const cy = Math.round(((vz / WORLD_SIZE) + 0.5) * (GRID - 1));
+      const radiusM = 34.0;
+      const rCells = Math.ceil(radiusM / CELL_SIZE);
+
+      const cells = [];
+      for (let dy = -rCells; dy <= rCells; dy++) {
+        for (let dx = -rCells; dx <= rCells; dx++) {
+          const x = cx + dx;
+          const y = cy + dy;
+          if (x < 1 || x >= GRID - 1 || y < 1 || y >= GRID - 1) continue;
+          const distM = Math.hypot(dx, dy) * CELL_SIZE;
+          if (distM > radiusM) continue;
+
+          const i = idx(x, y);
+          const rNorm = distM / radiusM; // 0 at center, 1 at outer base
+          const angle = Math.atan2(dy, dx);
+
+          // Stratovolcano geological profile:
+          // - Steep fluted volcanic cone rising to 29.5m at the crater rim (rNorm = 0.165, ~5.6m radius)
+          // - 4 radial lava spillway notches carved into the crater rim so lava pours down all sides
+          // - Deep glowing caldera bowl inside rNorm < 0.165
+          const rimNorm = 0.165;
+          let targetH;
+          let isCrater = false;
+
+          if (rNorm >= rimNorm) {
+            const slopeT = 1.0 - (rNorm - rimNorm) / (1.0 - rimNorm);
+            const coneCurve = Math.pow(clamp(slopeT, 0.0, 1.0), 1.38);
+            const radialFlutes = Math.sin(angle * 7.0 + valueNoise(x * 0.2, y * 0.2) * 2.5) * 1.15 * slopeT * (1.0 - slopeT);
+            // 4 spillway channels at 0, 90, 180, 270 deg so lava rivers pour down all 4 flanks
+            const spillwayNotch = Math.pow(Math.max(0, Math.cos(angle * 4.0)), 6.0) * 2.2 * Math.pow(slopeT, 2.5);
+            const currentBase = bedrock[i];
+            const coneAdd = coneCurve * 26.5 + radialFlutes - spillwayNotch;
+            targetH = clamp(Math.max(currentBase, 3.2 + coneAdd), MIN_TERRAIN_HEIGHT, MAX_TERRAIN_HEIGHT - 1.5);
+          } else {
+            isCrater = true;
+            const craterBowlT = rNorm / rimNorm; // 0 at center vent, 1 at crater rim
+            targetH = 23.5 + Math.pow(craterBowlT, 2.0) * 5.2;
+          }
+
+          cells.push({
+            i,
+            distM,
+            rNorm,
+            startBedrock: bedrock[i],
+            targetBedrock: targetH,
+            isCrater
+          });
+        }
+      }
+
+      volcanoEruptionState.active = true;
+      volcanoEruptionState.elapsed = 0.0;
+      volcanoEruptionState.wx = vx;
+      volcanoEruptionState.wz = vz;
+      volcanoEruptionState.cx = cx;
+      volcanoEruptionState.cy = cy;
+      volcanoEruptionState.radiusMeters = radiusM;
+      volcanoEruptionState.bombTimer = 0.0;
+      volcanoEruptionState.cells = cells;
+
+      // Initial seismic blast of fire, steam & debris as the volcano fractures the crust!
+      const { groundY } = sampleHeightsAtWorld(vx, vz);
+      spawnFireFlameAtWorld(vx, groundY + 1.0, vz, 3.2, 35);
+      spawnSteamPuffAtWorld(vx, groundY + 1.5, vz, 28);
+      spawnExplosionShards(vx, groundY + 1.0, vz, 22, [0xff5500, 0xfacc15, 0x29150c, 0x1c1917]);
+      updateVolcanoButtonUI();
+    }
+
+    function updateVolcanoEruption(dt) {
+      updateVolcanoButtonUI();
+      const time = uniforms.uTime.value;
+      const rad = THREE.MathUtils.degToRad(params.windDirDeg);
+      const windX = Math.cos(rad) * params.windSpeed * 0.25;
+      const windZ = Math.sin(rad) * params.windSpeed * 0.25;
+
+      // 1. Active 30-Second Volcano Emergence & Continuous Lava/Brimstone/Smoke/Ash Eruption
+      if (volcanoEruptionState.active) {
+        volcanoEruptionState.elapsed += dt;
+        const elapsed = volcanoEruptionState.elapsed;
+
+        // First 4.5 seconds: the massive volcano cone physically rises out of the ground!
+        const riseT = clamp(elapsed / 4.5, 0.0, 1.0);
+        const smoothRise = riseT * riseT * (3.0 - 2.0 * riseT);
+
+        let craterSummitY = 26.0;
+        for (let k = 0; k < volcanoEruptionState.cells.length; k++) {
+          const c = volcanoEruptionState.cells[k];
+          const ci = c.i;
+
+          if (elapsed <= 4.8) {
+            const desiredB = c.startBedrock + (c.targetBedrock - c.startBedrock) * smoothRise;
+            if (desiredB > bedrock[ci]) {
+              bedrock[ci] = desiredB;
+            }
+            if (c.rNorm < 0.88) {
+              obstacleType[ci] = 3; // Volcanic basalt rock cone
+              sand[ci] *= (1.0 - dt * 1.8); // Shed loose sand off the rising volcanic cone
+              snowCover[ci] = 0.0;
+              iceCover[ci] = 0.0;
+              if (veg[ci] >= 0.12) {
+                ignitePlantAtCell(ci);
+              }
+            }
+          }
+
+          // Continuous 30-second outpouring of molten lava from the top caldera crater!
+          if (c.isCrater && riseT > 0.25) {
+            const surge = 2.1 + 0.65 * Math.sin(time * 6.5 + c.distM);
+            const maxAllow = Math.max(0, MAX_TERRAIN_HEIGHT - (bedrock[ci] + sand[ci]));
+            water[ci] = Math.min(maxAllow, Math.max(water[ci], surge * riseT));
+            lavaFrac[ci] = 1.0;
+            soilMoisture[ci] = 0.0;
+            waterProximity[ci] = 0.0;
+            craterSummitY = Math.max(craterSummitY, bedrock[ci] + water[ci]);
+          }
+        }
+
+        // Position fiery crater PointLight above the erupting caldera
+        const pulse = 0.85 + 0.25 * Math.sin(time * 14.0);
+        volcanoCraterLight.position.set(volcanoEruptionState.wx, craterSummitY + 7.5, volcanoEruptionState.wz);
+        volcanoCraterLight.intensity = 22.0 * pulse;
+
+        // Continuously fire molten lava fountains, dark smoke & raining ash out of the top
+        spawnFireFlameAtWorld(volcanoEruptionState.wx, craterSummitY + 0.6, volcanoEruptionState.wz, 2.8, 5);
+        spawnVolcanoSmokeAndAshParticles(volcanoEruptionState.wx, craterSummitY + 1.0, volcanoEruptionState.wz);
+
+        // Eject ballistic flaming Brimstone & Molten Lava Bombs every 0.14s across the landscape
+        volcanoEruptionState.bombTimer += dt;
+        while (volcanoEruptionState.bombTimer >= 0.14) {
+          volcanoEruptionState.bombTimer -= 0.14;
+          launchBrimstoneBomb(volcanoEruptionState.wx, craterSummitY + 0.8, volcanoEruptionState.wz);
+        }
+
+        syncTerrainAndWaterMeshes();
+
+        if (elapsed >= VOLCANO_ERUPTION_DURATION) {
+          volcanoEruptionState.active = false;
+          volcanoCraterLight.intensity = 0.0;
+          updateVolcanoButtonUI();
+        }
+      } else {
+        volcanoCraterLight.intensity = 0.0;
+      }
+
+      // 2. Update Flying 3D Brimstone & Lava Bombs (pour molten lava & ignite plants/animals where they land!)
+      for (let i = activeBrimstoneBombs.length - 1; i >= 0; i--) {
+        const b = activeBrimstoneBombs[i];
+        b.age += dt;
+        b.vy -= 22.5 * dt; // Gravity
+        b.mesh.position.x += b.vx * dt;
+        b.mesh.position.y += b.vy * dt;
+        b.mesh.position.z += b.vz * dt;
+        b.mesh.rotation.x += b.rx * dt;
+        b.mesh.rotation.y += b.ry * dt;
+        b.mesh.rotation.z += b.rz * dt;
+
+        // Trail fire sparks in flight
+        if (Math.random() < 0.45) {
+          spawnFireFlameAtWorld(b.mesh.position.x, b.mesh.position.y, b.mesh.position.z, 0.6, 1);
+        }
+
+        const bx = b.mesh.position.x;
+        const bz = b.mesh.position.z;
+        const halfW = WORLD_SIZE * 0.485;
+        if (Math.abs(bx) > halfW || Math.abs(bz) > halfW || b.age > 6.0) {
+          brimstoneBombsGroup.remove(b.mesh);
+          b.mat.dispose();
+          activeBrimstoneBombs.splice(i, 1);
+          continue;
+        }
+
+        const floorY = sampleSurfaceHeightAtWorld(bx, bz);
+        if (b.mesh.position.y <= floorY + 0.25) {
+          // Brimstone & Lava Bomb impact on the landscape!
+          const gx = clamp(Math.round(((bx / WORLD_SIZE) + 0.5) * (GRID - 1)), 2, GRID - 3);
+          const gz = clamp(Math.round(((bz / WORLD_SIZE) + 0.5) * (GRID - 1)), 2, GRID - 3);
+
+          // Deposit a splashing pool of molten lava that flows down the landscape from the impact site
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const ci = idx(gx + dx, gz + dy);
+              const splashWeight = (dx === 0 && dy === 0) ? 0.58 : 0.26;
+              if (water[ci] > 0.04 && lavaFrac[ci] < 0.25) {
+                // Bomb landed in water -> boil into steam & harden to rock!
+                lavaFrac[ci] = 1.0;
+                solidifyLavaCellToRock(ci, Math.min(water[ci], splashWeight));
+              } else {
+                const maxL = Math.max(0, MAX_TERRAIN_HEIGHT - (bedrock[ci] + sand[ci]));
+                water[ci] = Math.min(maxL, water[ci] + splashWeight);
+                lavaFrac[ci] = 1.0;
+                soilMoisture[ci] = 0.0;
+                waterProximity[ci] = 0.0;
+                snowCover[ci] = 0.0;
+                iceCover[ci] = 0.0;
+              }
+              if (veg[ci] >= 0.12) {
+                ignitePlantAtCell(ci);
+              }
+            }
+          }
+
+          // Ignite any animals near the brimstone bomb impact
+          for (const a of faunaAgents) {
+            if (a.state === 'alive' && a.type !== 'fish') {
+              if (Math.hypot(a.x - bx, a.z - bz) < 4.5) {
+                a.isBurning = true;
+                a.burnTimer = 0.01;
+              }
+            }
+          }
+
+          spawnFireFlameAtWorld(bx, floorY + 0.25, bz, 1.4, 6);
+          spawnExplosionShards(bx, floorY + 0.2, bz, 4, [0xff5500, 0xfacc15, 0x29150c]);
+
+          brimstoneBombsGroup.remove(b.mesh);
+          b.mat.dispose();
+          activeBrimstoneBombs.splice(i, 1);
+        }
+      }
+
+      // 3. Update 3D Volcanic Smoke Plume & Falling Landscape Ash Particles
+      let activeAsh = 0;
+      for (let i = 0; i < VOLCANO_ASH_COUNT; i++) {
+        let life = volcanoAshLife[i];
+        if (life >= 1.0) continue;
+        activeAsh++;
+        const isAshFall = volcanoAshType[i] === 1;
+        life += dt * (isAshFall ? 0.30 : 0.42);
+        volcanoAshLife[i] = life;
+        const i3 = i * 3;
+        if (life >= 1.0) {
+          volcanoAshPos[i3 + 1] = -999;
+          continue;
+        }
+
+        if (isAshFall) {
+          // Falling gray volcanic ash drifting across the landscape
+          const flutterX = Math.sin(time * 2.3 + i) * 2.2;
+          const flutterZ = Math.cos(time * 2.0 + i * 1.3) * 2.2;
+          volcanoAshPos[i3]     += (volcanoAshVel[i3] + windX * 0.8 + flutterX) * dt;
+          volcanoAshPos[i3 + 1] += volcanoAshVel[i3 + 1] * dt;
+          volcanoAshPos[i3 + 2] += (volcanoAshVel[i3 + 2] + windZ * 0.8 + flutterZ) * dt;
+
+          const groundY = sampleSurfaceHeightAtWorld(volcanoAshPos[i3], volcanoAshPos[i3 + 2]);
+          if (volcanoAshPos[i3 + 1] <= groundY + 0.15) {
+            volcanoAshLife[i] = 1.0;
+            volcanoAshPos[i3 + 1] = -999;
+            continue;
+          }
+          const ashShade = 0.34 + (i % 5) * 0.05;
+          volcanoAshCol[i3]     = ashShade;
+          volcanoAshCol[i3 + 1] = ashShade * 0.96;
+          volcanoAshCol[i3 + 2] = ashShade * 0.94;
+        } else {
+          // Rising dark volcanic smoke & glowing brimstone ash plume above the crater
+          const billowX = Math.sin(time * 2.8 + i * 0.9) * (2.5 + life * 8.0);
+          const billowZ = Math.cos(time * 2.5 + i * 1.2) * (2.5 + life * 8.0);
+          volcanoAshPos[i3]     += (volcanoAshVel[i3] + windX * (0.4 + life * 1.4) + billowX) * dt;
+          volcanoAshPos[i3 + 1] += volcanoAshVel[i3 + 1] * (1.0 - life * 0.55) * dt;
+          volcanoAshPos[i3 + 2] += (volcanoAshVel[i3 + 2] + windZ * (0.4 + life * 1.4) + billowZ) * dt;
+
+          // Glowing orange-red crater illumination at the base of the smoke column, cooling to dark volcanic charcoal ash higher up
+          const baseHeat = Math.max(0.0, 1.0 - life * 2.8);
+          volcanoAshCol[i3]     = 0.18 + baseHeat * 0.78;
+          volcanoAshCol[i3 + 1] = 0.16 + baseHeat * 0.28;
+          volcanoAshCol[i3 + 2] = 0.15 + baseHeat * 0.04;
+        }
+      }
+
+      volcanoAshSystem.visible = activeAsh > 0;
+      if (activeAsh > 0) {
+        volcanoAshGeo.attributes.position.needsUpdate = true;
+        volcanoAshGeo.attributes.color.needsUpdate = true;
+      }
+    }
+
     // Bilinear height interpolation for smooth FPV walking, surface ice solidity, molten lava & underwater detection
     function sampleHeightsAtWorld(wx, wz) {
       const fx = clamp(((wx / WORLD_SIZE) + 0.5) * (GRID - 1), 0, GRID - 1.001);
@@ -7276,6 +7820,7 @@
       updateLavaEmbers(dt);
       updateFireAndSteamEffects(dt);
       updateThunderstormAndClouds(dt);
+      updateVolcanoEruption(dt);
       // Automatically show falling snowflakes, monsoon rain, thunderstorm rain, or haboob dust storms during severe weather, OR whenever user toggles Particles ON
       const isBadStormActive = (params.snowRate > 0.05) || (params.rainRate > 0.35) || (params.weatherMode === 'haboob') || (params.weatherMode === 'thunderstorm');
       particleSystem.visible = (params.showParticles || isBadStormActive) && (params.windSpeed > 1 || params.rainRate > 0.05 || params.snowRate > 0.05);
@@ -8148,6 +8693,11 @@
     let isPointerDown = false;
 
     function applyBrushAtWorld(wx, wz) {
+      if (params.tool === 'volcano') {
+        triggerVolcanoEruptionAtWorld(wx, wz);
+        return;
+      }
+
       const cx = Math.round(((wx / WORLD_SIZE) + 0.5) * (GRID - 1));
       const cy = Math.round(((wz / WORLD_SIZE) + 0.5) * (GRID - 1));
       const rCells = Math.max(1, Math.round(params.brushRadius / CELL_SIZE));
@@ -8666,12 +9216,17 @@
 
     document.querySelectorAll('.tool-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
+        if (btn.dataset.tool === 'volcano' && (volcanoEruptionState.active || Date.now() < volcanoCooldownUntil)) {
+          updateVolcanoButtonUI();
+          return;
+        }
         document.querySelectorAll('.tool-btn').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         params.tool = btn.dataset.tool;
         const ringColors = {
           water: 0x38bdf8,
           lava: 0xff4500,
+          volcano: 0xdc2626,
           pour: 0xffc56d,
           seed: 0x4ade80,
           fauna: 0xf472b6,
