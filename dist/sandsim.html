@@ -2058,7 +2058,7 @@
         🔊
       </button>
       <button id="btn-screenshot" title="Save a playable Cartridge PNG screenshot containing your entire 3D map, roads, water, flora, items &amp; vehicle setup (Shortcut: P)">
-        💾 Save
+        💾 Save/Screenshot
       </button>
       <button id="btn-load-cartridge-top" title="Load a playable Cartridge PNG map (or drag &amp; drop any Cartridge PNG onto the 3D window)">
         📂 Load
@@ -18750,7 +18750,7 @@
       const btn = document.getElementById('btn-screenshot');
       if (btn) {
         btn.textContent = '✅ Saved';
-        setTimeout(() => { btn.textContent = '💾 Save'; }, 1600);
+        setTimeout(() => { btn.textContent = '💾 Save/Screenshot'; }, 1600);
       }
       if (valCartridgeStatus) {
         valCartridgeStatus.textContent = 'Saved PNG!';
