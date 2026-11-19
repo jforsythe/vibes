@@ -7495,6 +7495,11 @@
       lightningFlashLight.position.set(tx, ty + 18.0, tz);
       lightningFlashLight.intensity = 28.0;
 
+      // Follow each lightning strike with a loud 3D spatial thunder clap!
+      if (typeof playLightningThunderClap === 'function') {
+        playLightningThunderClap(tx, ty, tz);
+      }
+
       // --- EXPLOSIVE BLAST AT STRIKE POINT (BLOWS UP ANIMALS, PLANTS & SAND!) ---
       spawnFireFlameAtWorld(tx, ty + 0.25, tz, 2.4, 26);
       spawnSteamPuffAtWorld(tx, ty + 0.35, tz, 18);
@@ -7587,6 +7592,9 @@
     }
 
     function updateThunderstormAndClouds(dt) {
+      if (typeof updateWeatherAudio === 'function') {
+        updateWeatherAudio(dt);
+      }
       const mode = params.weatherMode;
       const nightFactor = skyUniforms.uNightFactor.value || 0.0;
       const time = uniforms.uTime.value;
@@ -8735,6 +8743,291 @@
       vocalOsc.onended = () => {
         activeFrogAudioVoices = Math.max(0, activeFrogAudioVoices - 1);
       };
+    }
+
+    // 4. Loud 3D Spatial Thunder Clap Following Each Lightning Strike ("CRACK-KABOOM + Rolling Canyon Rumble!")
+    let activeThunderClapVoices = 0;
+    function playLightningThunderClap(wx, wy, wz) {
+      if (!params.audioEnabled || activeThunderClapVoices >= 5) return;
+      const ctx = ensureAudioContext();
+      if (!ctx || !whiteNoiseBuffer || !pinkNoiseBuffer) return;
+
+      activeThunderClapVoices++;
+      const now = ctx.currentTime;
+      const { distGain, pan } = computeWorldAudioSpatial(wx, wy, wz);
+      const outBus = createSpatialPanner(ctx, pan);
+
+      // Slight acoustic travel delay (0.03s nearby up to 0.19s across the basin) right after the visual lightning flash
+      _audioTmpVec.set(wx, wy, wz);
+      const dist = camera.position.distanceTo(_audioTmpVec);
+      const clapStart = now + clamp(dist * 0.0012, 0.025, 0.19);
+      const clapGainScale = clamp(distGain * 1.15, 0.42, 1.0);
+
+      // A. High-Voltage Electric Plasma Crack & Tear ("KRAK-KRAK!")
+      const crackSrc = ctx.createBufferSource();
+      crackSrc.buffer = whiteNoiseBuffer;
+      const crackBP = ctx.createBiquadFilter();
+      crackBP.type = 'bandpass';
+      crackBP.frequency.setValueAtTime(2200, clapStart);
+      crackBP.frequency.exponentialRampToValueAtTime(340, clapStart + 0.22);
+      crackBP.Q.setValueAtTime(1.35, clapStart);
+
+      const crackGain = ctx.createGain();
+      crackGain.gain.setValueAtTime(0.0001, now);
+      crackGain.gain.setValueAtTime(0.001, clapStart);
+      crackGain.gain.linearRampToValueAtTime(0.76 * clapGainScale, clapStart + 0.004);
+      crackGain.gain.exponentialRampToValueAtTime(0.14 * clapGainScale, clapStart + 0.045);
+      // Secondary jagged leader rip at +0.055s
+      crackGain.gain.linearRampToValueAtTime(0.62 * clapGainScale, clapStart + 0.060);
+      crackGain.gain.exponentialRampToValueAtTime(0.0001, clapStart + 0.25);
+      crackSrc.connect(crackBP);
+      crackBP.connect(crackGain);
+      crackGain.connect(outBus);
+      crackSrc.start(clapStart, Math.random() * 0.8, 0.28);
+
+      // B. Loud Chest-Rattling Sub-Bass Thunder Clap Shockwave
+      const subOsc = ctx.createOscillator();
+      subOsc.type = 'triangle';
+      subOsc.frequency.setValueAtTime(118 + Math.random() * 18, clapStart);
+      subOsc.frequency.exponentialRampToValueAtTime(36, clapStart + 0.28);
+      subOsc.frequency.exponentialRampToValueAtTime(21, clapStart + 0.85);
+      const subGain = ctx.createGain();
+      subGain.gain.setValueAtTime(0.0001, now);
+      subGain.gain.setValueAtTime(0.001, clapStart);
+      subGain.gain.linearRampToValueAtTime(0.84 * clapGainScale, clapStart + 0.010);
+      subGain.gain.exponentialRampToValueAtTime(0.32 * clapGainScale, clapStart + 0.24);
+      subGain.gain.exponentialRampToValueAtTime(0.0001, clapStart + 0.90);
+      subOsc.connect(subGain);
+      subGain.connect(outBus);
+      subOsc.start(clapStart);
+      subOsc.stop(clapStart + 0.92);
+
+      // C. Loud Broadband Thunder Boom + 2.3-Second Multi-Peak Rolling After-Rumble
+      const rumbleSrc = ctx.createBufferSource();
+      rumbleSrc.buffer = pinkNoiseBuffer;
+      const rumbleLP = ctx.createBiquadFilter();
+      rumbleLP.type = 'lowpass';
+      rumbleLP.frequency.setValueAtTime(980, clapStart);
+      rumbleLP.frequency.exponentialRampToValueAtTime(165, clapStart + 0.35);
+      rumbleLP.frequency.exponentialRampToValueAtTime(62, clapStart + 2.25);
+      rumbleLP.Q.setValueAtTime(1.6, clapStart);
+
+      const rumbleGain = ctx.createGain();
+      rumbleGain.gain.setValueAtTime(0.0001, now);
+      rumbleGain.gain.setValueAtTime(0.001, clapStart);
+      // Initial loud thunder clap blast
+      rumbleGain.gain.linearRampToValueAtTime(0.92 * clapGainScale, clapStart + 0.012);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.28 * clapGainScale, clapStart + 0.24);
+      // 1st canyon echo roll (+0.34s)
+      rumbleGain.gain.linearRampToValueAtTime(0.48 * clapGainScale, clapStart + 0.36);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.18 * clapGainScale, clapStart + 0.72);
+      // 2nd distant horizon roll (+0.92s)
+      rumbleGain.gain.linearRampToValueAtTime(0.30 * clapGainScale, clapStart + 0.95);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.0001, clapStart + 2.30);
+
+      rumbleSrc.connect(rumbleLP);
+      rumbleLP.connect(rumbleGain);
+      rumbleGain.connect(outBus);
+      rumbleSrc.start(clapStart, Math.random() * 0.2, 2.35);
+
+      rumbleSrc.onended = () => {
+        activeThunderClapVoices = Math.max(0, activeThunderClapVoices - 1);
+      };
+    }
+
+    // 5. Continuous Weather Ambience Synthesizer:
+    //    - Thunderstorm: Gentle continuous rolling thunder rumble in the clouds + periodic distant rolling swells
+    //    - Haboob: Loud howling desert sandstorm gale wind (deep gale roar + howling dune gusts + sandblast hiss)
+    let weatherAudioLoops = null;
+    let rollingThunderEnv = 0.0;
+    let haboobWindEnv = 0.0;
+    let nextRollingThunderSwellTimer = 1.6;
+
+    function ensureWeatherAudioLoops() {
+      if (weatherAudioLoops) return weatherAudioLoops;
+      const ctx = ensureAudioContext();
+      if (!ctx || !pinkNoiseBuffer || !whiteNoiseBuffer) return null;
+
+      const now = ctx.currentTime;
+
+      // --- A. THUNDERSTORM GENTLE ROLLING THUNDER LOOP ---
+      const thunderSrc = ctx.createBufferSource();
+      thunderSrc.buffer = pinkNoiseBuffer;
+      thunderSrc.loop = true;
+      const thunderLP = ctx.createBiquadFilter();
+      thunderLP.type = 'lowpass';
+      thunderLP.frequency.setValueAtTime(105, now);
+      thunderLP.Q.setValueAtTime(2.1, now);
+      const thunderGain = ctx.createGain();
+      thunderGain.gain.setValueAtTime(0.0, now);
+      thunderSrc.connect(thunderLP);
+      thunderLP.connect(thunderGain);
+      thunderGain.connect(audioCompressor);
+      thunderSrc.start(now, Math.random() * 1.5);
+
+      // --- B. HABOOB LOUD BLOWING SANDSTORM WIND LOOPS (3 Layers) ---
+      // Layer 1: Deep Desert Gale Roar (Lowpass Pink Noise 150-290 Hz)
+      const galeSrc = ctx.createBufferSource();
+      galeSrc.buffer = pinkNoiseBuffer;
+      galeSrc.loop = true;
+      const galeLP = ctx.createBiquadFilter();
+      galeLP.type = 'lowpass';
+      galeLP.frequency.setValueAtTime(220, now);
+      galeLP.Q.setValueAtTime(1.5, now);
+      const galeGain = ctx.createGain();
+      galeGain.gain.setValueAtTime(0.0, now);
+      galeSrc.connect(galeLP);
+      galeLP.connect(galeGain);
+      galeGain.connect(audioCompressor);
+      galeSrc.start(now, Math.random() * 1.5);
+
+      // Layer 2: Howling Dune-Crest Wind Gusts (Resonant Bandpass Pink Noise 340-880 Hz)
+      const howlSrc = ctx.createBufferSource();
+      howlSrc.buffer = pinkNoiseBuffer;
+      howlSrc.loop = true;
+      const howlBP = ctx.createBiquadFilter();
+      howlBP.type = 'bandpass';
+      howlBP.frequency.setValueAtTime(520, now);
+      howlBP.Q.setValueAtTime(3.4, now);
+      const howlGain = ctx.createGain();
+      howlGain.gain.setValueAtTime(0.0, now);
+      howlSrc.connect(howlBP);
+      howlBP.connect(howlGain);
+      howlGain.connect(audioCompressor);
+      howlSrc.start(now, Math.random() * 1.5);
+
+      // Layer 3: Whipping Sand-Blast Hiss (Bandpass White Noise 1,600-3,100 Hz)
+      const sandHissSrc = ctx.createBufferSource();
+      sandHissSrc.buffer = whiteNoiseBuffer;
+      sandHissSrc.loop = true;
+      const sandHissBP = ctx.createBiquadFilter();
+      sandHissBP.type = 'bandpass';
+      sandHissBP.frequency.setValueAtTime(2100, now);
+      sandHissBP.Q.setValueAtTime(1.2, now);
+      const sandHissGain = ctx.createGain();
+      sandHissGain.gain.setValueAtTime(0.0, now);
+      sandHissSrc.connect(sandHissBP);
+      sandHissBP.connect(sandHissGain);
+      sandHissGain.connect(audioCompressor);
+      sandHissSrc.start(now, Math.random() * 1.5);
+
+      weatherAudioLoops = {
+        thunderLP,
+        thunderGain,
+        galeLP,
+        galeGain,
+        howlBP,
+        howlGain,
+        sandHissBP,
+        sandHissGain
+      };
+      return weatherAudioLoops;
+    }
+
+    // Distant stereo-panned cloud-to-cloud gentle rolling thunder swell during thunderstorms
+    function playGentleRollingThunderSwell() {
+      if (!params.audioEnabled || activeThunderClapVoices >= 5) return;
+      const ctx = ensureAudioContext();
+      if (!ctx || !pinkNoiseBuffer) return;
+
+      const now = ctx.currentTime;
+      const pan = (Math.random() - 0.5) * 1.5;
+      const outBus = createSpatialPanner(ctx, clamp(pan, -0.85, 0.85));
+
+      const rollSrc = ctx.createBufferSource();
+      rollSrc.buffer = pinkNoiseBuffer;
+      const rollLP = ctx.createBiquadFilter();
+      rollLP.type = 'lowpass';
+      rollLP.frequency.setValueAtTime(72, now);
+      rollLP.frequency.linearRampToValueAtTime(135 + Math.random() * 35, now + 0.75);
+      rollLP.frequency.exponentialRampToValueAtTime(52, now + 2.35);
+      rollLP.Q.setValueAtTime(1.9, now);
+
+      const rollGain = ctx.createGain();
+      const peakAmp = 0.22 + Math.random() * 0.10;
+      rollGain.gain.setValueAtTime(0.0001, now);
+      rollGain.gain.linearRampToValueAtTime(peakAmp, now + 0.65);
+      rollGain.gain.linearRampToValueAtTime(peakAmp * 0.62, now + 1.15);
+      rollGain.gain.linearRampToValueAtTime(peakAmp * 0.85, now + 1.48);
+      rollGain.gain.exponentialRampToValueAtTime(0.0001, now + 2.40);
+
+      rollSrc.connect(rollLP);
+      rollLP.connect(rollGain);
+      rollGain.connect(outBus);
+      rollSrc.start(now, Math.random() * 0.2, 2.45);
+    }
+
+    function updateWeatherAudio(dt) {
+      const mode = params.weatherMode;
+      const isThunderstorm = (mode === 'thunderstorm');
+      const isHaboob = (mode === 'haboob');
+
+      const targetThunder = (params.audioEnabled && isThunderstorm) ? 1.0 : 0.0;
+      const targetHaboob = (params.audioEnabled && isHaboob) ? 1.0 : 0.0;
+
+      rollingThunderEnv += (targetThunder - rollingThunderEnv) * Math.min(1.0, dt * 1.8);
+      haboobWindEnv += (targetHaboob - haboobWindEnv) * Math.min(1.0, dt * 1.8);
+
+      if (rollingThunderEnv < 0.002 && haboobWindEnv < 0.002) {
+        if (weatherAudioLoops && audioCtx) {
+          const now = audioCtx.currentTime;
+          weatherAudioLoops.thunderGain.gain.setTargetAtTime(0.0, now, 0.06);
+          weatherAudioLoops.galeGain.gain.setTargetAtTime(0.0, now, 0.06);
+          weatherAudioLoops.howlGain.gain.setTargetAtTime(0.0, now, 0.06);
+          weatherAudioLoops.sandHissGain.gain.setTargetAtTime(0.0, now, 0.06);
+        }
+        return;
+      }
+
+      const loops = ensureWeatherAudioLoops();
+      if (!loops || !audioCtx) return;
+
+      const now = audioCtx.currentTime;
+      const time = uniforms.uTime.value || 0.0;
+
+      // 1. Modulate Gentle Rolling Thunder Ambience during Thunderstorms
+      if (rollingThunderEnv > 0.001) {
+        const rollWave = 0.55 + 0.28 * Math.sin(time * 1.25) + 0.17 * Math.cos(time * 2.35 + 1.1);
+        const cutoff = 72 + rollWave * 68;
+        loops.thunderLP.frequency.setTargetAtTime(cutoff, now, 0.08);
+        loops.thunderGain.gain.setTargetAtTime(rollingThunderEnv * (0.14 + rollWave * 0.16), now, 0.08);
+
+        if (isThunderstorm) {
+          nextRollingThunderSwellTimer -= dt;
+          if (nextRollingThunderSwellTimer <= 0.0) {
+            playGentleRollingThunderSwell();
+            nextRollingThunderSwellTimer = 2.4 + Math.random() * 2.2;
+          }
+        }
+      } else {
+        loops.thunderGain.gain.setTargetAtTime(0.0, now, 0.06);
+      }
+
+      // 2. Modulate Loud Blowing Wind & Howling Sandstorm Gusts during Haboob
+      if (haboobWindEnv > 0.001) {
+        const windRatio = clamp(params.windSpeed / 27.0, 0.45, 1.35);
+        const gustWave1 = 0.5 + 0.5 * Math.sin(time * 1.65);
+        const gustWave2 = 0.5 + 0.5 * Math.cos(time * 2.85 + 0.7);
+        const gustIntensity = 0.48 + 0.34 * gustWave1 + 0.18 * gustWave2;
+
+        // Deep desert gale roar
+        loops.galeLP.frequency.setTargetAtTime(160 + gustIntensity * 140 * windRatio, now, 0.07);
+        loops.galeGain.gain.setTargetAtTime(haboobWindEnv * (0.34 + gustIntensity * 0.24) * windRatio, now, 0.07);
+
+        // Loud howling wind sweeping across dune crests
+        const howlFreq = 360 + (gustWave1 * 320 + gustWave2 * 180) * windRatio;
+        loops.howlBP.frequency.setTargetAtTime(howlFreq, now, 0.07);
+        loops.howlGain.gain.setTargetAtTime(haboobWindEnv * (0.28 + gustIntensity * 0.26) * windRatio, now, 0.07);
+
+        // Whipping sand-grain hiss
+        const hissFreq = 1650 + gustIntensity * 1150 * windRatio;
+        loops.sandHissBP.frequency.setTargetAtTime(hissFreq, now, 0.07);
+        loops.sandHissGain.gain.setTargetAtTime(haboobWindEnv * (0.12 + gustWave1 * 0.15) * windRatio, now, 0.07);
+      } else {
+        loops.galeGain.gain.setTargetAtTime(0.0, now, 0.06);
+        loops.howlGain.gain.setTargetAtTime(0.0, now, 0.06);
+        loops.sandHissGain.gain.setTargetAtTime(0.0, now, 0.06);
+      }
     }
 
     function launchFireworkAtWorld(wx, wz, forceImmediate = false) {
