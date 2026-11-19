@@ -1878,6 +1878,14 @@
 
         <div class="control-row">
           <div class="control-label">
+            <span>Vehicle Top Speed</span>
+            <span class="control-val" id="val-truck-top-speed">24 m/s · 1.0x</span>
+          </div>
+          <input type="range" id="slider-truck-top-speed" min="10" max="48" step="1" value="24" title="10 m/s (Crawl) to 48 m/s (2.0x Nitro Top Speed, ~58 m/s on paved road)" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
             <span>Suspension Stiffness</span>
             <span class="control-val" id="val-truck-suspension">60% · Balanced</span>
           </div>
@@ -2187,6 +2195,7 @@
       driveMode: false,
       truckSmokeIntensity: 0.60,     // 0.0 (Off) .. 1.0 (Heavy offroad sand & dust rooster-tails)
       truckSkidThreshold: 6.5,       // Cornering/drift threshold before tire squeal triggers (0.5 .. 9.0)
+      truckTopSpeed: 24.0,           // Base offroad top speed in m/s (10.0 .. 48.0 m/s, double the 24.0 m/s default)
       truckSuspension: 0.60,         // 0.10 (Soft plush body roll & bounce) .. 1.00 (Stiff flat rally suspension)
       truckCounterweight: 0.85,      // 0.00 (Top-heavy easy rollover) .. 1.00 (Heavy low-CG anti-roll counterweight, never flips at 1.0)
       truckTireTracking: 0.68,       // 0.10 (Loose sideways drift) .. 1.00 (Locked-in tire tracking & fast slip recovery)
@@ -11831,7 +11840,12 @@
       const time = uniforms.uTime.value || 0.0;
       const absSpd = Math.abs(activeTruck.speed || 0.0);
 
-      // 4-speed offroad gear RPM curve tuned by user's per-gear engine pitch sliders (truckGear1Tune .. truckGear4Tune)!
+      // 4-speed offroad gear RPM curve tuned by user's per-gear engine pitch sliders (truckGear1Tune .. truckGear4Tune)
+      // Shift points scale proportionally with Vehicle Top Speed (params.truckTopSpeed / 24.0)!
+      const topSpeedScale = clamp((params.truckTopSpeed || 24.0) / 24.0, 0.4, 2.2);
+      const shift1 = 6.8 * topSpeedScale;
+      const shift2 = 13.4 * topSpeedScale;
+      const shift3 = 19.5 * topSpeedScale;
       const g1Peak = params.truckGear1Tune || 98.0;
       const g2Peak = params.truckGear2Tune || 108.0;
       const g3Peak = params.truckGear3Tune || 114.0;
@@ -11839,27 +11853,27 @@
       const idleBase = 38.0;
       let baseRpmFreq = idleBase;
       let gearLabel = 'Idle';
-      const isOverdrive4th = (absSpd >= 19.5);
+      const isOverdrive4th = (absSpd >= shift3);
       if (absSpd < 0.25) {
         baseRpmFreq = idleBase;
         gearLabel = 'Idle';
-      } else if (absSpd < 6.8) {
-        const t = absSpd / 6.8;
+      } else if (absSpd < shift1) {
+        const t = absSpd / shift1;
         baseRpmFreq = idleBase + t * (g1Peak - idleBase);
         gearLabel = `1st · ${Math.round(absSpd)} m/s`;
-      } else if (absSpd < 13.4) {
-        const t = (absSpd - 6.8) / 6.6;
+      } else if (absSpd < shift2) {
+        const t = (absSpd - shift1) / (shift2 - shift1);
         const g2Low = idleBase + (g2Peak - idleBase) * 0.34;
         baseRpmFreq = g2Low + t * (g2Peak - g2Low);
         gearLabel = `2nd · ${Math.round(absSpd)} m/s`;
-      } else if (absSpd < 19.5) {
-        const t = (absSpd - 13.4) / 6.1;
+      } else if (absSpd < shift3) {
+        const t = (absSpd - shift2) / (shift3 - shift2);
         const g3Low = idleBase + (g3Peak - idleBase) * 0.38;
         baseRpmFreq = g3Low + t * (g3Peak - g3Low);
         gearLabel = `3rd · ${Math.round(absSpd)} m/s`;
       } else {
         // 4th Gear Overdrive: uses user's 4th Gear Tune slider (truckGear4Tune)
-        const t = clamp((absSpd - 19.5) / 10.0, 0.0, 1.0);
+        const t = clamp((absSpd - shift3) / (10.0 * topSpeedScale), 0.0, 1.0);
         const g4Low = Math.max(28.0, g4Peak * 0.72);
         baseRpmFreq = g4Low + t * (g4Peak - g4Low);
         gearLabel = `4th OD · ${Math.round(absSpd)} m/s`;
@@ -12202,9 +12216,11 @@
           const cIdx = idx(gx, gz);
           const surfMatHere = surfaceMaterial[cIdx];
           const isRoadSurface = (surfMatHere >= 2);
-          const maxFwdSpeed = isRoadSurface ? 28.5 : 23.5;
-          const maxRevSpeed = -10.5;
-          const accelRate = isRoadSurface ? 23.0 : 19.0;
+          const baseTopSpeed = clamp(params.truckTopSpeed ?? 24.0, 10.0, 48.0);
+          const topSpeedScale = baseTopSpeed / 24.0;
+          const maxFwdSpeed = isRoadSurface ? (baseTopSpeed * 1.21) : baseTopSpeed;
+          const maxRevSpeed = -10.5 * Math.max(0.85, Math.sqrt(topSpeedScale));
+          const accelRate = (isRoadSurface ? 23.0 : 19.0) * (0.35 + 0.65 * topSpeedScale);
 
           // 1. Longitudinal Acceleration, Braking & Rolling Drag
           let spd = it.speed || 0.0;
@@ -14683,6 +14699,7 @@
     // --- Offroad Vehicle Tuner Controls (Smoke Intensity, Skid Threshold, Physics/Suspension/Counterweight/Tracking/Jump, Per-Gear Engine Tune, Headlight Angle/Distance/Color) ---
     const sliderTruckSmoke = document.getElementById('slider-truck-smoke');
     const sliderTruckSkidThresh = document.getElementById('slider-truck-skid-thresh');
+    const sliderTruckTopSpeed = document.getElementById('slider-truck-top-speed');
     const sliderTruckSuspension = document.getElementById('slider-truck-suspension');
     const sliderTruckCounterweight = document.getElementById('slider-truck-counterweight');
     const sliderTruckTracking = document.getElementById('slider-truck-tracking');
@@ -14701,6 +14718,18 @@
       if (val <= 3.8) return `${val.toFixed(1)} · Balanced`;
       if (val <= 6.8) return `${val.toFixed(1)} · High`;
       return `${val.toFixed(1)} · Extreme Only`;
+    }
+
+    if (sliderTruckTopSpeed) {
+      sliderTruckTopSpeed.addEventListener('input', (e) => {
+        const spdVal = parseFloat(e.target.value);
+        params.truckTopSpeed = spdVal;
+        const el = document.getElementById('val-truck-top-speed');
+        if (el) {
+          const mult = (spdVal / 24.0).toFixed(1);
+          el.textContent = `${Math.round(spdVal)} m/s · ${mult}x`;
+        }
+      });
     }
 
     if (sliderTruckSuspension) {
