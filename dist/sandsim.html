@@ -907,6 +907,103 @@
         font-size: 10.5px;
       }
     }
+
+    /* Background Suspend / Memory Unloaded Modal ("Continue" or "Reload") */
+    #background-suspend-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9800;
+      background: radial-gradient(circle at 50% 40%, rgba(20, 17, 14, 0.92) 0%, rgba(8, 7, 5, 0.97) 100%);
+      backdrop-filter: blur(16px);
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    #background-suspend-overlay.active {
+      display: flex;
+    }
+
+    .suspend-card {
+      background: rgba(24, 20, 16, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 26px 28px;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .suspend-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #fde047;
+      background: rgba(234, 179, 8, 0.16);
+      border: 1px solid rgba(250, 204, 21, 0.45);
+      padding: 4px 12px;
+      border-radius: 999px;
+    }
+
+    .suspend-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent-bright);
+      letter-spacing: 0.02em;
+    }
+
+    .suspend-desc {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    .suspend-actions {
+      display: flex;
+      gap: 12px;
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .suspend-btn {
+      flex: 1;
+      justify-content: center;
+      padding: 11px 16px;
+      font-size: 13.5px;
+      font-weight: 700;
+      border-radius: 11px;
+      cursor: pointer;
+    }
+
+    .suspend-btn.continue-btn {
+      background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+      color: #042f2e;
+      border-color: #6ee7b7;
+      box-shadow: 0 4px 18px rgba(16, 185, 129, 0.35);
+    }
+
+    .suspend-btn.continue-btn:hover {
+      filter: brightness(1.08);
+    }
+
+    .suspend-btn.reload-btn {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+
+    .suspend-btn.reload-btn:hover {
+      background: rgba(224, 108, 85, 0.22);
+      border-color: var(--danger);
+      color: #ffd0c7;
+    }
   </style>
   <script type="importmap">
     {
@@ -930,6 +1027,25 @@
     <button id="btn-force-landscape" style="margin-top:8px; padding:9px 18px; font-weight:700; background:linear-gradient(135deg,#e8a84c,#c97b28); color:#16110b; border-color:#ffc56d;">
       🔄 Lock Landscape / Continue
     </button>
+  </div>
+
+  <!-- Background Suspend & Memory Unloaded Overlay -->
+  <div id="background-suspend-overlay">
+    <div class="suspend-card">
+      <span class="suspend-badge" id="suspend-status-badge">⏸️ Rendering Stopped · State Saved · Memory Unloaded</span>
+      <div class="suspend-title">Simulator Paused in Background</div>
+      <p class="suspend-desc">
+        The app was placed in the background. All 3D rendering was stopped, your current terrain, water, lava, and ecosystem state was saved, and GPU/scene memory was unloaded.
+      </p>
+      <div class="suspend-actions">
+        <button id="btn-bg-continue" class="suspend-btn continue-btn" title="Restore saved state into memory and resume rendering where you left off">
+          ▶️ Continue
+        </button>
+        <button id="btn-bg-reload" class="suspend-btn reload-btn" title="Reload the application fresh from scratch">
+          🔄 Reload
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Mobile FPV Virtual Joystick & Action Buttons -->
@@ -8096,7 +8212,7 @@
     });
 
     // ============================================================================
-    // 15. MAIN SIMULATION & RENDER LOOP
+    // 15. MAIN SIMULATION & RENDER LOOP + BACKGROUND SUSPEND / MEMORY UNLOAD
     // ============================================================================
     updateSunPosition();
     buildTerrain('craters');
@@ -8107,9 +8223,350 @@
     let frameCount = 0;
     let fpsFrames = 0;
     let fpsTimer = 0;
+    let animFrameId = null;
+    let isBackgroundSuspended = false;
+    let savedSnapshotBlob = null;
+
+    // IndexedDB persistence helper so saved state survives background memory unload
+    const STATE_DB_NAME = 'aeolian_oasis_suspend_db';
+    const STATE_STORE_NAME = 'snapshots';
+    const STATE_KEY = 'suspended_state';
+
+    function openStateDB() {
+      return new Promise((resolve, reject) => {
+        if (!window.indexedDB) { reject(new Error('No IndexedDB')); return; }
+        const req = indexedDB.open(STATE_DB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(STATE_STORE_NAME)) {
+            db.createObjectStore(STATE_STORE_NAME);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function saveSnapshotToIndexedDB(snapshot) {
+      try {
+        const db = await openStateDB();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction(STATE_STORE_NAME, 'readwrite');
+          tx.objectStore(STATE_STORE_NAME).put(snapshot, STATE_KEY);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+        db.close();
+      } catch (_) {
+        // Fallback: savedSnapshotBlob is already held in compact serialized form
+      }
+    }
+
+    async function loadSnapshotFromIndexedDB() {
+      try {
+        const db = await openStateDB();
+        const data = await new Promise((resolve, reject) => {
+          const tx = db.transaction(STATE_STORE_NAME, 'readonly');
+          const req = tx.objectStore(STATE_STORE_NAME).get(STATE_KEY);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error);
+        });
+        db.close();
+        return data;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    async function clearSnapshotFromIndexedDB() {
+      try {
+        const db = await openStateDB();
+        await new Promise((resolve) => {
+          const tx = db.transaction(STATE_STORE_NAME, 'readwrite');
+          tx.objectStore(STATE_STORE_NAME).delete(STATE_KEY);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        });
+        db.close();
+      } catch (_) {}
+    }
+
+    function captureFullSimulatorSnapshot() {
+      // Pack all 10 Float32Arrays + 1 Uint8Array into a single compact binary ArrayBuffer
+      const floatCount = MAX_CELLS * 10;
+      const byteLength = floatCount * 4 + MAX_CELLS;
+      const packedBuffer = new ArrayBuffer(byteLength);
+      const fView = new Float32Array(packedBuffer, 0, floatCount);
+      const uView = new Uint8Array(packedBuffer, floatCount * 4, MAX_CELLS);
+
+      fView.set(bedrock, 0);
+      fView.set(sand, MAX_CELLS);
+      fView.set(water, MAX_CELLS * 2);
+      fView.set(lavaFrac, MAX_CELLS * 3);
+      fView.set(soilMoisture, MAX_CELLS * 4);
+      fView.set(waterProximity, MAX_CELLS * 5);
+      fView.set(veg, MAX_CELLS * 6);
+      fView.set(vegHealth, MAX_CELLS * 7);
+      fView.set(snowCover, MAX_CELLS * 8);
+      fView.set(iceCover, MAX_CELLS * 9);
+      uView.set(obstacleType);
+
+      const serializedFauna = faunaAgents.map((a) => ({
+        type: a.type,
+        state: a.state,
+        skeletonTimer: a.skeletonTimer || 0,
+        submergedTime: a.submergedTime || 0,
+        huntCooldown: a.huntCooldown || 0,
+        apexPhase: a.apexPhase || 'PROWL',
+        x: a.x,
+        y: a.y,
+        z: a.z,
+        heading: a.heading,
+        speed: a.speed,
+        turnRate: a.turnRate,
+        scale: a.scale,
+        phase: a.phase,
+        colorHex: a.colorHex
+      }));
+
+      return {
+        packedBuffer,
+        paramsCopy: { ...params },
+        simTick,
+        timeVal: uniforms.uTime.value,
+        cameraPos: [camera.position.x, camera.position.y, camera.position.z],
+        orbitTarget: [controls.target.x, controls.target.y, controls.target.z],
+        fpvCopy: {
+          yaw: fpvState.yaw,
+          pitch: fpvState.pitch,
+          velY: fpvState.velY,
+          onGround: fpvState.onGround,
+          trappedUnderIce: fpvState.trappedUnderIce,
+          savedOrbitPos: [fpvState.savedOrbitPos.x, fpvState.savedOrbitPos.y, fpvState.savedOrbitPos.z],
+          savedOrbitTarget: [fpvState.savedOrbitTarget.x, fpvState.savedOrbitTarget.y, fpvState.savedOrbitTarget.z]
+        },
+        fauna: serializedFauna
+      };
+    }
+
+    function unloadSimulatorMemory() {
+      // 1. Dispose all articulated 3D apex predator skeletal hierarchies & clear fauna array
+      if (typeof faunaAgents !== 'undefined') {
+        for (const a of faunaAgents) {
+          if (typeof disposeApexRig === 'function') disposeApexRig(a);
+        }
+        faunaAgents.length = 0;
+      }
+
+      // 2. Clear all active 3D arrow projectiles
+      if (typeof activeArrows !== 'undefined') {
+        for (const arr of activeArrows) {
+          if (arr.mesh) projectilesGroup.remove(arr.mesh);
+        }
+        activeArrows.length = 0;
+      }
+
+      // 3. Zero out all 7 flora InstancedMesh counts & 18 fauna InstancedMesh counts
+      for (const pool of allPlantPools) {
+        pool.count = 0;
+        pool.instanceMatrix.needsUpdate = true;
+      }
+      const allFaunaInst = [
+        camelInst, oryxInst, fennecInst, flamingoInst,
+        macawInst, macawWingLInst, macawWingRInst,
+        batInst, batWingLInst, batWingRInst,
+        fishInst, hawkInst, hawkWingLInst, hawkWingRInst,
+        owlInst, owlWingLInst, owlWingRInst, skeletonInst
+      ];
+      for (const inst of allFaunaInst) {
+        inst.count = 0;
+        inst.instanceMatrix.needsUpdate = true;
+      }
+
+      // 4. Zero out live simulation heightfield & coupled state arrays
+      bedrock.fill(0);
+      sand.fill(0);
+      sandNext.fill(0);
+      water.fill(0);
+      waterNext.fill(0);
+      lavaFrac.fill(0);
+      lavaFracNext.fill(0);
+      soilMoisture.fill(0);
+      moistureNext.fill(0);
+      waterProximity.fill(0);
+      waterProxNext.fill(0);
+      veg.fill(0);
+      vegHealth.fill(0);
+      shadow.fill(0);
+      windSpeedMap.fill(0);
+      obstacleType.fill(0);
+      snowCover.fill(0);
+      iceCover.fill(0);
+
+      // 5. Release WebGL shadow map textures, render lists, and GPU program/buffer caches
+      if (sunLight.shadow && sunLight.shadow.map) {
+        sunLight.shadow.map.dispose();
+        sunLight.shadow.map = null;
+      }
+      if (renderer.renderLists) {
+        renderer.renderLists.dispose();
+      }
+      renderer.dispose();
+      renderer.domElement.style.visibility = 'hidden';
+    }
+
+    function suspendAppInBackground() {
+      if (isBackgroundSuspended) return;
+      isBackgroundSuspended = true;
+
+      // 1. Stop all rendering immediately
+      if (animFrameId !== null) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+      }
+      clock.stop();
+      isPointerDown = false;
+      fpvState.bowDrawing = false;
+      if (document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
+        document.exitPointerLock();
+      }
+
+      // 2. Save full simulation state
+      const snapshot = captureFullSimulatorSnapshot();
+      savedSnapshotBlob = snapshot;
+      saveSnapshotToIndexedDB(snapshot);
+
+      // 3. Unload GPU & scene memory
+      unloadSimulatorMemory();
+
+      // 4. Show "Continue" or "Reload" modal
+      const fpsEl = document.getElementById('stat-fps');
+      if (fpsEl) fpsEl.textContent = 'PAUSED';
+      const overlay = document.getElementById('background-suspend-overlay');
+      if (overlay) overlay.classList.add('active');
+    }
+
+    async function continueFromBackgroundSuspend() {
+      if (!isBackgroundSuspended) return;
+
+      let snap = savedSnapshotBlob;
+      if (!snap || !snap.packedBuffer) {
+        snap = await loadSnapshotFromIndexedDB();
+      }
+      if (!snap || !snap.packedBuffer) {
+        window.location.reload();
+        return;
+      }
+
+      // 1. Restore all 10 Float32Arrays + 1 Uint8Array from packed binary buffer
+      const floatCount = MAX_CELLS * 10;
+      const fView = new Float32Array(snap.packedBuffer, 0, floatCount);
+      const uView = new Uint8Array(snap.packedBuffer, floatCount * 4, MAX_CELLS);
+
+      bedrock.set(fView.subarray(0, MAX_CELLS));
+      sand.set(fView.subarray(MAX_CELLS, MAX_CELLS * 2));
+      water.set(fView.subarray(MAX_CELLS * 2, MAX_CELLS * 3));
+      lavaFrac.set(fView.subarray(MAX_CELLS * 3, MAX_CELLS * 4));
+      soilMoisture.set(fView.subarray(MAX_CELLS * 4, MAX_CELLS * 5));
+      waterProximity.set(fView.subarray(MAX_CELLS * 5, MAX_CELLS * 6));
+      veg.set(fView.subarray(MAX_CELLS * 6, MAX_CELLS * 7));
+      vegHealth.set(fView.subarray(MAX_CELLS * 7, MAX_CELLS * 8));
+      snowCover.set(fView.subarray(MAX_CELLS * 8, MAX_CELLS * 9));
+      iceCover.set(fView.subarray(MAX_CELLS * 9, MAX_CELLS * 10));
+      obstacleType.set(uView);
+
+      // 2. Restore simulation parameters & camera/FPV state
+      Object.assign(params, snap.paramsCopy);
+      simTick = snap.simTick || 0;
+      uniforms.uTime.value = snap.timeVal || 0;
+
+      camera.position.set(snap.cameraPos[0], snap.cameraPos[1], snap.cameraPos[2]);
+      controls.target.set(snap.orbitTarget[0], snap.orbitTarget[1], snap.orbitTarget[2]);
+      if (snap.fpvCopy) {
+        fpvState.yaw = snap.fpvCopy.yaw;
+        fpvState.pitch = snap.fpvCopy.pitch;
+        fpvState.velY = snap.fpvCopy.velY;
+        fpvState.onGround = snap.fpvCopy.onGround;
+        fpvState.trappedUnderIce = snap.fpvCopy.trappedUnderIce;
+        fpvState.savedOrbitPos.fromArray(snap.fpvCopy.savedOrbitPos);
+        fpvState.savedOrbitTarget.fromArray(snap.fpvCopy.savedOrbitTarget);
+      }
+
+      // 3. Recreate wildlife agents (including articulated 3D apex predator rigs)
+      faunaAgents.length = 0;
+      if (Array.isArray(snap.fauna)) {
+        for (const fa of snap.fauna) {
+          let rig = null;
+          if (fa.state === 'alive') {
+            if (fa.type === 'lion') rig = createArticulatedLionRig();
+            else if (fa.type === 'jaguar') rig = createArticulatedJaguarRig();
+            else if (fa.type === 'croc') rig = createArticulatedCrocRig();
+            if (rig) {
+              rig.root.position.set(fa.x, fa.y, fa.z);
+              rig.root.rotation.y = fa.heading;
+              rig.root.scale.setScalar(fa.scale);
+              apexRigsGroup.add(rig.root);
+            }
+          }
+          faunaAgents.push({
+            ...fa,
+            stalkTimer: 0,
+            pounceTimer: 0,
+            lookYawOffset: 0,
+            rig
+          });
+        }
+      }
+
+      // 4. Re-upload geometries, materials, shadow maps, and flora instances to GPU
+      savedSnapshotBlob = null;
+      clearSnapshotFromIndexedDB();
+
+      renderer.domElement.style.visibility = 'visible';
+      applyFidelityTier(params.fidelity);
+      updateSunPosition();
+      computeWindShadowAndFlow();
+      syncTerrainAndWaterMeshes();
+      rebuildFloraInstances();
+      syncUILabels();
+
+      // Hide suspend modal & resume render loop
+      isBackgroundSuspended = false;
+      const overlay = document.getElementById('background-suspend-overlay');
+      if (overlay) overlay.classList.remove('active');
+
+      clock.start();
+      clock.getDelta();
+      animFrameId = requestAnimationFrame(animate);
+    }
+
+    async function reloadFromBackgroundSuspend() {
+      savedSnapshotBlob = null;
+      await clearSnapshotFromIndexedDB();
+      window.location.reload();
+    }
+
+    document.getElementById('btn-bg-continue').addEventListener('click', () => {
+      continueFromBackgroundSuspend();
+    });
+
+    document.getElementById('btn-bg-reload').addEventListener('click', () => {
+      reloadFromBackgroundSuspend();
+    });
+
+    // Trigger background suspend whenever the tab/app is put into the background
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        suspendAppInBackground();
+      }
+    });
+    window.addEventListener('pagehide', () => {
+      suspendAppInBackground();
+    });
 
     function animate() {
-      requestAnimationFrame(animate);
+      if (isBackgroundSuspended) return;
+      animFrameId = requestAnimationFrame(animate);
 
       const dt = Math.min(clock.getDelta(), 0.05);
       uniforms.uTime.value += dt;
