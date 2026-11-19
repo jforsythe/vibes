@@ -1650,6 +1650,145 @@
       border-color: var(--danger);
       color: #ffd0c7;
     }
+
+    /* World Genesis Staged Build Loading Screen */
+    #world-boot-loader {
+      position: fixed;
+      inset: 0;
+      z-index: 9500;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 28px 18px 86px 18px;
+      background: radial-gradient(circle at 50% 42%, rgba(16, 13, 10, 0.14) 0%, rgba(10, 8, 6, 0.56) 100%);
+      pointer-events: auto;
+      transition: opacity 0.55s ease, visibility 0.55s ease;
+    }
+
+    #world-boot-loader.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .boot-loader-card {
+      width: 100%;
+      max-width: 490px;
+      background: rgba(18, 15, 12, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 197, 109, 0.52);
+      border-radius: 16px;
+      padding: 16px 20px;
+      box-shadow: 0 20px 55px rgba(0, 0, 0, 0.78), 0 0 26px rgba(232, 168, 76, 0.18);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .boot-loader-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .boot-loader-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--accent-bright);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .boot-loader-pct {
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      font-weight: 800;
+      color: #fde68a;
+      background: rgba(232, 168, 76, 0.18);
+      border: 1px solid rgba(255, 197, 109, 0.42);
+      padding: 2px 9px;
+      border-radius: 999px;
+    }
+
+    .boot-progress-track {
+      width: 100%;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.10);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .boot-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #e8a84c 0%, #38bdf8 55%, #34d399 100%);
+      border-radius: 999px;
+      transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .boot-loader-current {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--text);
+      min-height: 18px;
+    }
+
+    .boot-steps-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 5px 10px;
+      margin-top: 2px;
+    }
+
+    .boot-step-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: rgba(243, 236, 226, 0.42);
+      font-weight: 600;
+      transition: color 0.25s ease, transform 0.25s ease;
+    }
+
+    .boot-step-item.active {
+      color: #fde047;
+      font-weight: 800;
+      transform: translateX(2px);
+    }
+
+    .boot-step-item.done {
+      color: #6ee7b7;
+    }
+
+    .boot-step-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      flex-shrink: 0;
+    }
+
+    .boot-step-item.active .boot-step-dot {
+      background: rgba(250, 204, 21, 0.25);
+      border-color: #fde047;
+      box-shadow: 0 0 8px rgba(250, 204, 21, 0.65);
+    }
+
+    .boot-step-item.done .boot-step-dot {
+      background: rgba(16, 185, 129, 0.25);
+      border-color: #34d399;
+      color: #6ee7b7;
+    }
   </style>
   <script type="importmap">
     {
@@ -1690,6 +1829,32 @@
         <button id="btn-bg-reload" class="suspend-btn reload-btn" title="Reload the application fresh from scratch">
           🔄 Reload
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Staged World Genesis Loading Screen -->
+  <div id="world-boot-loader">
+    <div class="boot-loader-card">
+      <div class="boot-loader-top">
+        <div class="boot-loader-title">
+          <span>🏜️ Building Aeolian &amp; Oasis 3D</span>
+        </div>
+        <span class="boot-loader-pct" id="boot-loader-pct">0%</span>
+      </div>
+      <div class="boot-progress-track">
+        <div class="boot-progress-fill" id="boot-progress-fill"></div>
+      </div>
+      <div class="boot-loader-current" id="boot-loader-current">1 / 8 · Laying Foundation Slab &amp; Plinth...</div>
+      <div class="boot-steps-grid" id="boot-steps-grid">
+        <div class="boot-step-item" data-boot-step="0"><span class="boot-step-dot">1</span><span>🪨 Foundation Slab</span></div>
+        <div class="boot-step-item" data-boot-step="1"><span class="boot-step-dot">2</span><span>🏔️ Sculpting Terrain</span></div>
+        <div class="boot-step-item" data-boot-step="2"><span class="boot-step-dot">3</span><span>🌊 Pouring Elements</span></div>
+        <div class="boot-step-item" data-boot-step="3"><span class="boot-step-dot">4</span><span>🌴 Growing Biome Flora</span></div>
+        <div class="boot-step-item" data-boot-step="4"><span class="boot-step-dot">5</span><span>🐪 Spawning Animals</span></div>
+        <div class="boot-step-item" data-boot-step="5"><span class="boot-step-dot">6</span><span>📦 World Items Ready</span></div>
+        <div class="boot-step-item" data-boot-step="6"><span class="boot-step-dot">7</span><span>🌤️ Starting Weather</span></div>
+        <div class="boot-step-item" data-boot-step="7"><span class="boot-step-dot">8</span><span>🧑‍🎨 Spawning Oasis Artist</span></div>
       </div>
     </div>
   </div>
@@ -10821,8 +10986,13 @@
     function updateVoxelHumanArtist(dt) {
       const rig = voxelHuman.rig;
 
-      // 1. If the Voxel Human was destroyed, count down the respawn cooldown before regenerating a new human!
+      // 1. If the Voxel Human was destroyed (or world boot hasn't reached the person spawn step yet), wait or count down respawn cooldown!
       if (!voxelHuman.active) {
+        if (typeof worldPersonSpawnAllowed !== 'undefined' && !worldPersonSpawnAllowed) {
+          rig.root.visible = false;
+          if (voxelHumanBubbleEl) voxelHumanBubbleEl.style.display = 'none';
+          return;
+        }
         if (voxelHuman.respawnCooldown > 0.0) {
           voxelHuman.respawnCooldown = Math.max(0.0, voxelHuman.respawnCooldown - dt);
           rig.root.visible = false;
@@ -17578,6 +17748,13 @@
         syncTerrainAndWaterMeshes();
         rebuildFloraInstances();
 
+        worldBootComplete = true;
+        worldWeatherStarted = true;
+        worldPersonSpawnAllowed = true;
+        terrainMesh.visible = true;
+        waterMesh.visible = true;
+        if (bootLoaderEl) bootLoaderEl.classList.add('hidden');
+
         const loadedTitle = meta.title || file.name.replace(/\.png$/i, '');
         if (valCartridgeStatus) {
           valCartridgeStatus.textContent = 'Loaded!';
@@ -19776,12 +19953,175 @@
     }
 
     // ============================================================================
-    // 15. MAIN SIMULATION & RENDER LOOP + BACKGROUND SUSPEND / MEMORY UNLOAD
+    // 15. MAIN SIMULATION & RENDER LOOP + STAGED WORLD GENESIS + BACKGROUND SUSPEND
     // ============================================================================
     updateSunPosition();
-    buildTerrain('craters');
     applyFidelityTier(3);
     syncUILabels();
+
+    let worldBootComplete = false;
+    let worldWeatherStarted = false;
+    let worldPersonSpawnAllowed = false;
+
+    const bootLoaderEl = document.getElementById('world-boot-loader');
+    const bootLoaderPctEl = document.getElementById('boot-loader-pct');
+    const bootProgressFillEl = document.getElementById('boot-progress-fill');
+    const bootLoaderCurrentEl = document.getElementById('boot-loader-current');
+
+    function setBootStepUI(stepIdx, pct, statusText) {
+      if (bootLoaderPctEl) bootLoaderPctEl.textContent = `${Math.round(pct)}%`;
+      if (bootProgressFillEl) bootProgressFillEl.style.width = `${clamp(pct, 0, 100)}%`;
+      if (bootLoaderCurrentEl) bootLoaderCurrentEl.textContent = statusText;
+      document.querySelectorAll('.boot-step-item').forEach((el) => {
+        const idxAttr = parseInt(el.dataset.bootStep, 10);
+        el.classList.toggle('done', idxAttr < stepIdx);
+        el.classList.toggle('active', idxAttr === stepIdx);
+        const dot = el.querySelector('.boot-step-dot');
+        if (dot) {
+          dot.textContent = idxAttr < stepIdx ? '✓' : `${idxAttr + 1}`;
+        }
+      });
+    }
+
+    function waitBootDelay(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async function runStagedWorldGenesis(preset = 'craters') {
+      worldBootComplete = false;
+      worldWeatherStarted = false;
+      worldPersonSpawnAllowed = false;
+
+      // Pause dynamic weather, day/night & person while building the world step-by-step
+      const savedSimSteps = params.simSteps;
+      const savedAutoWeather = params.autoWeather;
+      const savedAutoDayNight = params.autoDayNight;
+      params.simSteps = 0;
+      params.autoWeather = false;
+      params.autoDayNight = false;
+
+      // Pre-compute the target preset layers by running buildTerrain once, then capture buffers & clear them so we can reveal each layer in order!
+      buildTerrain(preset);
+      const targetBedrock = new Float32Array(bedrock);
+      const targetSand = new Float32Array(sand);
+      const targetWater = new Float32Array(water);
+      const targetSoilMoisture = new Float32Array(soilMoisture);
+      const targetWaterProx = new Float32Array(waterProximity);
+      const targetVeg = new Float32Array(veg);
+      const targetVegHealth = new Float32Array(vegHealth);
+      const targetObstacle = new Uint8Array(obstacleType);
+
+      // Clear all fauna, flora, water, terrain, and hide meshes for Step 1 (Foundation Slab only)
+      if (typeof faunaAgents !== 'undefined') {
+        for (const a of faunaAgents) {
+          if (a.rig && typeof disposeApexRig === 'function') disposeApexRig(a);
+        }
+        faunaAgents.length = 0;
+      }
+      voxelHuman.active = false;
+      voxelHuman.rig.root.visible = false;
+      if (voxelHumanBubbleEl) voxelHumanBubbleEl.style.display = 'none';
+
+      bedrock.fill(0.2);
+      sand.fill(0);
+      water.fill(0);
+      soilMoisture.fill(0);
+      waterProximity.fill(0);
+      veg.fill(0);
+      obstacleType.fill(0);
+      syncTerrainAndWaterMeshes();
+      rebuildFloraInstances();
+
+      plinthMesh.visible = true;
+      terrainMesh.visible = false;
+      waterMesh.visible = false;
+
+      // STEP 1: Foundation Slab & Plinth
+      setBootStepUI(0, 12, '1 / 8 · Laying Foundation Slab & Plinth...');
+      await waitBootDelay(520);
+
+      // STEP 2: Sculpting Bedrock & Sand Terrain (Animated Elevation Rise from the Slab!)
+      setBootStepUI(1, 26, '2 / 8 · Sculpting Bedrock & Aeolian Sand Terrain...');
+      terrainMesh.visible = true;
+      obstacleType.set(targetObstacle);
+      const terrainSteps = 10;
+      for (let s = 1; s <= terrainSteps; s++) {
+        const t = s / terrainSteps;
+        const easeT = t * t * (3.0 - 2.0 * t);
+        for (let i = 0; i < MAX_CELLS; i++) {
+          bedrock[i] = 0.2 + (targetBedrock[i] - 0.2) * easeT;
+          sand[i] = targetSand[i] * easeT;
+        }
+        computeWindShadowAndFlow();
+        syncTerrainAndWaterMeshes();
+        await waitBootDelay(52);
+      }
+
+      // STEP 3: Pouring Elements (Watersheds, Crater Lakes & Capillary Moisture)
+      setBootStepUI(2, 42, '3 / 8 · Pouring Elements (Water Basins & Hydrology)...');
+      waterMesh.visible = true;
+      soilMoisture.set(targetSoilMoisture);
+      waterProximity.set(targetWaterProx);
+      const waterSteps = 8;
+      for (let s = 1; s <= waterSteps; s++) {
+        const t = s / waterSteps;
+        for (let i = 0; i < MAX_CELLS; i++) {
+          water[i] = targetWater[i] * t;
+        }
+        syncTerrainAndWaterMeshes();
+        await waitBootDelay(62);
+      }
+
+      // STEP 4: Growing Biome Flora (Riparian Jungle Palms, Ferns & Desert Saguaro Cacti)
+      setBootStepUI(3, 56, '4 / 8 · Growing Riparian Jungle & Desert Cacti...');
+      vegHealth.set(targetVegHealth);
+      const vegSteps = 6;
+      for (let s = 1; s <= vegSteps; s++) {
+        const t = s / vegSteps;
+        for (let i = 0; i < MAX_CELLS; i++) {
+          veg[i] = targetVeg[i] * t;
+        }
+        rebuildFloraInstances();
+        await waitBootDelay(78);
+      }
+
+      // STEP 5: Spawning Biome Animals (Camels, Flamingos, Frogs, Koi & Apex Predators)
+      setBootStepUI(4, 70, '5 / 8 · Populating Wildlife & Biome Animals...');
+      for (let k = 0; k < 12; k++) {
+        maintainBiomeFaunaPopulations();
+        if (k % 3 === 2) {
+          await waitBootDelay(120);
+        }
+      }
+
+      // STEP 6: Initializing Placeable World Items & Offroad Systems
+      setBootStepUI(5, 82, '6 / 8 · Preparing World Items & Offroad Systems...');
+      updatePlacedItemsCountUI();
+      await waitBootDelay(460);
+
+      // STEP 7: Starting Weather, Wind & Day/Night Cycle
+      setBootStepUI(6, 92, '7 / 8 · Starting Weather, Trade Winds & Solar Cycle...');
+      params.simSteps = savedSimSteps;
+      params.autoWeather = savedAutoWeather;
+      params.autoDayNight = savedAutoDayNight;
+      worldWeatherStarted = true;
+      applyWeatherPreset(params.weatherMode || 'oasis');
+      syncUILabels();
+      await waitBootDelay(480);
+
+      // STEP 8: Spawning the Wandering Oasis Artist
+      setBootStepUI(7, 100, '8 / 8 · Spawning Wandering Oasis Artist...');
+      worldPersonSpawnAllowed = true;
+      spawnOrRelocateVoxelHuman();
+      await waitBootDelay(520);
+
+      // Complete & fade out loading screen
+      setBootStepUI(8, 100, '✨ World Ready — Enjoy Aeolian & Oasis 3D!');
+      worldBootComplete = true;
+      if (bootLoaderEl) {
+        bootLoaderEl.classList.add('hidden');
+      }
+    }
 
     const clock = new THREE.Clock();
     let frameCount = 0;
@@ -20187,12 +20527,16 @@
         }
       }
 
-      if (frameCount % 30 === 0) {
+      if (worldBootComplete && frameCount % 30 === 0) {
         maintainBiomeFaunaPopulations();
       }
-      updateWeatherAndSnowIce(dt);
+      if (worldWeatherStarted) {
+        updateWeatherAndSnowIce(dt);
+      }
       updateWildlife(dt);
-      updateParticles(dt);
+      if (worldWeatherStarted) {
+        updateParticles(dt);
+      }
       updateFPVAndUnderwaterState(dt);
       updateSciFiSkyAtmosphere(dt);
 
@@ -20224,6 +20568,7 @@
     }
 
     animate();
+    runStagedWorldGenesis('craters');
 
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
