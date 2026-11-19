@@ -2210,8 +2210,8 @@
       <div class="optics-viewport-wrap">
         <canvas id="human-optics-canvas" width="640" height="480"></canvas>
       </div>
-      <!-- Quick Bird Species & Live Perched Behavior Bar (Shown in Binoculars Birdwatching Mode) -->
-      <div id="optics-birdwatch-controls" style="display:none; width:100%; flex-direction:column; gap:6px; padding:6px 10px; background:rgba(15,23,42,0.72); border:1px solid rgba(74,222,128,0.25); border-radius:10px;">
+      <!-- Quick Bird Species & Live Perched Behavior Bar (Hidden per user preference; Next Target button cycles all 4 birds) -->
+      <div id="optics-birdwatch-controls" style="display:none !important;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;">
           <span style="font-size:10.5px; font-weight:700; color:#86efac; text-transform:uppercase; letter-spacing:0.05em;">🔭 Bird Species (All 4 Viewable):</span>
           <div style="display:flex; gap:5px; flex-wrap:wrap;">
@@ -13068,6 +13068,126 @@
       binocularsRootGroup.add(flamStage);
     }
 
+    // 6B. 3D Rolling Plains, Sand Dunes, Desert Hills, Cacti & Oasis Trees Panorama Corridor
+    //     Revealed when zooming out and panning the binoculars across the plains & hills to locate the next perched bird!
+    const binocularsPlainsHillsGroup = new THREE.Group();
+    binocularsPlainsHillsGroup.visible = false;
+    binocularsRootGroup.add(binocularsPlainsHillsGroup);
+    {
+      const sandHillMat   = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.88 });
+      const goldDuneMat   = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.84 });
+      const mesaRockMat   = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.90 });
+      const oasisGrassMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.76 });
+      const cactusMat     = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.72 });
+      const trunkMat      = new THREE.MeshStandardMaterial({ color: 0x5c3a1d, roughness: 0.88 });
+      const crownMat      = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.62 });
+
+      // Wide Desert Plains Ground Floor
+      const plainFloor = new THREE.Mesh(new THREE.PlaneGeometry(90, 36, 1, 1), sandHillMat);
+      plainFloor.rotation.x = -Math.PI * 0.5;
+      plainFloor.position.set(0, -3.4, -9.0);
+      binocularsPlainsHillsGroup.add(plainFloor);
+
+      // Multi-depth Rolling Hills, Sand Dunes & Sandstone Ridges (staggered in Z for rich 3D parallax during binocular pan!)
+      const hillSpecs = [
+        // Distant mountain/mesa ridge (z = -15.5)
+        [-26.0, -2.6, -15.5, 9.5, 0.42, 0.45, mesaRockMat],
+        [-14.0, -2.4, -15.0, 8.8, 0.46, 0.45, sandHillMat],
+        [ -2.0, -2.5, -15.8, 9.2, 0.40, 0.45, mesaRockMat],
+        [ 10.5, -2.3, -15.2, 8.6, 0.48, 0.45, sandHillMat],
+        [ 23.0, -2.5, -15.5, 9.4, 0.43, 0.45, mesaRockMat],
+        // Midground rolling golden sand dunes & oasis hills (z = -9.5)
+        [-22.0, -2.8,  -9.5, 6.2, 0.38, 0.50, goldDuneMat],
+        [-11.5, -2.7,  -9.2, 5.8, 0.42, 0.50, sandHillMat],
+        [ -1.5, -2.9,  -9.0, 5.5, 0.36, 0.50, oasisGrassMat],
+        [  8.5, -2.7,  -9.4, 6.0, 0.44, 0.50, goldDuneMat],
+        [ 19.5, -2.8,  -9.2, 5.8, 0.39, 0.50, sandHillMat],
+        // Foreground plains & low dune swells (z = -5.2)
+        [-17.0, -3.1,  -5.2, 4.2, 0.32, 0.55, goldDuneMat],
+        [ -6.0, -3.2,  -5.0, 3.8, 0.30, 0.55, sandHillMat],
+        [  5.5, -3.1,  -5.3, 4.0, 0.33, 0.55, goldDuneMat],
+        [ 16.5, -3.2,  -5.1, 3.9, 0.31, 0.55, oasisGrassMat]
+      ];
+      for (const [hx, hy, hz, rad, sy, sz, hMat] of hillSpecs) {
+        const hill = new THREE.Mesh(new THREE.SphereGeometry(rad, 18, 12), hMat);
+        hill.scale.set(1.55, sy, sz);
+        hill.position.set(hx, hy, hz);
+        binocularsPlainsHillsGroup.add(hill);
+      }
+
+      // Scattered 3D Saguaro Cacti & Oasis Canopy Trees across the rolling plains and hills
+      for (let i = -9; i <= 9; i++) {
+        const px = i * 2.4 + Math.sin(i * 3.7) * 0.65;
+        const pz = -5.5 - (Math.abs(i * 7) % 3) * 2.4;
+        const py = -2.45 + Math.cos(i * 2.1) * 0.35;
+        if (Math.abs(i) % 2 === 0) {
+          // 3D Saguaro Cactus on the hillside
+          const cGroup = new THREE.Group();
+          cGroup.position.set(px, py, pz);
+          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 1.55, 8), cactusMat);
+          trunk.position.y = 0.75;
+          cGroup.add(trunk);
+          const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.12, 0.65, 7), cactusMat);
+          armL.position.set(-0.28, 0.85, 0);
+          armL.rotation.z = -0.35;
+          cGroup.add(armL);
+          const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.11, 0.55, 7), cactusMat);
+          armR.position.set(0.26, 0.72, 0);
+          armR.rotation.z = 0.35;
+          cGroup.add(armR);
+          binocularsPlainsHillsGroup.add(cGroup);
+        } else {
+          // 3D Oasis Tree on the plains
+          const tGroup = new THREE.Group();
+          tGroup.position.set(px, py, pz);
+          const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.22, 1.35, 8), trunkMat);
+          tr.position.y = 0.65;
+          tGroup.add(tr);
+          const cr = new THREE.Mesh(new THREE.DodecahedronGeometry(0.68, 1), crownMat);
+          cr.scale.set(1.25, 0.82, 1.0);
+          cr.position.y = 1.42;
+          tGroup.add(cr);
+          binocularsPlainsHillsGroup.add(tGroup);
+        }
+      }
+    }
+
+    // Optical Slew / Zoom-Pan State for Telescope ("Scanning the Heavens") & Binoculars ("Zooming Across the Plains & Hills")
+    const opticsSlewState = {
+      active: false,
+      mode: '',        // 'telescope' | 'binoculars'
+      progress: 1.0,   // 0.0 -> 1.0
+      duration: 1.55,  // seconds
+      fromId: '',
+      toId: '',
+      slewDirX: 1.0,
+      slewDirY: 0.42,
+      slewCount: 0,
+      starBaseX: 0.0,
+      starBaseY: 0.0
+    };
+
+    function startOpticsTargetSlewTransition(mode, fromId, toId) {
+      const dirs = [
+        [ 1.00,  0.42],
+        [-0.94,  0.52],
+        [ 0.88, -0.56],
+        [-1.00, -0.38]
+      ];
+      const d = dirs[opticsSlewState.slewCount % dirs.length];
+      opticsSlewState.slewCount++;
+      opticsSlewState.active = true;
+      opticsSlewState.mode = mode;
+      opticsSlewState.progress = 0.0;
+      opticsSlewState.duration = mode === 'telescope' ? 1.55 : 1.65;
+      opticsSlewState.fromId = fromId;
+      opticsSlewState.toId = toId;
+      opticsSlewState.slewDirX = d[0];
+      opticsSlewState.slewDirY = d[1];
+      opticsSlewState.starBaseX = opticsStarFieldMesh.position.x;
+      opticsSlewState.starBaseY = opticsStarFieldMesh.position.y;
+    }
+
     // Animate a Perched 3D Bird Model through its 3 Lifelike Perched Behaviors:
     //   1. LOOK_AROUND ("👀 Sitting & Looking Around")
     //   2. GROOM ("✨ Grooming & Preening Plumage")
@@ -13242,10 +13362,40 @@
       return behavior;
     }
 
+    function animateTelescopeTargetObject(targetId, tSec) {
+      const obj = telescopeTargets3D[targetId];
+      if (!obj) return;
+      if (targetId === 'saturn' || targetId === 'jupiter') {
+        obj.rotation.y = Math.sin(tSec * 0.25) * 0.16;
+        const moons = obj.userData.moons || [];
+        for (const m of moons) {
+          const ang = m.phase + tSec * m.speed;
+          m.mesh.position.set(Math.cos(ang) * m.dist, Math.sin(ang * 0.7) * 0.22, Math.sin(ang) * m.dist);
+        }
+      } else if (targetId === 'orion' || targetId === 'pillars' || targetId === 'ring') {
+        obj.rotation.y = Math.sin(tSec * 0.22) * 0.14;
+        obj.rotation.x = Math.cos(tSec * 0.18) * 0.09;
+      } else if (targetId === 'whirlpool') {
+        obj.rotation.z = tSec * 0.04;
+      }
+    }
+
     function renderLive3DOpticsFrame(dtOptics) {
       if (!humanOpticsCtx || !humanOpticsCanvasEl || !opticsImgData) return;
       opticsElapsedSec += dtOptics;
       opticsUniforms.uTime.value = opticsElapsedSec;
+
+      // Advance active telescope celestial slew or binoculars plains/hills zoom-pan transition
+      if (opticsSlewState.active) {
+        opticsSlewState.progress += dtOptics / Math.max(0.2, opticsSlewState.duration);
+        if (opticsSlewState.progress >= 1.0) {
+          opticsSlewState.progress = 1.0;
+          opticsSlewState.active = false;
+          opticsStarFieldMesh.position.set(0, 0, 0);
+          opticsCamera.fov = 34;
+          opticsCamera.updateProjectionMatrix();
+        }
+      }
 
       const w = humanOpticsCanvasEl.width;
       const h = humanOpticsCanvasEl.height;
@@ -13261,33 +13411,90 @@
         const targetIdx = voxelHuman.telescopeSpaceTargetIdx || 0;
         const spec = TELESCOPE_SPACE_CATALOG[targetIdx % TELESCOPE_SPACE_CATALOG.length];
 
-        for (const key of Object.keys(telescopeTargets3D)) {
-          telescopeTargets3D[key].visible = (key === spec.id);
-        }
+        if (opticsSlewState.active && opticsSlewState.mode === 'telescope') {
+          const u = clamp(opticsSlewState.progress, 0.0, 1.0);
+          // Smooth S-curve slew with subtle equatorial mount damped lock-on settle at u = 0.84..1.0
+          const cubicEase = u < 0.5 ? 4.0 * u * u * u : 1.0 - Math.pow(-2.0 * u + 2.0, 3.0) * 0.5;
+          const finderSettle = Math.sin(u * Math.PI) * Math.sin(u * Math.PI * 3.5) * 0.045 * (1.0 - u);
+          const slewEase = cubicEase + finderSettle;
+          const slewVelBell = Math.sin(u * Math.PI);
 
-        // Subtle 3D telescope sidereal tracking & atmospheric seeing micro-drift (gives true 3D depth parallax against the background starfield!)
-        opticsCamera.position.x = Math.sin(opticsElapsedSec * 0.42) * 0.28 + Math.cos(opticsElapsedSec * 1.1) * 0.05;
-        opticsCamera.position.y = Math.cos(opticsElapsedSec * 0.35) * 0.22 + Math.sin(opticsElapsedSec * 0.9) * 0.05;
-        opticsCamera.position.z = 11.2;
-        opticsCamera.lookAt(0, 0, 0);
+          // Widen FOV slightly while slewing rapidly across the heavens, then focus back to 34 deg on lock-on
+          opticsCamera.fov = 34.0 + slewVelBell * 11.0;
+          opticsCamera.updateProjectionMatrix();
 
-        const activeObj = telescopeTargets3D[spec.id];
-        if (activeObj) {
-          if (spec.id === 'saturn' || spec.id === 'jupiter') {
-            // Slowly tilt & wobble planet in 3D while its moons orbit in 3D space!
-            activeObj.rotation.y = Math.sin(opticsElapsedSec * 0.25) * 0.16;
-            const moons = activeObj.userData.moons || [];
-            for (const m of moons) {
-              const ang = m.phase + opticsElapsedSec * m.speed;
-              m.mesh.position.set(Math.cos(ang) * m.dist, Math.sin(ang * 0.7) * 0.22, Math.sin(ang) * m.dist);
+          // Sweep the 3,200-star 3D starfield across the eyepiece lens
+          const starSpanX = -opticsSlewState.slewDirX * (slewEase - 0.5) * 18.0;
+          const starSpanY = -opticsSlewState.slewDirY * (slewEase - 0.5) * 13.0;
+          opticsStarFieldMesh.position.set(starSpanX, starSpanY, 0);
+
+          for (const key of Object.keys(telescopeTargets3D)) {
+            const obj = telescopeTargets3D[key];
+            if (key === opticsSlewState.fromId && u < 0.52) {
+              obj.visible = true;
+              obj.position.set(
+                -opticsSlewState.slewDirX * slewEase * 32.0,
+                -opticsSlewState.slewDirY * slewEase * 22.0,
+                0
+              );
+              animateTelescopeTargetObject(key, opticsElapsedSec);
+            } else if (key === opticsSlewState.toId && u > 0.44) {
+              obj.visible = true;
+              obj.position.set(
+                opticsSlewState.slewDirX * (1.0 - slewEase) * 32.0,
+                opticsSlewState.slewDirY * (1.0 - slewEase) * 22.0,
+                0
+              );
+              animateTelescopeTargetObject(key, opticsElapsedSec);
+            } else {
+              obj.visible = false;
+              obj.position.set(0, 0, 0);
             }
-          } else if (spec.id === 'orion' || spec.id === 'pillars' || spec.id === 'ring') {
-            // Subtle 3D parallax rotation of the multi-layer volumetric nebula shells
-            activeObj.rotation.y = Math.sin(opticsElapsedSec * 0.22) * 0.14;
-            activeObj.rotation.x = Math.cos(opticsElapsedSec * 0.18) * 0.09;
-          } else if (spec.id === 'whirlpool') {
-            activeObj.rotation.z = opticsElapsedSec * 0.04;
           }
+
+          opticsCamera.position.set(
+            Math.sin(opticsElapsedSec * 5.0) * 0.12 * slewVelBell,
+            Math.cos(opticsElapsedSec * 4.2) * 0.10 * slewVelBell,
+            11.2
+          );
+          opticsCamera.lookAt(0, 0, 0);
+
+          // Live scanning RA / Dec coordinates in the header while slewing across the heavens
+          const raH = String(Math.floor((u * 19 + targetIdx * 3) % 24)).padStart(2, '0');
+          const raM = String(Math.floor((u * 59 * 4) % 60)).padStart(2, '0');
+          const decD = Math.floor(12 + Math.sin(u * 4.0 + targetIdx) * 38);
+          if (humanOpticsTitleEl) {
+            humanOpticsTitleEl.textContent = u < 0.78
+              ? `🔭 Scanning the Heavens... Slewing Equatorial Mount`
+              : spec.title;
+          }
+          if (humanOpticsSubEl) {
+            humanOpticsSubEl.textContent = u < 0.88
+              ? `Slewing across Starfield · RA ${raH}h ${raM}m · Dec ${decD >= 0 ? '+' : ''}${decD}° · Locking Target...`
+              : spec.sub;
+          }
+        } else {
+          opticsStarFieldMesh.position.set(0, 0, 0);
+          for (const key of Object.keys(telescopeTargets3D)) {
+            const obj = telescopeTargets3D[key];
+            obj.visible = (key === spec.id);
+            obj.position.set(0, 0, 0);
+          }
+
+          if (humanOpticsTitleEl && humanOpticsTitleEl.textContent !== spec.title) {
+            humanOpticsTitleEl.textContent = spec.title;
+          }
+          if (humanOpticsSubEl && humanOpticsSubEl.textContent !== spec.sub) {
+            humanOpticsSubEl.textContent = spec.sub;
+          }
+
+          // Subtle 3D telescope sidereal tracking & atmospheric seeing micro-drift (gives true 3D depth parallax against the background starfield!)
+          opticsCamera.position.x = Math.sin(opticsElapsedSec * 0.42) * 0.28 + Math.cos(opticsElapsedSec * 1.1) * 0.05;
+          opticsCamera.position.y = Math.cos(opticsElapsedSec * 0.35) * 0.22 + Math.sin(opticsElapsedSec * 0.9) * 0.05;
+          opticsCamera.position.z = 11.2;
+          opticsCamera.lookAt(0, 0, 0);
+
+          animateTelescopeTargetObject(spec.id, opticsElapsedSec);
         }
       } else {
         // 3D Binoculars Birdwatching View!
@@ -13301,30 +13508,96 @@
           owl:      0x0b1026,
           flamingo: 0x0369a1
         };
-        opticsScene.background.setHex(bgColors[spKey] || 0x0c4a6e);
 
-        for (const key of Object.keys(birdDioramas3D)) {
-          birdDioramas3D[key].visible = (key === spKey);
-        }
+        if (opticsSlewState.active && opticsSlewState.mode === 'binoculars') {
+          const u = clamp(opticsSlewState.progress, 0.0, 1.0);
+          // Smooth S-curve pan across the desert plains & hills while zooming out and back in!
+          const slewEase = u < 0.5 ? 4.0 * u * u * u : 1.0 - Math.pow(-2.0 * u + 2.0, 3.0) * 0.5;
+          const zoomOutBell = Math.sin(u * Math.PI); // 0 -> 1 (mid-pan across plains & hills) -> 0 (zoomed in on bird)
 
-        // Gentle handheld binocular breathing sway focused on the perched bird on its tree or cactus
-        opticsCamera.position.x = Math.sin(opticsElapsedSec * 0.75) * 0.14;
-        opticsCamera.position.y = 0.22 + Math.cos(opticsElapsedSec * 0.64) * 0.09;
-        opticsCamera.position.z = 7.5;
-        opticsCamera.lookAt(0, 0.12, 0);
+          // Interpolate sky background color across the plains horizon
+          const cFrom = new THREE.Color(bgColors[opticsSlewState.fromId] || 0x0c4a6e);
+          const cPlains = new THREE.Color(0x38bdf8);
+          const cTo = new THREE.Color(bgColors[opticsSlewState.toId] || 0x0c4a6e);
+          if (u < 0.5) {
+            opticsScene.background.copy(cFrom).lerp(cPlains, u * 2.0);
+          } else {
+            opticsScene.background.copy(cPlains).lerp(cTo, (u - 0.5) * 2.0);
+          }
 
-        const stage = birdDioramas3D[spKey];
-        if (stage && stage.userData) {
-          const activeBehavior = animatePerched3DBirdBehavior(stage.userData, opticsElapsedSec);
+          // Zoom out wide to scan across the rolling plains & hills, then zoom in tight onto the newly spotted bird!
+          opticsCamera.fov = 34.0 + zoomOutBell * 21.0;
+          opticsCamera.updateProjectionMatrix();
+          opticsCamera.position.x = Math.sin(opticsElapsedSec * 3.2) * 0.25 * zoomOutBell;
+          opticsCamera.position.y = 0.22 + Math.sin(u * Math.PI * 2.0) * 0.42 * zoomOutBell;
+          opticsCamera.position.z = 7.5 + zoomOutBell * 6.4;
+          opticsCamera.lookAt(0, 0.12 - zoomOutBell * 0.55, 0);
+
+          // Sweep the 3D Rolling Plains, Sand Dunes, Hills, Cacti & Oasis Trees across the binocular lenses!
+          binocularsPlainsHillsGroup.visible = true;
+          binocularsPlainsHillsGroup.position.x = (0.5 - slewEase) * 32.0;
+
+          for (const key of Object.keys(birdDioramas3D)) {
+            const st = birdDioramas3D[key];
+            if (key === opticsSlewState.fromId && u < 0.46) {
+              st.visible = true;
+              st.position.set(-slewEase * 26.0, 0, 0);
+              animatePerched3DBirdBehavior(st.userData, opticsElapsedSec);
+            } else if (key === opticsSlewState.toId && u > 0.54) {
+              st.visible = true;
+              st.position.set((1.0 - slewEase) * 26.0, 0, 0);
+              animatePerched3DBirdBehavior(st.userData, opticsElapsedSec);
+            } else {
+              st.visible = false;
+              st.position.set(0, 0, 0);
+            }
+          }
+
           const bMeta = BIRDWATCH_SPECIES_CATALOG[spKey] || BIRDWATCH_SPECIES_CATALOG.macaw;
-          const behaviorLabels = {
-            LOOK_AROUND:  '👀 Sitting & Looking Around',
-            GROOM:        '✨ Grooming & Preening Plumage',
-            WING_STRETCH: '🦅 Stretching Out Its Wings'
-          };
-          const nextSub = `8×42 Field Binoculars · ${bMeta.perchLabel} · Live Action: ${behaviorLabels[activeBehavior] || behaviorLabels.LOOK_AROUND}`;
-          if (humanOpticsSubEl && humanOpticsSubEl.textContent !== nextSub) {
-            humanOpticsSubEl.textContent = nextSub;
+          const azDeg = Math.round((110 + u * 145 + opticsSlewState.slewCount * 65) % 360);
+          const rangeM = Math.round(38 + zoomOutBell * 95);
+          if (humanOpticsTitleEl) {
+            humanOpticsTitleEl.textContent = u < 0.76
+              ? `🔭 Scanning Plains & Hills for Wildlife...`
+              : bMeta.title;
+          }
+          if (humanOpticsSubEl) {
+            humanOpticsSubEl.textContent = u < 0.84
+              ? `8×42 Field Binoculars · Panning Rolling Dunes & Hills · Azimuth ${azDeg}° · Range ${rangeM} m`
+              : bMeta.sub;
+          }
+        } else {
+          binocularsPlainsHillsGroup.visible = false;
+          opticsScene.background.setHex(bgColors[spKey] || 0x0c4a6e);
+
+          for (const key of Object.keys(birdDioramas3D)) {
+            const st = birdDioramas3D[key];
+            st.visible = (key === spKey);
+            st.position.set(0, 0, 0);
+          }
+
+          // Gentle handheld binocular breathing sway focused on the perched bird on its tree or cactus
+          opticsCamera.position.x = Math.sin(opticsElapsedSec * 0.75) * 0.14;
+          opticsCamera.position.y = 0.22 + Math.cos(opticsElapsedSec * 0.64) * 0.09;
+          opticsCamera.position.z = 7.5;
+          opticsCamera.lookAt(0, 0.12, 0);
+
+          const stage = birdDioramas3D[spKey];
+          if (stage && stage.userData) {
+            const activeBehavior = animatePerched3DBirdBehavior(stage.userData, opticsElapsedSec);
+            const bMeta = BIRDWATCH_SPECIES_CATALOG[spKey] || BIRDWATCH_SPECIES_CATALOG.macaw;
+            if (humanOpticsTitleEl && humanOpticsTitleEl.textContent !== bMeta.title) {
+              humanOpticsTitleEl.textContent = bMeta.title;
+            }
+            const behaviorLabels = {
+              LOOK_AROUND:  '👀 Sitting & Looking Around',
+              GROOM:        '✨ Grooming & Preening Plumage',
+              WING_STRETCH: '🦅 Stretching Out Its Wings'
+            };
+            const nextSub = `8×42 Field Binoculars · ${bMeta.perchLabel} · Live Action: ${behaviorLabels[activeBehavior] || behaviorLabels.LOOK_AROUND}`;
+            if (humanOpticsSubEl && humanOpticsSubEl.textContent !== nextSub) {
+              humanOpticsSubEl.textContent = nextSub;
+            }
           }
         }
       }
@@ -13354,6 +13627,38 @@
       ctx.save();
       if (activeOpticsMode === 'telescope') {
         const lensR = Math.min(w, h) * 0.455;
+
+        // When slewing across the heavens, draw passing celestial star-streak trails across the lens!
+        if (opticsSlewState.active && opticsSlewState.mode === 'telescope') {
+          const u = clamp(opticsSlewState.progress, 0.0, 1.0);
+          const streakIntensity = Math.sin(u * Math.PI);
+          if (streakIntensity > 0.05) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(cx, cy, lensR, 0, Math.PI * 2);
+            ctx.clip();
+            const dx = -opticsSlewState.slewDirX * streakIntensity * 68.0;
+            const dy =  opticsSlewState.slewDirY * streakIntensity * 48.0;
+            for (let s = 0; s < 38; s++) {
+              const seedA = (s * 73.1 + opticsSlewState.slewCount * 19.7);
+              const baseX = ((seedA * 17.3 + u * 520.0 * -opticsSlewState.slewDirX) % w + w) % w;
+              const baseY = ((seedA * 31.7 + u * 380.0 *  opticsSlewState.slewDirY) % h + h) % h;
+              const grad = ctx.createLinearGradient(baseX, baseY, baseX + dx, baseY + dy);
+              const isBlue = (s % 3 !== 0);
+              grad.addColorStop(0.0, 'rgba(255, 255, 255, 0)');
+              grad.addColorStop(0.5, isBlue ? `rgba(186, 230, 253, ${(0.48 * streakIntensity).toFixed(2)})` : `rgba(254, 240, 138, ${(0.45 * streakIntensity).toFixed(2)})`);
+              grad.addColorStop(1.0, 'rgba(255, 255, 255, 0)');
+              ctx.strokeStyle = grad;
+              ctx.lineWidth = (s % 5 === 0) ? 2.2 : 1.2;
+              ctx.beginPath();
+              ctx.moveTo(baseX, baseY);
+              ctx.lineTo(baseX + dx, baseY + dy);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+        }
+
         // Darken outside circular telescope aperture
         ctx.fillStyle = '#010206';
         ctx.beginPath();
@@ -13371,11 +13676,13 @@
         ctx.arc(cx, cy, lensR, 0, Math.PI * 2);
         ctx.fill();
 
-        // Illuminated Astrometric Reticle Crosshairs
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.34)';
+        // Illuminated Astrometric Reticle Crosshairs (pulses cyan while slewing across the heavens)
+        const isSlewingT = opticsSlewState.active && opticsSlewState.mode === 'telescope';
+        const retRadiusInner = isSlewingT ? (44 + Math.sin(opticsSlewState.progress * Math.PI) * 18) : 44;
+        ctx.strokeStyle = isSlewingT ? 'rgba(56, 189, 248, 0.58)' : 'rgba(56, 189, 248, 0.34)';
         ctx.lineWidth = 1.1;
         ctx.beginPath();
-        ctx.arc(cx, cy, 44, 0, Math.PI * 2);
+        ctx.arc(cx, cy, retRadiusInner, 0, Math.PI * 2);
         ctx.arc(cx, cy, 118, 0, Math.PI * 2);
         ctx.moveTo(cx - lensR, cy); ctx.lineTo(cx - 20, cy);
         ctx.moveTo(cx + 20, cy); ctx.lineTo(cx + lensR, cy);
@@ -13409,10 +13716,31 @@
         ctx.arc(cx + 108, cy, rLens, 0, Math.PI * 2);
         ctx.clip();
         ctx.putImageData(opticsImgData, 0, 0);
-        // Binocular rangefinder mil-dot reticle
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+
+        // When panning across the plains & hills in binoculars mode, add subtle horizontal wind/motion lines & focus ring indicator
+        const isPanningB = opticsSlewState.active && opticsSlewState.mode === 'binoculars';
+        const panIntensity = isPanningB ? Math.sin(opticsSlewState.progress * Math.PI) : 0.0;
+        if (panIntensity > 0.05) {
+          ctx.strokeStyle = `rgba(255, 248, 220, ${(0.22 * panIntensity).toFixed(2)})`;
+          ctx.lineWidth = 1.4;
+          for (let i = 0; i < 14; i++) {
+            const sy = 55 + ((i * 37) % (h - 110));
+            const sx = ((i * 97 - opticsSlewState.progress * 780) % w + w) % w;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(sx + 48 * panIntensity, sy);
+            ctx.stroke();
+          }
+        }
+
+        // Binocular rangefinder mil-dot reticle (expands & contracts with zoom ring while scanning across the plains & hills!)
+        const zoomRingR = 32 + panIntensity * 26;
+        ctx.strokeStyle = isPanningB ? 'rgba(134, 239, 172, 0.55)' : 'rgba(255, 255, 255, 0.35)';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
+        if (isPanningB) {
+          ctx.arc(cx, cy, zoomRingR, 0, Math.PI * 2);
+        }
         ctx.moveTo(cx - 85, cy); ctx.lineTo(cx - 16, cy);
         ctx.moveTo(cx + 16, cy); ctx.lineTo(cx + 85, cy);
         ctx.moveTo(cx, cy - 65); ctx.lineTo(cx, cy - 16);
@@ -13435,24 +13763,25 @@
     function syncBirdwatchOpticsControlsUI() {
       const bwControlsEl = document.getElementById('optics-birdwatch-controls');
       if (bwControlsEl) {
-        bwControlsEl.style.display = (activeOpticsMode === 'binoculars') ? 'flex' : 'none';
+        bwControlsEl.style.display = 'none';
       }
-      const curSp = voxelHuman.birdwatchSpecies || 'macaw';
-      document.querySelectorAll('.birdwatch-species-btn').forEach((btn) => {
-        btn.classList.toggle('active', btn.dataset.species === curSp);
-      });
-      document.querySelectorAll('.birdwatch-action-btn').forEach((btn) => {
-        btn.classList.toggle('active', btn.dataset.baction === birdwatchForcedActionMode);
-      });
     }
 
-    function openVoxelHumanOpticsModal(mode) {
+    function openVoxelHumanOpticsModal(mode, skipResetSlew = false) {
       if (!humanOpticsModalEl) return;
       activeOpticsMode = mode;
       isOpticsGameplayPaused = true;
       isPointerDown = false;
       opticsLastPerfMs = performance.now();
       clock.stop();
+
+      if (!skipResetSlew) {
+        opticsSlewState.active = false;
+        opticsSlewState.progress = 1.0;
+        opticsStarFieldMesh.position.set(0, 0, 0);
+        opticsCamera.fov = 34;
+        opticsCamera.updateProjectionMatrix();
+      }
 
       // Suspend audio engine hum while gameplay is paused in optics view
       if (audioCtx && audioCtx.state === 'running') {
@@ -13465,14 +13794,18 @@
         const idxT = voxelHuman.telescopeSpaceTargetIdx || 0;
         const spec = TELESCOPE_SPACE_CATALOG[idxT % TELESCOPE_SPACE_CATALOG.length];
         if (humanOpticsPauseBadgeEl) humanOpticsPauseBadgeEl.textContent = '⏸️ Gameplay Paused · Live 3D Astronomical Telescope View';
-        if (humanOpticsTitleEl) humanOpticsTitleEl.textContent = spec.title;
-        if (humanOpticsSubEl) humanOpticsSubEl.textContent = spec.sub;
+        if (!opticsSlewState.active) {
+          if (humanOpticsTitleEl) humanOpticsTitleEl.textContent = spec.title;
+          if (humanOpticsSubEl) humanOpticsSubEl.textContent = spec.sub;
+        }
       } else {
         const spKey = voxelHuman.birdwatchSpecies || 'macaw';
         const bMeta = BIRDWATCH_SPECIES_CATALOG[spKey] || BIRDWATCH_SPECIES_CATALOG.macaw;
         if (humanOpticsPauseBadgeEl) humanOpticsPauseBadgeEl.textContent = '⏸️ Gameplay Paused · Live 3D Birdwatching Binoculars View';
-        if (humanOpticsTitleEl) humanOpticsTitleEl.textContent = bMeta.title;
-        if (humanOpticsSubEl) humanOpticsSubEl.textContent = bMeta.sub;
+        if (!opticsSlewState.active) {
+          if (humanOpticsTitleEl) humanOpticsTitleEl.textContent = bMeta.title;
+          if (humanOpticsSubEl) humanOpticsSubEl.textContent = bMeta.sub;
+        }
       }
 
       renderLive3DOpticsFrame(0.016);
@@ -13971,16 +14304,24 @@
       btnNextOpticsTarget.addEventListener('click', (e) => {
         e.stopPropagation();
         if (activeOpticsMode === 'telescope') {
-          voxelHuman.telescopeSpaceTargetIdx = ((voxelHuman.telescopeSpaceTargetIdx || 0) + 1) % TELESCOPE_SPACE_CATALOG.length;
-          openVoxelHumanOpticsModal('telescope');
+          const prevIdx = (voxelHuman.telescopeSpaceTargetIdx || 0) % TELESCOPE_SPACE_CATALOG.length;
+          const nextIdx = (prevIdx + 1) % TELESCOPE_SPACE_CATALOG.length;
+          const fromId = TELESCOPE_SPACE_CATALOG[prevIdx].id;
+          const toId = TELESCOPE_SPACE_CATALOG[nextIdx].id;
+          voxelHuman.telescopeSpaceTargetIdx = nextIdx;
+          startOpticsTargetSlewTransition('telescope', fromId, toId);
+          openVoxelHumanOpticsModal('telescope', true);
         } else if (activeOpticsMode === 'binoculars') {
           const bKeys = Object.keys(BIRDWATCH_SPECIES_CATALOG);
-          const curIdx = bKeys.indexOf(voxelHuman.birdwatchSpecies || 'macaw');
-          voxelHuman.birdwatchSpecies = bKeys[(curIdx + 1) % bKeys.length];
+          const curIdx = Math.max(0, bKeys.indexOf(voxelHuman.birdwatchSpecies || 'macaw'));
+          const fromSp = bKeys[curIdx];
+          const toSp = bKeys[(curIdx + 1) % bKeys.length];
+          voxelHuman.birdwatchSpecies = toSp;
           if (voxelHuman.routine === 'BIRDWATCHING') {
-            voxelHuman.bubbleEmoji = BIRDWATCH_SPECIES_CATALOG[voxelHuman.birdwatchSpecies].emoji;
+            voxelHuman.bubbleEmoji = BIRDWATCH_SPECIES_CATALOG[toSp].emoji;
           }
-          openVoxelHumanOpticsModal('binoculars');
+          startOpticsTargetSlewTransition('binoculars', fromSp, toSp);
+          openVoxelHumanOpticsModal('binoculars', true);
         }
       });
     }
