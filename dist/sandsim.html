@@ -793,26 +793,27 @@
     }
 
     .dock-popup-menu {
-      position: absolute;
-      bottom: calc(100% + 10px);
-      left: 50%;
-      transform: translateX(-50%) translateY(6px);
+      position: fixed;
+      bottom: 64px;
+      left: 16px;
       display: none;
       flex-direction: column;
       gap: 5px;
-      min-width: 156px;
+      min-width: 162px;
       background: rgba(18, 15, 12, 0.96);
       backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 197, 109, 0.48);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 197, 109, 0.55);
       border-radius: 12px;
       padding: 8px;
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.78);
-      z-index: 40;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.82);
+      z-index: 80;
+      pointer-events: auto;
+      touch-action: manipulation;
     }
 
-    .dock-popup-wrap.open .dock-popup-menu {
+    .dock-popup-menu.open {
       display: flex;
-      transform: translateX(-50%) translateY(0);
     }
 
     .dock-popup-title {
@@ -1083,6 +1084,7 @@
     }
     body.drive-mobile-active .top-bar,
     body.drive-mobile-active .bottom-dock,
+    body.drive-mobile-active .dock-popup-menu,
     body.drive-mobile-active .control-panel,
     body.drive-mobile-active #fpv-banner,
     body.drive-mobile-active #fpv-equip-bar,
@@ -14909,35 +14911,86 @@
     const popupWrapMaterials = document.getElementById('popup-wrap-materials');
     const btnPopupMaterials = document.getElementById('btn-popup-materials');
     const labelPopupMaterials = document.getElementById('label-popup-materials');
+    const popupMenuMaterials = document.getElementById('popup-menu-materials');
     const popupWrapItems = document.getElementById('popup-wrap-items');
     const btnPopupItems = document.getElementById('btn-popup-items');
     const labelPopupItems = document.getElementById('label-popup-items');
+    const popupMenuItems = document.getElementById('popup-menu-items');
+    const bottomDockEl = document.getElementById('bottom-dock');
+
+    // Portal popup menus to document.body so mobile .bottom-dock (overflow-x: auto + backdrop-filter) never clips them!
+    if (popupMenuMaterials && popupMenuMaterials.parentElement !== document.body) {
+      document.body.appendChild(popupMenuMaterials);
+    }
+    if (popupMenuItems && popupMenuItems.parentElement !== document.body) {
+      document.body.appendChild(popupMenuItems);
+    }
+
+    function positionDockPopupMenu(triggerBtn, menuEl) {
+      if (!triggerBtn || !menuEl) return;
+      const btnRect = triggerBtn.getBoundingClientRect();
+      const menuWidth = menuEl.offsetWidth || 168;
+      const centerLeft = btnRect.left + btnRect.width * 0.5 - menuWidth * 0.5;
+      const clampedLeft = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, centerLeft));
+      const bottomPx = Math.max(48, window.innerHeight - btnRect.top + 8);
+      menuEl.style.left = `${Math.round(clampedLeft)}px`;
+      menuEl.style.bottom = `${Math.round(bottomPx)}px`;
+    }
 
     function closeAllDockPopups() {
       if (popupWrapMaterials) popupWrapMaterials.classList.remove('open');
+      if (popupMenuMaterials) popupMenuMaterials.classList.remove('open');
       if (popupWrapItems) popupWrapItems.classList.remove('open');
+      if (popupMenuItems) popupMenuItems.classList.remove('open');
     }
 
-    if (btnPopupMaterials && popupWrapMaterials) {
+    function toggleDockPopup(wrapEl, triggerBtn, menuEl) {
+      if (!wrapEl || !triggerBtn || !menuEl) return;
+      const willOpen = !menuEl.classList.contains('open');
+      closeAllDockPopups();
+      if (willOpen) {
+        wrapEl.classList.add('open');
+        menuEl.classList.add('open');
+        positionDockPopupMenu(triggerBtn, menuEl);
+      }
+    }
+
+    if (btnPopupMaterials && popupWrapMaterials && popupMenuMaterials) {
       btnPopupMaterials.addEventListener('click', (e) => {
         e.stopPropagation();
-        const willOpen = !popupWrapMaterials.classList.contains('open');
-        closeAllDockPopups();
-        if (willOpen) popupWrapMaterials.classList.add('open');
+        toggleDockPopup(popupWrapMaterials, btnPopupMaterials, popupMenuMaterials);
       });
     }
 
-    if (btnPopupItems && popupWrapItems) {
+    if (btnPopupItems && popupWrapItems && popupMenuItems) {
       btnPopupItems.addEventListener('click', (e) => {
         e.stopPropagation();
-        const willOpen = !popupWrapItems.classList.contains('open');
-        closeAllDockPopups();
-        if (willOpen) popupWrapItems.classList.add('open');
+        toggleDockPopup(popupWrapItems, btnPopupItems, popupMenuItems);
       });
     }
 
+    if (bottomDockEl) {
+      bottomDockEl.addEventListener('scroll', () => {
+        if (popupMenuMaterials && popupMenuMaterials.classList.contains('open')) {
+          positionDockPopupMenu(btnPopupMaterials, popupMenuMaterials);
+        }
+        if (popupMenuItems && popupMenuItems.classList.contains('open')) {
+          positionDockPopupMenu(btnPopupItems, popupMenuItems);
+        }
+      }, { passive: true });
+    }
+
+    window.addEventListener('resize', () => {
+      if (popupMenuMaterials && popupMenuMaterials.classList.contains('open')) {
+        positionDockPopupMenu(btnPopupMaterials, popupMenuMaterials);
+      }
+      if (popupMenuItems && popupMenuItems.classList.contains('open')) {
+        positionDockPopupMenu(btnPopupItems, popupMenuItems);
+      }
+    });
+
     window.addEventListener('pointerdown', (e) => {
-      if (!e.target.closest('.dock-popup-wrap')) {
+      if (!e.target.closest('.dock-popup-wrap') && !e.target.closest('.dock-popup-menu')) {
         closeAllDockPopups();
       }
     });
