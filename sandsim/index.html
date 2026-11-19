@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Aeolian & Oasis — 3D Sand, Hydrology & Biome Flora Simulator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏜️</text></svg>" />
   <style>
     :root {
       --bg-panel: rgba(16, 15, 13, 0.86);
@@ -5572,6 +5573,7 @@
     const _lavaGlowBufA = new Float32Array(MAX_CELLS);
     const _lavaGlowBufB = new Float32Array(MAX_CELLS);
     let _lastTerrainSyncFrame = -1;
+    let frameCount = 0;
 
     function syncTerrainAndWaterMeshes() {
       const tPos = terrainGeo.attributes.position.array;
@@ -5986,9 +5988,7 @@
       waterGeo.attributes.lavaMask.needsUpdate = true;
 
       updateTerrainSideSkirt();
-      if (typeof frameCount !== 'undefined') {
-        _lastTerrainSyncFrame = frameCount;
-      }
+      _lastTerrainSyncFrame = frameCount;
     }
 
     // Live 3D cactus crown perch registry (updated in rebuildFloraInstances so nocturnal owls can fly down and sit on top of cacti!)
@@ -6344,7 +6344,7 @@
       params.lilyPadCount = cLilyPad;
 
       // Sync terrain vertex colors so green grass surfaces on angled slopes appear immediately (skip if already synced this frame!)
-      if (typeof frameCount === 'undefined' || _lastTerrainSyncFrame !== frameCount) {
+      if (frameCount === 0 || _lastTerrainSyncFrame !== frameCount) {
         syncTerrainAndWaterMeshes();
       }
 
@@ -24028,7 +24028,6 @@
     }
 
     const clock = new THREE.Clock();
-    let frameCount = 0;
     let fpsFrames = 0;
     let fpsTimer = 0;
     let animFrameId = null;
