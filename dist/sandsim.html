@@ -5211,6 +5211,56 @@
 
     const frogInst = createFaunaPool(createFrogGeometry(), 0x22c55e, true);
 
+    // 6F. Diurnal Desert Cottontail / Jackrabbit (facing +Z: rounded furry body, tall upright ears, fluffy cotton tail, muscular hind haunches)
+    function createRabbitGeometry() {
+      const parts = [];
+      // Plump arched rabbit torso
+      const body = new THREE.SphereGeometry(0.24, 8, 6);
+      body.scale(0.88, 0.86, 1.36);
+      body.rotateX(-0.12);
+      body.translate(0, 0.24, -0.02);
+      parts.push(body);
+
+      // Rounded rabbit head & nose
+      const head = new THREE.SphereGeometry(0.16, 7, 6);
+      head.scale(0.92, 0.92, 1.12);
+      head.translate(0, 0.36, 0.25);
+      parts.push(head);
+
+      // Fluffy round cotton tail at -Z
+      const tail = new THREE.SphereGeometry(0.095, 6, 5);
+      tail.translate(0, 0.27, -0.35);
+      parts.push(tail);
+
+      // Two tall upright Jackrabbit / Cottontail ears + hind haunches & forelegs
+      for (const side of [-1, 1]) {
+        const ear = new THREE.SphereGeometry(0.055, 6, 5);
+        ear.scale(0.65, 3.2, 0.85);
+        ear.rotateZ(side * -0.16);
+        ear.rotateX(-0.14);
+        ear.translate(side * 0.08, 0.58, 0.20);
+        parts.push(ear);
+
+        // Muscular hind thigh & foot
+        const haunch = new THREE.SphereGeometry(0.13, 6, 5);
+        haunch.scale(0.65, 0.95, 1.25);
+        haunch.translate(side * 0.14, 0.17, -0.12);
+        parts.push(haunch);
+
+        const hindFoot = new THREE.BoxGeometry(0.08, 0.045, 0.22);
+        hindFoot.translate(side * 0.14, 0.03, -0.08);
+        parts.push(hindFoot);
+
+        // Front forelegs
+        const foreLeg = new THREE.CylinderGeometry(0.035, 0.03, 0.20, 5);
+        foreLeg.translate(side * 0.09, 0.10, 0.20);
+        parts.push(foreLeg);
+      }
+      return safeMergeGeometries(parts, true);
+    }
+
+    const rabbitInst = createFaunaPool(createRabbitGeometry(), 0xd6c7b2, true);
+
     // 7. Bleached Bone Skeleton Geometry (Spine, 4 Pairs of Ribs, Skull & Limb Bones lying on the ground/lakebed)
     function createSkeletonGeometry() {
       const parts = [];
@@ -6136,11 +6186,17 @@
         scale = 1.15;
         colorHex = 0x3f6212;
       } else if (type === 'frog') {
-        // Oasis Pond Frog (hops around pond banks, shallow water & floating lily pads, ribbiting periodically!)
+        // Oasis Pond Frog (hops around pond banks, shallow water & floating lily pads, calling "Co-quí!" at night!)
         speed = 3.1 + Math.random() * 0.9;
         scale = 0.88 + Math.random() * 0.32;
         const frogColors = [0x22c55e, 0x16a34a, 0x4ade80, 0x65a30d];
         colorHex = frogColors[Math.floor(Math.random() * frogColors.length)];
+      } else if (type === 'rabbit') {
+        // Daytime Desert Cottontail / Jackrabbit (bounds rapidly across dunes, scrub & grassy slopes during the day)
+        speed = 5.4 + Math.random() * 1.6;
+        scale = 0.86 + Math.random() * 0.28;
+        const rabbitColors = [0xd6c7b2, 0xc2a887, 0xe7dec8, 0xb89c7a];
+        colorHex = rabbitColors[Math.floor(Math.random() * rabbitColors.length)];
       }
 
       faunaAgents.push({
@@ -6179,10 +6235,14 @@
       // Underwater fish stay active, though fewer feed near the surface at night
       const targetFish = clamp(Math.floor(params.totalWaterVol / (isNightTime ? 260 : 180)), 0, 65);
 
-      // Diurnal animals (Camels, Flamingos, Macaws, Hawks, and most Oryx) disappear to sleep at night!
+      // Diurnal animals (Camels, Rabbits, Flamingos, Macaws, Hawks, and most Oryx) disappear to sleep at night!
       const targetFlamingos = (!isSnowAndIceActive && !isNightTime && hasWater) ? clamp(Math.floor(params.junglePlantCount / 45) + 6, 4, 38) : 0;
       const targetMacaws = (!isSnowAndIceActive && !isNightTime) ? clamp(Math.floor(params.junglePlantCount / 55), 0, 34) : 0;
-      const targetCamels = !isNightTime ? 16 : 0;
+      // Fewer Camels (6 instead of 16) + lively daytime Desert Rabbits!
+      const targetCamels = !isNightTime ? 6 : 0;
+      const targetRabbits = (!isNightTime && !isSnowAndIceActive)
+        ? clamp(Math.floor((params.desertPlantCount + params.junglePlantCount) / 40) + 12, 10, 26)
+        : 0;
       // Most Oryx sleep at night, leaving only a small twilight/night herd (4-6) that nocturnal Lions & Jaguars can stalk
       const fullDayOryx = clamp(Math.floor(params.desertPlantCount / 35) + 10, 10, 36);
       const targetOryx = !isNightTime ? fullDayOryx : clamp(Math.floor(fullDayOryx * 0.22), 4, 7);
@@ -6205,7 +6265,7 @@
         : 0;
 
       const counts = {
-        camel: 0, oryx: 0, flamingo: 0, macaw: 0, fish: 0, hawk: 0,
+        camel: 0, rabbit: 0, oryx: 0, flamingo: 0, macaw: 0, fish: 0, hawk: 0,
         fennec: 0, bat: 0, owl: 0, frog: 0,
         jaguar: 0, lion: 0, croc: 0
       };
@@ -6223,6 +6283,9 @@
           }
         }
       };
+      if (counts.camel > targetCamels) {
+        cullExcessSleeping('camel', targetCamels);
+      }
       if (isNightTime) {
         cullExcessSleeping('oryx', targetOryx);
         cullExcessSleeping('fish', targetFish);
@@ -6249,6 +6312,7 @@
       trySpawnInBiome('flamingo', targetFlamingos, (i) => ((water[i] > 0.02 && water[i] < 0.45) || (waterProximity[i] > 0.65 && water[i] < 0.45)) && lavaFrac[i] < 0.2);
       trySpawnInBiome('macaw', targetMacaws, (i) => waterProximity[i] >= 0.38 && veg[i] > 1.2);
       trySpawnInBiome('camel', targetCamels, (i) => water[i] < 0.01 && waterProximity[i] < 0.45 && obstacleType[i] === 0);
+      trySpawnInBiome('rabbit', targetRabbits, (i) => water[i] < 0.01 && obstacleType[i] === 0);
       trySpawnInBiome('oryx', targetOryx, (i) => water[i] < 0.01 && waterProximity[i] < 0.38 && obstacleType[i] === 0);
       trySpawnInBiome('hawk', targetHawks, () => true);
 
@@ -6271,7 +6335,7 @@
       const isNightTime = (hr >= 19.0 || hr < 5.5) || ((skyUniforms.uNightFactor.value || 0) > 0.55);
 
       let cCamel = 0, cOryx = 0, cFlamingo = 0, cMacaw = 0, cFish = 0, cHawk = 0, cSkeleton = 0;
-      let cFennec = 0, cBat = 0, cOwl = 0, cFrog = 0;
+      let cFennec = 0, cBat = 0, cOwl = 0, cFrog = 0, cRabbit = 0;
 
       for (let i = faunaAgents.length - 1; i >= 0; i--) {
         const a = faunaAgents[i];
@@ -6307,15 +6371,15 @@
           continue;
         }
 
-        // During Snow & Ice, all birds, bats & pond frogs immediately disappear/hibernate!
-        if (isSnowAndIceActive && (a.type === 'flamingo' || a.type === 'macaw' || a.type === 'hawk' || a.type === 'owl' || a.type === 'bat' || a.type === 'frog')) {
+        // During Snow & Ice, all birds, bats, pond frogs & rabbits immediately disappear/hibernate!
+        if (isSnowAndIceActive && (a.type === 'flamingo' || a.type === 'macaw' || a.type === 'hawk' || a.type === 'owl' || a.type === 'bat' || a.type === 'frog' || a.type === 'rabbit')) {
           faunaAgents.splice(i, 1);
           continue;
         }
 
-        // Diurnal animals (Camels, Flamingos, Macaws, Hawks) go to sleep and disappear at night;
+        // Diurnal animals (Camels, Rabbits, Flamingos, Macaws, Hawks) go to sleep and disappear at night;
         // Nocturnal animals (Fennec Foxes, Fruit Bats, Night Owls) go to sleep and disappear during the day!
-        if (isNightTime && (a.type === 'camel' || a.type === 'flamingo' || a.type === 'macaw' || a.type === 'hawk')) {
+        if (isNightTime && (a.type === 'camel' || a.type === 'rabbit' || a.type === 'flamingo' || a.type === 'macaw' || a.type === 'hawk')) {
           faunaAgents.splice(i, 1);
           continue;
         }
@@ -6357,6 +6421,7 @@
           oryx: 1.48,
           flamingo: 1.72,
           fennec: 0.88,
+          rabbit: 0.72,
           lion: 1.24,
           jaguar: 1.08,
           croc: 0.65,
@@ -6514,9 +6579,9 @@
               const p = faunaAgents[j];
               if (p.state !== 'alive') continue;
               const eligible =
-                (a.type === 'jaguar' && (p.type === 'flamingo' || p.type === 'oryx' || p.type === 'fennec')) ||
-                (a.type === 'lion'   && (p.type === 'oryx' || p.type === 'camel' || p.type === 'fennec')) ||
-                (a.type === 'croc'   && (p.type === 'fish' || p.type === 'flamingo' || p.type === 'oryx' || p.type === 'fennec'));
+                (a.type === 'jaguar' && (p.type === 'flamingo' || p.type === 'oryx' || p.type === 'fennec' || p.type === 'rabbit')) ||
+                (a.type === 'lion'   && (p.type === 'oryx' || p.type === 'camel' || p.type === 'fennec' || p.type === 'rabbit')) ||
+                (a.type === 'croc'   && (p.type === 'fish' || p.type === 'flamingo' || p.type === 'oryx' || p.type === 'fennec' || p.type === 'rabbit'));
               if (!eligible) continue;
 
               const dPrey = Math.hypot(p.x - a.x, p.z - a.z);
@@ -6751,13 +6816,37 @@
           const frogBaseY = (waterDepth > 0.025 && waterSurfaceY > groundY) ? (waterSurfaceY - 0.015) : walkSurfaceY;
           a.y = frogBaseY + hopHeight;
 
-          // Periodic 3D Spatial Frog Croak / Ribbit sound effect!
-          a.croakTimer = (a.croakTimer !== undefined ? a.croakTimer : 2.5) - dt;
+          // Periodic 3D Spatial Coquí Frog call ("CO-QUÍ!") ONLY AT NIGHT!
+          a.croakTimer = (a.croakTimer !== undefined ? a.croakTimer : 2.0) - dt;
           if (a.croakTimer <= 0.0) {
-            a.croakTimer = 2.8 + Math.random() * 5.2;
-            if (!isHopping && typeof playFrogRibbitSound === 'function') {
+            a.croakTimer = 1.8 + Math.random() * 3.4;
+            if (isNightTime && !isHopping && typeof playFrogRibbitSound === 'function') {
               playFrogRibbitSound(a.x, a.y, a.z);
             }
+          }
+
+        } else if (a.type === 'rabbit') {
+          // Daytime Desert Cottontail / Jackrabbit: quick agile bounding hops with brief foraging pauses
+          if (isLavaHazardAhead || isInHazardousWetArea || probeEffWater > fleeThreshold) {
+            steerToHighDryGround(15.5);
+          } else if (obstacleType[pIdx] === 2 || (probeH.groundY - groundY) > 1.8) {
+            a.heading += 2.0 * coldSpeedMult * dt;
+          } else {
+            a.heading += a.turnRate * dt * 1.3 * coldSpeedMult;
+          }
+
+          const boundCycle = (time * 2.1 + a.phase) % 2.0;
+          const isForagingPause = (!isLavaHazardAhead && !isInHazardousWetArea && boundCycle > 1.45);
+          if (isForagingPause) {
+            a.hopPitch = 0.08;
+            a.y = walkSurfaceY;
+          } else {
+            const hopWave = Math.sin(time * 13.5 * coldSpeedMult + a.phase);
+            const hopArc = Math.max(0, hopWave) * 0.32 * a.scale * coldSpeedMult;
+            a.hopPitch = -Math.cos(time * 13.5 * coldSpeedMult + a.phase) * 0.26;
+            a.x += Math.sin(a.heading) * a.speed * fleeSpeedMult * coldSpeedMult * dt;
+            a.z += Math.cos(a.heading) * a.speed * fleeSpeedMult * coldSpeedMult * dt;
+            a.y = walkSurfaceY + hopArc;
           }
 
         } else if (a.type === 'camel' || a.type === 'oryx' || a.type === 'fennec') {
@@ -6836,7 +6925,7 @@
         const struggleTilt = isDrowning ? Math.sin(time * 11.0 + a.phase) * 0.18 : 0;
         const isBird = isFlyer;
         const climb = isBird ? (a.climbRate || 0) : 0;
-        const birdPitch = isBird ? clamp(-climb * 0.08, -0.32, 0.32) : (a.type === 'frog' ? (a.hopPitch || 0) : 0);
+        const birdPitch = isBird ? clamp(-climb * 0.08, -0.32, 0.32) : ((a.type === 'frog' || a.type === 'rabbit') ? (a.hopPitch || 0) : 0);
         const roll = (isBird ? -a.turnRate * 0.35 : 0) + struggleTilt;
         const wiggle = (a.type === 'fish') ? Math.sin(time * 11.0 + a.phase) * 0.14 : 0;
         dummy.rotation.order = 'YXZ';
@@ -6927,11 +7016,16 @@
           frogInst.setMatrixAt(cFrog, dummy.matrix);
           frogInst.setColorAt(cFrog, tempColor);
           cFrog++;
+        } else if (a.type === 'rabbit' && cRabbit < MAX_FAUNA_PER_SPECIES) {
+          rabbitInst.setMatrixAt(cRabbit, dummy.matrix);
+          rabbitInst.setColorAt(cRabbit, tempColor);
+          cRabbit++;
         }
       }
 
       const faunaPools = [
         [camelInst, cCamel],
+        [rabbitInst, cRabbit],
         [oryxInst, cOryx],
         [fennecInst, cFennec],
         [flamingoInst, cFlamingo],
@@ -8695,17 +8789,17 @@
       };
     }
 
-    // 3. 3D Spatial Oasis Pond Frog Croak & Two-Syllable "Rib-bit!" Synthesizer
+    // 3. 3D Spatial Nocturnal Coquí Frog Call ("CO-QUÍ!") Synthesizer (Louder, pure two-note whistle-chirp at night)
     let lastFrogSoundMs = 0;
     let activeFrogAudioVoices = 0;
     function playFrogRibbitSound(wx, wy, wz, forceImmediate = false) {
-      if (!params.audioEnabled || activeFrogAudioVoices >= 3) return;
+      if (!params.audioEnabled || activeFrogAudioVoices >= 5) return;
       const nowMs = performance.now();
-      if (!forceImmediate && nowMs - lastFrogSoundMs < 480) return;
+      if (!forceImmediate && nowMs - lastFrogSoundMs < 280) return;
 
       _audioTmpVec.set(wx, wy, wz);
       const dist = camera.position.distanceTo(_audioTmpVec);
-      if (!forceImmediate && dist > 145.0) return;
+      if (!forceImmediate && dist > 180.0) return;
 
       const ctx = ensureAudioContext();
       if (!ctx) return;
@@ -8716,59 +8810,73 @@
       const { distGain, pan } = computeWorldAudioSpatial(wx, wy, wz);
       const outBus = createSpatialPanner(ctx, pan);
 
-      // Vocal-cord glottal sawtooth oscillator + throat-sac trill amplitude modulation + formant bandpass filter
-      const basePitch = 152 + Math.random() * 44; // Individual frog vocal pitch variation
-      const vocalOsc = ctx.createOscillator();
-      vocalOsc.type = 'sawtooth';
+      // Authentic Puerto Rican Coquí Frog ("CO-QUÍ!") acoustic profile:
+      // - Note 1 ("CO"): ~1,130 - 1,240 Hz steady resonant whistle tone (~0.10s)
+      // - Brief pause: 0.105s -> 0.165s
+      // - Note 2 ("QUÍ!"): ~1,850 Hz sweeping sharply upward to ~2,320 - 2,480 Hz (~0.18s), louder & piercing!
+      const pitchJitter = 0.94 + Math.random() * 0.12;
+      const coFreq = 1160 * pitchJitter;
+      const quiStartFreq = 1860 * pitchJitter;
+      const quiPeakFreq = 2380 * pitchJitter;
 
-      // Two-syllable "Rib-bit!" pitch contour
-      // Syllable 1 ("Rib-"): 0.00s -> 0.085s
-      vocalOsc.frequency.setValueAtTime(basePitch * 0.92, now);
-      vocalOsc.frequency.exponentialRampToValueAtTime(basePitch * 1.28, now + 0.08);
-      // Syllable 2 ("-bit!"): 0.115s -> 0.25s
-      vocalOsc.frequency.setValueAtTime(basePitch * 1.05, now + 0.115);
-      vocalOsc.frequency.exponentialRampToValueAtTime(basePitch * 1.54, now + 0.185);
-      vocalOsc.frequency.exponentialRampToValueAtTime(basePitch * 0.86, now + 0.255);
+      const mainOsc = ctx.createOscillator();
+      mainOsc.type = 'sine';
+      // 2nd harmonic overtone adds the rich biological vocal-sac resonance of a real Coquí frog
+      const harmOsc = ctx.createOscillator();
+      harmOsc.type = 'triangle';
 
-      // Resonant throat-sac formant bandpass filter
-      const formantFilter = ctx.createBiquadFilter();
-      formantFilter.type = 'bandpass';
-      formantFilter.Q.setValueAtTime(5.2, now);
-      formantFilter.frequency.setValueAtTime(460, now);
-      formantFilter.frequency.exponentialRampToValueAtTime(890, now + 0.08);
-      formantFilter.frequency.setValueAtTime(520, now + 0.115);
-      formantFilter.frequency.exponentialRampToValueAtTime(1180, now + 0.185);
-      formantFilter.frequency.exponentialRampToValueAtTime(480, now + 0.255);
+      // "CO" note pitch (0.00s -> 0.105s)
+      mainOsc.frequency.setValueAtTime(coFreq * 0.97, now);
+      mainOsc.frequency.exponentialRampToValueAtTime(coFreq * 1.02, now + 0.10);
+      harmOsc.frequency.setValueAtTime(coFreq * 1.94, now);
+      harmOsc.frequency.exponentialRampToValueAtTime(coFreq * 2.04, now + 0.10);
 
-      // Rapid 36 Hz glottal throat-trill modulator for realistic amphibian croak texture
-      const trillOsc = ctx.createOscillator();
-      trillOsc.type = 'sine';
-      trillOsc.frequency.setValueAtTime(34 + Math.random() * 8, now);
-      const trillGain = ctx.createGain();
-      trillGain.gain.setValueAtTime(45, now);
-      trillOsc.connect(trillGain);
-      trillGain.connect(vocalOsc.frequency);
+      // "QUÍ!" note upward whistle sweep (0.160s -> 0.345s)
+      mainOsc.frequency.setValueAtTime(quiStartFreq, now + 0.160);
+      mainOsc.frequency.exponentialRampToValueAtTime(quiPeakFreq, now + 0.305);
+      mainOsc.frequency.exponentialRampToValueAtTime(quiPeakFreq * 0.96, now + 0.350);
 
-      // Two-syllable amplitude envelope ("Rib" ... "bit!")
+      harmOsc.frequency.setValueAtTime(quiStartFreq * 2.0, now + 0.160);
+      harmOsc.frequency.exponentialRampToValueAtTime(quiPeakFreq * 2.0, now + 0.305);
+
+      const harmGain = ctx.createGain();
+      harmGain.gain.setValueAtTime(0.18, now);
+
+      // Vocal-sac peaking filter so the "CO-QUÍ!" rings out loud and clear across the oasis at night
+      const vocalPeak = ctx.createBiquadFilter();
+      vocalPeak.type = 'peaking';
+      vocalPeak.frequency.setValueAtTime(2150, now);
+      vocalPeak.Q.setValueAtTime(1.8, now);
+      vocalPeak.gain.setValueAtTime(4.5, now);
+
       const envGain = ctx.createGain();
-      const vol = 0.20 * distGain;
-      envGain.gain.setValueAtTime(0.0001, now);
-      envGain.gain.linearRampToValueAtTime(vol * 0.78, now + 0.016);
-      envGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
-      envGain.gain.setValueAtTime(0.001, now + 0.112);
-      envGain.gain.linearRampToValueAtTime(vol, now + 0.135);
-      envGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.265);
+      const loudGain = clamp(distGain * 1.45, 0.48, 1.0);
+      const coVol = 0.38 * loudGain;
+      const quiVol = 0.58 * loudGain; // "QUÍ!" syllable is louder and carries further
 
-      vocalOsc.connect(formantFilter);
-      formantFilter.connect(envGain);
+      envGain.gain.setValueAtTime(0.0001, now);
+      // Syllable 1: "CO"
+      envGain.gain.linearRampToValueAtTime(coVol, now + 0.012);
+      envGain.gain.setValueAtTime(coVol * 0.92, now + 0.075);
+      envGain.gain.exponentialRampToValueAtTime(0.0008, now + 0.112);
+      // Syllable 2: "QUÍ!"
+      envGain.gain.setValueAtTime(0.0008, now + 0.158);
+      envGain.gain.linearRampToValueAtTime(quiVol, now + 0.182);
+      envGain.gain.setValueAtTime(quiVol * 0.94, now + 0.285);
+      envGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.355);
+
+      mainOsc.connect(vocalPeak);
+      harmOsc.connect(harmGain);
+      harmGain.connect(vocalPeak);
+      vocalPeak.connect(envGain);
       envGain.connect(outBus);
 
-      vocalOsc.start(now);
-      trillOsc.start(now);
-      vocalOsc.stop(now + 0.28);
-      trillOsc.stop(now + 0.28);
+      mainOsc.start(now);
+      harmOsc.start(now);
+      mainOsc.stop(now + 0.37);
+      harmOsc.stop(now + 0.37);
 
-      vocalOsc.onended = () => {
+      mainOsc.onended = () => {
         activeFrogAudioVoices = Math.max(0, activeFrogAudioVoices - 1);
       };
     }
@@ -10343,7 +10451,9 @@
           const rPond = Math.random();
           if (rPond < 0.42) {
             spawnAnimalAgent('frog', jx, jz);
-            playFrogRibbitSound(jx, sampleSurfaceHeightAtWorld(jx, jz), jz, true);
+            if (isNightTime) {
+              playFrogRibbitSound(jx, sampleSurfaceHeightAtWorld(jx, jz), jz, true);
+            }
           } else if (isNightTime) {
             spawnAnimalAgent('bat', jx, jz);
           } else {
@@ -10354,7 +10464,8 @@
           if (isNightTime) {
             spawnAnimalAgent(r < 0.65 ? 'fennec' : (r < 0.80 ? 'oryx' : 'owl'), jx, jz);
           } else {
-            spawnAnimalAgent(r < 0.45 ? 'camel' : (r < 0.85 ? 'oryx' : 'hawk'), jx, jz);
+            // Daytime desert spawn: mostly Rabbits & Oryx, fewer Camels!
+            spawnAnimalAgent(r < 0.16 ? 'camel' : (r < 0.56 ? 'rabbit' : (r < 0.86 ? 'oryx' : 'hawk')), jx, jz);
           }
         }
         return;
@@ -11537,7 +11648,7 @@
         pool.instanceMatrix.needsUpdate = true;
       }
       const allFaunaInst = [
-        camelInst, oryxInst, fennecInst, flamingoInst,
+        camelInst, rabbitInst, oryxInst, fennecInst, flamingoInst,
         macawInst, macawWingLInst, macawWingRInst,
         batInst, batWingLInst, batWingRInst,
         fishInst, hawkInst, hawkWingLInst, hawkWingRInst,
