@@ -6876,6 +6876,35 @@
       let cCamel = 0, cOryx = 0, cFlamingo = 0, cMacaw = 0, cFish = 0, cHawk = 0, cSkeleton = 0;
       let cFennec = 0, cBat = 0, cOwl = 0, cOwlEyes = 0, cFrog = 0, cRabbit = 0;
 
+      // Helper for Frogs & Alligators: find the nearest body of water to migrate toward when their current pond dries up!
+      const findNearestWaterTarget = (fromX, fromZ, minDepth = 0.06) => {
+        if (params.totalWaterVol < 15) return null;
+        let bestI = -1;
+        let bestD2 = 1e9;
+        for (let wy = 4; wy < GRID - 4; wy += 2) {
+          for (let wx = 4; wx < GRID - 4; wx += 2) {
+            const ci = idx(wx, wy);
+            if (water[ci] >= minDepth && lavaFrac[ci] < 0.15) {
+              const candX = ((wx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+              const candZ = ((wy / (GRID - 1)) - 0.5) * WORLD_SIZE;
+              const d2 = (candX - fromX) * (candX - fromX) + (candZ - fromZ) * (candZ - fromZ);
+              if (d2 < bestD2) {
+                bestD2 = d2;
+                bestI = ci;
+              }
+            }
+          }
+        }
+        if (bestI === -1) return null;
+        const wgx = bestI % GRID;
+        const wgy = Math.floor(bestI / GRID);
+        return {
+          wx: ((wgx / (GRID - 1)) - 0.5) * WORLD_SIZE,
+          wz: ((wgy / (GRID - 1)) - 0.5) * WORLD_SIZE,
+          d2: bestD2
+        };
+      };
+
       for (let i = faunaAgents.length - 1; i >= 0; i--) {
         const a = faunaAgents[i];
         const { groundY, waterDepth, localIce, localLava, waterSurfaceY } = sampleHeightsAtWorld(a.x, a.z);
@@ -6937,14 +6966,34 @@
           faunaAgents.splice(i, 1);
           continue;
         }
-        if (a.type === 'frog' && params.totalWaterVol < 25 && !a.isBurning) {
-          faunaAgents.splice(i, 1);
-          continue;
+        // Frogs & Alligators: if their current pond dries up, they migrate toward the nearest body of water,
+        // and if they stay dry for too long without reaching water, they disappear just like fish!
+        if (a.type === 'frog' && !a.isBurning) {
+          const isFrogAtWater = (waterDepth >= 0.022 && localLava < 0.20) || (wp >= 0.44 && params.totalWaterVol >= 25);
+          if (!isFrogAtWater) {
+            a.dryTimer = (a.dryTimer || 0.0) + dt;
+          } else {
+            a.dryTimer = Math.max(0.0, (a.dryTimer || 0.0) - dt * 3.0);
+          }
+          const maxFrogDryTime = params.totalWaterVol < 25 ? 4.0 : 11.5;
+          if (a.dryTimer >= maxFrogDryTime) {
+            faunaAgents.splice(i, 1);
+            continue;
+          }
         }
-        if (a.type === 'croc' && params.totalWaterVol < 40 && !isInMoltenLava && !a.isBurning) {
-          disposeApexRig(a);
-          faunaAgents.splice(i, 1);
-          continue;
+        if (a.type === 'croc' && !isInMoltenLava && !a.isBurning) {
+          const isCrocAtWater = (waterDepth >= 0.045 && localLava < 0.20) || (wp >= 0.52 && params.totalWaterVol >= 35);
+          if (!isCrocAtWater) {
+            a.dryTimer = (a.dryTimer || 0.0) + dt;
+          } else {
+            a.dryTimer = Math.max(0.0, (a.dryTimer || 0.0) - dt * 3.0);
+          }
+          const maxCrocDryTime = params.totalWaterVol < 35 ? 4.5 : 14.0;
+          if (a.dryTimer >= maxCrocDryTime) {
+            disposeApexRig(a);
+            faunaAgents.splice(i, 1);
+            continue;
+          }
         }
         if ((a.type === 'macaw' || a.type === 'bat' || a.type === 'jaguar') && params.totalWaterVol < 30 && params.junglePlantCount < 15 && !a.isBurning) {
           disposeApexRig(a);
@@ -7119,41 +7168,15 @@
                 a.apexPhase = 'NIGHT_REST';
                 apexSpeedMult = 0.0;
               } else {
-                // Find the nearest water pool and place/move the alligator into the water so it sits still in water at night
-                let bestWaterI = -1;
-                let bestWaterD2 = 999999;
-                for (let wy = 4; wy < GRID - 4; wy += 2) {
-                  for (let wx = 4; wx < GRID - 4; wx += 2) {
-                    const ci = idx(wx, wy);
-                    if (water[ci] >= 0.14 && lavaFrac[ci] < 0.15) {
-                      const candX = ((wx / (GRID - 1)) - 0.5) * WORLD_SIZE;
-                      const candZ = ((wy / (GRID - 1)) - 0.5) * WORLD_SIZE;
-                      const d2 = (candX - a.x) * (candX - a.x) + (candZ - a.z) * (candZ - a.z);
-                      if (d2 < bestWaterD2) {
-                        bestWaterD2 = d2;
-                        bestWaterI = ci;
-                      }
-                    }
-                  }
-                }
-                if (bestWaterI !== -1) {
-                  const wgx = bestWaterI % GRID;
-                  const wgy = Math.floor(bestWaterI / GRID);
-                  const targetWx = ((wgx / (GRID - 1)) - 0.5) * WORLD_SIZE;
-                  const targetWz = ((wgy / (GRID - 1)) - 0.5) * WORLD_SIZE;
-                  if (bestWaterD2 > 64.0) {
-                    a.x = targetWx;
-                    a.z = targetWz;
-                    a.apexPhase = 'NIGHT_REST';
-                    apexSpeedMult = 0.0;
-                  } else {
-                    steerToward(Math.atan2(targetWx - a.x, targetWz - a.z), 10.0);
-                    a.apexPhase = 'PROWL';
-                    apexSpeedMult = 0.85;
-                  }
+                // Current pool dried up at night -> migrate overland toward the nearest remaining body of water!
+                const waterTarget = findNearestWaterTarget(a.x, a.z, 0.10);
+                if (waterTarget) {
+                  steerToward(Math.atan2(waterTarget.wx - a.x, waterTarget.wz - a.z), 7.5);
+                  a.apexPhase = 'PROWL';
+                  apexSpeedMult = 1.05;
                 } else {
-                  a.apexPhase = 'NIGHT_REST';
-                  apexSpeedMult = 0.0;
+                  a.apexPhase = 'PROWL';
+                  apexSpeedMult = 0.65;
                 }
               }
             } else {
@@ -7412,19 +7435,35 @@
             }
           }
 
+          const isCrocSeekingWater = (waterDepth < 0.045 && wp < 0.52);
+          let crocMigrationMult = 1.0;
           if (isLavaHazardAhead || isInMoltenLava || probeH.localLava > 0.12) {
             steerToHighDryGround(14.5);
+          } else if (isCrocSeekingWater) {
+            // Current pond dried up! Actively migrate overland toward the nearest body of water
+            const waterTarget = findNearestWaterTarget(a.x, a.z, 0.10);
+            if (waterTarget) {
+              steerToward(Math.atan2(waterTarget.wx - a.x, waterTarget.wz - a.z), 7.2 * coldSpeedMult);
+              crocMigrationMult = 1.18;
+            } else {
+              a.heading += a.turnRate * dt * 0.9 * coldSpeedMult;
+            }
           } else if (a.apexPhase === 'NIGHT_REST') {
             // Sitting completely still in the water at night
             a.turnRate = 0;
           } else if (probeH.waterDepth < 0.02 && waterProximity[pIdx] < 0.65) {
-            a.heading += 1.8 * coldSpeedMult * dt;
+            const waterTarget = findNearestWaterTarget(a.x, a.z, 0.10);
+            if (waterTarget) {
+              steerToward(Math.atan2(waterTarget.wx - a.x, waterTarget.wz - a.z), 6.0 * coldSpeedMult);
+            } else {
+              a.heading += 1.8 * coldSpeedMult * dt;
+            }
           } else if (!isChasingPrey) {
             a.heading += a.turnRate * dt * 0.9 * coldSpeedMult;
           }
-          if (a.apexPhase !== 'NIGHT_REST' || isLavaHazardAhead || isInMoltenLava) {
-            a.x += Math.sin(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
-            a.z += Math.cos(a.heading) * a.speed * sprintMult * fleeSpeedMult * dt;
+          if (a.apexPhase !== 'NIGHT_REST' || isCrocSeekingWater || isLavaHazardAhead || isInMoltenLava) {
+            a.x += Math.sin(a.heading) * a.speed * sprintMult * crocMigrationMult * fleeSpeedMult * dt;
+            a.z += Math.cos(a.heading) * a.speed * sprintMult * crocMigrationMult * fleeSpeedMult * dt;
           }
           // When lake water freezes hard, crocodiles crawl on top of the hard ice sheet; at night or in water, float low in the water!
           a.y = isHardIceSurface ? waterSurfaceY : (waterDepth > 0.07 ? (waterSurfaceY - 0.18) : groundY);
@@ -7481,26 +7520,42 @@
           a.y = walkSurfaceY + Math.abs(Math.sin(time * 7.0 * coldSpeedMult + a.phase)) * 0.08 * feedingPause;
 
         } else if (a.type === 'frog') {
-          // Oasis Pond Frog: hops in parabolic 3D leaps along pond banks & floating lily pads, then sits and croaks ("rib-bit!")
+          // Oasis Pond Frog: hops in parabolic 3D leaps along pond banks & floating lily pads, then sits and croaks ("rib-bit!");
+          // if its current pond dries up, it actively migrates toward the nearest body of water!
           const pWp = waterProximity[pIdx];
+          const isFrogMigratingToWater = (waterDepth < 0.022 && wp < 0.44);
           if (isLavaHazardAhead || isInMoltenLava || probeH.localLava > 0.12) {
             steerToHighDryGround(16.0);
+          } else if (isFrogMigratingToWater) {
+            const waterTarget = findNearestWaterTarget(a.x, a.z, 0.05);
+            if (waterTarget) {
+              steerToward(Math.atan2(waterTarget.wx - a.x, waterTarget.wz - a.z), 8.2 * coldSpeedMult);
+            } else {
+              a.heading += a.turnRate * dt * 1.2 * coldSpeedMult;
+            }
           } else if (pWp < 0.42 || probeH.waterDepth > 1.05 || obstacleType[pIdx] === 2) {
             // Stay near pond shoreline and shallow lily-pad water
-            a.heading += 2.2 * coldSpeedMult * dt;
+            const waterTarget = (pWp < 0.42) ? findNearestWaterTarget(a.x, a.z, 0.05) : null;
+            if (waterTarget && waterTarget.d2 < 900.0) {
+              steerToward(Math.atan2(waterTarget.wx - a.x, waterTarget.wz - a.z), 6.5 * coldSpeedMult);
+            } else {
+              a.heading += 2.2 * coldSpeedMult * dt;
+            }
           } else {
             a.heading += a.turnRate * dt * 0.9 * coldSpeedMult;
           }
 
-          // Sit-and-hop cycle: hop for 0.56s, then sit & call for ~1.8s (unless fleeing lava)
-          const hopCycle = (time * 1.35 + a.phase) % 2.35;
-          const isHopping = (hopCycle < 0.56) || isLavaHazardAhead || isInMoltenLava;
+          // Sit-and-hop cycle: hop for 0.56s, then sit & call for ~1.8s (or hop continuously when migrating to water or fleeing lava!)
+          const hopCycle = (time * (isFrogMigratingToWater ? 2.4 : 1.35) + a.phase) % (isFrogMigratingToWater ? 0.85 : 2.35);
+          const isHopping = (hopCycle < 0.56) || isFrogMigratingToWater || isLavaHazardAhead || isInMoltenLava;
           let hopHeight = 0.0;
           if (isHopping) {
-            const hopT = (isLavaHazardAhead || isInMoltenLava) ? ((time * 4.5 + a.phase) % 1.0) : (hopCycle / 0.56);
+            const hopT = (isLavaHazardAhead || isInMoltenLava || isFrogMigratingToWater)
+              ? ((time * (isFrogMigratingToWater ? 3.2 : 4.5) + a.phase) % 1.0)
+              : (hopCycle / 0.56);
             hopHeight = Math.sin(hopT * Math.PI) * 0.46 * a.scale;
             a.hopPitch = Math.cos(hopT * Math.PI) * -0.45;
-            const hopSpeed = a.speed * (isLavaHazardAhead ? 1.85 : 1.45) * coldSpeedMult;
+            const hopSpeed = a.speed * (isLavaHazardAhead ? 1.85 : (isFrogMigratingToWater ? 1.65 : 1.45)) * coldSpeedMult;
             a.x += Math.sin(a.heading) * hopSpeed * dt;
             a.z += Math.cos(a.heading) * hopSpeed * dt;
           } else {
