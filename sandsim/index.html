@@ -2152,7 +2152,7 @@
     <button class="tool-btn" data-tool="erase" title="Clear obstacles, roads, flora & placed items in brush radius">🧹 Erase</button>
     <button id="btn-dock-reset-water-plants" class="danger" title="Remove all water, plants, and aquatic/jungle animals from the current map">🔄 Reset Water & Life</button>
     <span class="dock-hint">
-      <kbd>✋ L-Drag</kbd> Pan · <kbd>R-Drag</kbd> Orbit · <kbd>V</kbd> Walk Mode
+      <kbd>WASD</kbd> / <kbd>✋ L-Drag</kbd> Pan · <kbd>R-Drag</kbd> Orbit · <kbd>V</kbd> Walk Mode
     </span>
   </div>
 
@@ -19714,6 +19714,12 @@
         if (e.code === 'Space')                           { driveState.keys.drift = true; e.preventDefault(); }
         return;
       }
+      // Track WASD / Arrow Keys & Shift in both Omniscient Observer Mode (for panning around the slab) and FPV Walk Mode
+      if (e.code === 'KeyW' || e.code === 'ArrowUp') fpvState.keys.forward = true;
+      if (e.code === 'KeyS' || e.code === 'ArrowDown') fpvState.keys.backward = true;
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft') fpvState.keys.left = true;
+      if (e.code === 'KeyD' || e.code === 'ArrowRight') fpvState.keys.right = true;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') fpvState.keys.sprint = true;
       if (!params.fpvMode) return;
       if (e.code === 'Digit1') { setFpvEquipment('sculpt'); return; }
       if (e.code === 'Digit2') { setFpvEquipment('none'); return; }
@@ -19721,11 +19727,6 @@
       if (e.code === 'Digit4') { setFpvEquipment('torch'); return; }
       if (e.code === 'KeyQ')   { cycleFpvEquipment(-1); return; }
       if (e.code === 'KeyE')   { cycleFpvEquipment(1); return; }
-      if (e.code === 'KeyW' || e.code === 'ArrowUp') fpvState.keys.forward = true;
-      if (e.code === 'KeyS' || e.code === 'ArrowDown') fpvState.keys.backward = true;
-      if (e.code === 'KeyA' || e.code === 'ArrowLeft') fpvState.keys.left = true;
-      if (e.code === 'KeyD' || e.code === 'ArrowRight') fpvState.keys.right = true;
-      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') fpvState.keys.sprint = true;
       if (e.code === 'Space') {
         fpvState.keys.jump = true;
         e.preventDefault();
@@ -22398,7 +22399,73 @@
       }
 
       if (!params.fpvMode) {
-        controls.update();
+        if (!params.driveMode) {
+          // Omniscient Observer Mode: WASD / Arrow Keys pan the camera & orbit target across the slab,
+          // and enforce a boundary limit on how far you can pan away from the slab on any side!
+          const kF = fpvState.keys.forward ? 1 : 0;
+          const kB = fpvState.keys.backward ? 1 : 0;
+          const kR = fpvState.keys.right ? 1 : 0;
+          const kL = fpvState.keys.left ? 1 : 0;
+          const moveFwd = kF - kB;
+          const moveRight = kR - kL;
+
+          if (moveFwd !== 0 || moveRight !== 0) {
+            // Compute horizontal camera-facing forward & right vectors in the XZ plane
+            let fwdX = controls.target.x - camera.position.x;
+            let fwdZ = controls.target.z - camera.position.z;
+            const fwdLen = Math.hypot(fwdX, fwdZ);
+            if (fwdLen > 0.001) {
+              fwdX /= fwdLen;
+              fwdZ /= fwdLen;
+            } else {
+              fwdX = 0;
+              fwdZ = -1;
+            }
+            const rightX = -fwdZ;
+            const rightZ = fwdX;
+
+            let panX = fwdX * moveFwd + rightX * moveRight;
+            let panZ = fwdZ * moveFwd + rightZ * moveRight;
+            const panLen = Math.hypot(panX, panZ);
+            if (panLen > 1.0) {
+              panX /= panLen;
+              panZ /= panLen;
+            }
+
+            // Scale pan speed smoothly with camera distance from target (and 1.85x faster when holding Shift)
+            const camDistToTarget = Math.max(24.0, camera.position.distanceTo(controls.target));
+            const sprintMult = fpvState.keys.sprint ? 1.85 : 1.0;
+            const panSpeed = clamp(camDistToTarget * 0.65, 38.0, 145.0) * sprintMult;
+
+            const stepX = panX * panSpeed * dt;
+            const stepZ = panZ * panSpeed * dt;
+            controls.target.x += stepX;
+            controls.target.z += stepZ;
+            camera.position.x += stepX;
+            camera.position.z += stepZ;
+          }
+
+          controls.update();
+
+          // Enforce a hard boundary limit on how far the omniscient camera target can move away from the slab on any side
+          // (WORLD_SIZE = 220m, so half-slab is 110m; allow panning up to 132m from center — just past the slab edge — while preserving the camera's relative offset!)
+          const maxTargetBoundXZ = WORLD_SIZE * 0.60; // 132m on any side
+          const clampedTargetX = clamp(controls.target.x, -maxTargetBoundXZ, maxTargetBoundXZ);
+          const clampedTargetZ = clamp(controls.target.z, -maxTargetBoundXZ, maxTargetBoundXZ);
+          const clampedTargetY = clamp(controls.target.y, -6.0, MAX_TERRAIN_HEIGHT + 28.0);
+
+          const corrX = clampedTargetX - controls.target.x;
+          const corrY = clampedTargetY - controls.target.y;
+          const corrZ = clampedTargetZ - controls.target.z;
+          if (corrX !== 0 || corrY !== 0 || corrZ !== 0) {
+            controls.target.set(clampedTargetX, clampedTargetY, clampedTargetZ);
+            camera.position.x += corrX;
+            camera.position.y += corrY;
+            camera.position.z += corrZ;
+          }
+        } else {
+          controls.update();
+        }
       }
       renderer.render(scene, camera);
     }
