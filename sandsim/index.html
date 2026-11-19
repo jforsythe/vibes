@@ -1273,7 +1273,7 @@
         display: flex;
         min-width: auto;
       }
-      button.fpv-btn, #btn-screenshot {
+      button.fpv-btn, #btn-screenshot, #btn-load-cartridge-top {
         padding: 5px 9px;
         font-size: 11px;
       }
@@ -1576,9 +1576,13 @@
       <button id="btn-audio-toggle" class="audio-btn" title="Toggle Global Sound Effects On/Off (Shortcut: M)">
         🔊 Audio: ON
       </button>
-      <button id="btn-screenshot" title="Capture a PNG screenshot of the 3D scene and save it to your computer (Shortcut: P)">
-        📸 Screenshot
+      <button id="btn-screenshot" title="Save a playable Cartridge PNG screenshot containing your entire 3D map, roads, water, flora, items &amp; vehicle setup (Shortcut: P)">
+        💾 Save Cartridge
       </button>
+      <button id="btn-load-cartridge-top" title="Load a playable Cartridge PNG map (or drag &amp; drop any Cartridge PNG onto the 3D window)">
+        📂 Load Cartridge
+      </button>
+      <input type="file" id="input-cartridge-file" accept="image/png,.png" style="display:none;" />
       <div class="stat-item keep-mobile">
         <span class="stat-label">Weather</span>
         <span class="stat-value" style="color:#bae6fd;" id="stat-weather">🌤️ Clear Oasis</span>
@@ -1677,6 +1681,7 @@
     <!-- Compact Icon Strip (Shown when Collapsed) -->
     <div class="panel-collapsed-icons">
       <button class="panel-icon-btn" data-section="sec-fidelity" title="Expand Controls · Graphics Fidelity">⚙️</button>
+      <button class="panel-icon-btn" data-section="sec-cartridge" title="Map Cartridges (Save &amp; Load Playable PNGs)">💾</button>
       <button class="panel-icon-btn" data-section="sec-fidelity" title="Graphics & Visual Fidelity">✨</button>
       <button class="panel-icon-btn" data-section="sec-terrain" title="1. Terrain & Watersheds">🏞️</button>
       <button class="panel-icon-btn" data-section="sec-weather" title="2. Weather & Climate Regimes">🌤️</button>
@@ -1707,6 +1712,39 @@
           <span>Models: Smooth LOD</span>
           <span>Shadows: 1024px</span>
           <span>Water: Glossy Clear</span>
+        </div>
+      </div>
+
+      <!-- Playable PNG Map Cartridges Card -->
+      <div class="section-card" id="sec-cartridge">
+        <div class="section-header">
+          <span>💾 Map Cartridges (PNG)</span>
+          <span class="fidelity-badge" id="val-cartridge-status">Playable PNG</span>
+        </div>
+        <div class="control-row" style="gap:4px;">
+          <div class="control-label">
+            <span>Cartridge Name</span>
+            <span class="control-val" id="val-cartridge-slug" style="font-size:10px; opacity:0.85;">auto-named.png</span>
+          </div>
+          <div style="display:flex; gap:5px; align-items:center;">
+            <input
+              type="text"
+              id="input-cartridge-title"
+              maxlength="36"
+              placeholder="Auto-named on save..."
+              style="flex:1; background:rgba(0,0,0,0.38); border:1px solid rgba(255,197,109,0.38); color:var(--text); border-radius:7px; padding:5px 8px; font-size:11.5px; font-weight:600; outline:none;"
+              title="Concise Cartridge title embedded on the PNG card &amp; used as the filename"
+            />
+            <button type="button" id="btn-reroll-cartridge-title" style="padding:5px 8px; font-size:12px;" title="Generate a fresh concise Cartridge title from your current map">🎲</button>
+          </div>
+        </div>
+        <div class="btn-grid" style="margin-top:6px;">
+          <button type="button" id="btn-save-cartridge-panel" class="primary" title="Export a playable Cartridge PNG image with your entire 3D map embedded inside (Shortcut: P)">💾 Save PNG</button>
+          <button type="button" id="btn-load-cartridge-panel" title="Load a Cartridge PNG file from your device">📂 Load PNG</button>
+        </div>
+        <div class="fidelity-details" style="margin-top:6px;">
+          <span>Drop any Cartridge .png on screen to play</span>
+          <span>Shortcut: <kbd>P</kbd></span>
         </div>
       </div>
 
@@ -13775,44 +13813,815 @@
       }
     }
 
-    function captureAndSaveScreenshot() {
+    // ============================================================================
+    // 12B. PLAYABLE CARTRIDGE PNG SAVE & LOAD SYSTEM (Embedded `caRt` PNG Chunk)
+    // ============================================================================
+    let cartridgeNameSeed = 0;
+    let userEditedCartridgeTitle = false;
+
+    const inputCartridgeTitle = document.getElementById('input-cartridge-title');
+    const valCartridgeSlug = document.getElementById('val-cartridge-slug');
+    const valCartridgeStatus = document.getElementById('val-cartridge-status');
+    const btnRerollCartridgeTitle = document.getElementById('btn-reroll-cartridge-title');
+    const btnSaveCartridgePanel = document.getElementById('btn-save-cartridge-panel');
+    const btnLoadCartridgePanel = document.getElementById('btn-load-cartridge-panel');
+    const btnLoadCartridgeTop = document.getElementById('btn-load-cartridge-top');
+    const inputCartridgeFile = document.getElementById('input-cartridge-file');
+
+    function titleToCartridgeSlug(titleStr) {
+      const slug = (titleStr || 'oasis-cartridge')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 36);
+      return slug || 'oasis-cartridge';
+    }
+
+    // Concise, evocative 2-3 word Cartridge title generator tailored to the live map state!
+    function generateCartridgeTitle(advanceSeed = true) {
+      if (advanceSeed) cartridgeNameSeed++;
+      let roadCells = 0;
+      let dirtCells = 0;
+      for (let i = 0; i < MAX_CELLS; i += 4) {
+        if (surfaceMaterial[i] >= 2) roadCells += 4;
+        else if (surfaceMaterial[i] === 1) dirtCells += 4;
+      }
+      const hasTruck = Boolean(getLatestPlacedTruck());
+      let lanternCount = 0;
+      let tapCount = 0;
+      for (let i = 0; i < placedWorldItems.length; i++) {
+        if (placedWorldItems[i].type === 'item-lantern') lanternCount++;
+        else if (placedWorldItems[i].type === 'item-tap') tapCount++;
+      }
+
+      const activeTerrainBtn = document.querySelector('.terrain-btn.active');
+      const terrainKey = activeTerrainBtn ? activeTerrainBtn.dataset.terrain : 'craters';
+      const hr = ((params.timeOfDay % 24) + 24) % 24;
+      const isNight = (hr >= 19.0 || hr < 5.5) || ((skyUniforms.uNightFactor.value || 0) > 0.50);
+      const isDuskDawn = !isNight && (hr < 7.6 || hr >= 16.8);
+
+      // 1. First Word: Atmosphere / Lighting / Weather
+      let prefixPool;
+      if (params.weatherMode === 'snow' || params.avgIceCover > 0.12) {
+        prefixPool = ['Frostlit', 'Glacial', 'Winter', 'Snowbound', 'Icy', 'Arctic'];
+      } else if (params.weatherMode === 'haboob') {
+        prefixPool = ['Haboob', 'Sirocco', 'Sandstorm', 'Dustveiled', 'Tempest', 'Gale'];
+      } else if (params.weatherMode === 'thunderstorm' || params.weatherMode === 'monsoon') {
+        prefixPool = ['Stormlit', 'Monsoon', 'Thunder', 'Cloudburst', 'Tempest', 'Rainwashed'];
+      } else if (params.totalLavaVol > 40) {
+        prefixPool = ['Molten', 'Volcanic', 'Obsidian', 'Brimstone', 'Magma', 'Crimson'];
+      } else if (isNight) {
+        prefixPool = ['Starlit', 'Moonlit', 'Midnight', 'Nocturne', 'Lunar', 'Astral'];
+      } else if (isDuskDawn) {
+        prefixPool = ['Sunset', 'Crimson', 'Amber', 'Twilight', 'Saffron', 'Dusk'];
+      } else {
+        prefixPool = ['Golden', 'Sunlit', 'Solstice', 'Mirage', 'Radiant', 'Sunbaked'];
+      }
+
+      // 2. Second Word: Signature Feature / Biome / Vehicle
+      let midPool;
+      if (hasTruck && roadCells > 100) {
+        midPool = ['Baja', 'Trophy', 'Rally', 'Overdrive', 'Asphalt', 'Apex'];
+      } else if (hasTruck) {
+        midPool = ['Baja', 'Offroad', 'DuneRunner', 'Outlaw', 'Trailblazer', 'Safari'];
+      } else if (params.totalLavaVol > 40) {
+        midPool = ['Magma', 'Cinder', 'Fireflow', 'Basalt', 'Inferno', 'Ember'];
+      } else if (lanternCount >= 2) {
+        midPool = ['Lantern', 'Firefly', 'Beacon', 'Caravan', 'Campfire', 'Watch'];
+      } else if (params.junglePlantCount > 150 && params.totalWaterVol > 280) {
+        midPool = ['Emerald', 'Palm', 'Riparian', 'Canopy', 'Eden', 'Lotus'];
+      } else if (params.desertPlantCount > 110) {
+        midPool = ['Saguaro', 'Agave', 'Badlands', 'Nomad', 'Mojave', 'Cactus'];
+      } else if (tapCount >= 1) {
+        midPool = ['Artesian', 'Spring', 'Cascade', 'Wellspring', 'Aquifer', 'Fountain'];
+      } else {
+        midPool = ['Aeolian', 'Barchan', 'Sahara', 'Horizon', 'Caravan', 'Zephyr'];
+      }
+
+      // 3. Third Word: Concise Landform / Domain
+      let nounPool;
+      if (roadCells > 160) {
+        nounPool = ['Circuit', 'Track', 'Run', 'Course', 'Speedway'];
+      } else if (terrainKey === 'canyon') {
+        nounPool = ['Wadi', 'Canyon', 'Gorge', 'Ravine', 'Narrows'];
+      } else if (terrainKey === 'craters') {
+        nounPool = ['Craters', 'Basin', 'Lagoon', 'Atoll', 'Caldera'];
+      } else if (terrainKey === 'ruins') {
+        nounPool = ['Temple', 'Ruins', 'Sanctum', 'Citadel', 'Relic'];
+      } else if (terrainKey === 'fortress') {
+        nounPool = ['Fortress', 'Bastion', 'Keep', 'Stronghold', 'Outpost'];
+      } else if (terrainKey === 'ridges') {
+        nounPool = ['Ridges', 'Valleys', 'Crest', 'Corridor', 'Pass'];
+      } else if (params.totalWaterVol > 260) {
+        nounPool = ['Oasis', 'Springs', 'Haven', 'Sanctuary', 'Lagoon'];
+      } else {
+        nounPool = ['Dunes', 'Drifts', 'Expanse', 'Sands', 'Pan'];
+      }
+
+      const hSeed = Math.floor(
+        cartridgeNameSeed * 7 +
+        Math.round(params.totalWaterVol * 0.05) +
+        Math.round(params.junglePlantCount * 0.1) +
+        Math.round(params.desertPlantCount * 0.1) +
+        placedWorldItems.length * 13
+      );
+      const w1 = prefixPool[Math.abs(hSeed) % prefixPool.length];
+      const w2 = midPool[Math.abs(hSeed * 3 + cartridgeNameSeed * 5) % midPool.length];
+      const w3 = nounPool[Math.abs(hSeed * 7 + cartridgeNameSeed * 11) % nounPool.length];
+      return `${w1} ${w2} ${w3}`;
+    }
+
+    function syncCartridgeTitlePreview(forceNew = false) {
+      if (!inputCartridgeTitle) return;
+      if (forceNew || !userEditedCartridgeTitle || !inputCartridgeTitle.value.trim()) {
+        inputCartridgeTitle.value = generateCartridgeTitle(forceNew);
+        userEditedCartridgeTitle = false;
+      }
+      if (valCartridgeSlug) {
+        valCartridgeSlug.textContent = `${titleToCartridgeSlug(inputCartridgeTitle.value)}.png`;
+      }
+    }
+
+    if (inputCartridgeTitle) {
+      inputCartridgeTitle.addEventListener('input', () => {
+        userEditedCartridgeTitle = inputCartridgeTitle.value.trim().length > 0;
+        if (valCartridgeSlug) {
+          valCartridgeSlug.textContent = `${titleToCartridgeSlug(inputCartridgeTitle.value)}.png`;
+        }
+      });
+      syncCartridgeTitlePreview(true);
+    }
+
+    if (btnRerollCartridgeTitle) {
+      btnRerollCartridgeTitle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        userEditedCartridgeTitle = false;
+        syncCartridgeTitlePreview(true);
+      });
+    }
+
+    // Floating Cartridge Toast Notification & Drag-and-Drop Overlay
+    const cartridgeToastEl = document.createElement('div');
+    cartridgeToastEl.style.cssText = 'position:fixed; top:64px; left:50%; transform:translateX(-50%) translateY(-12px); background:rgba(16,14,11,0.94); border:1.5px solid rgba(255,197,109,0.75); color:#fef3c7; padding:9px 18px; border-radius:999px; font-size:12.5px; font-weight:700; box-shadow:0 10px 32px rgba(0,0,0,0.75); backdrop-filter:blur(12px); z-index:120; pointer-events:none; opacity:0; transition:opacity 0.22s ease, transform 0.22s ease; white-space:nowrap;';
+    document.body.appendChild(cartridgeToastEl);
+    let cartridgeToastTimer = null;
+
+    function showCartridgeToast(msg, isError = false) {
+      cartridgeToastEl.textContent = msg;
+      cartridgeToastEl.style.borderColor = isError ? 'rgba(248,113,113,0.85)' : 'rgba(255,197,109,0.80)';
+      cartridgeToastEl.style.color = isError ? '#fecaca' : '#fef3c7';
+      cartridgeToastEl.style.opacity = '1';
+      cartridgeToastEl.style.transform = 'translateX(-50%) translateY(0)';
+      if (cartridgeToastTimer) clearTimeout(cartridgeToastTimer);
+      cartridgeToastTimer = setTimeout(() => {
+        cartridgeToastEl.style.opacity = '0';
+        cartridgeToastEl.style.transform = 'translateX(-50%) translateY(-12px)';
+      }, 3200);
+    }
+
+    const cartridgeDropOverlay = document.createElement('div');
+    cartridgeDropOverlay.style.cssText = 'position:fixed; inset:14px; border:3px dashed rgba(255,197,109,0.85); border-radius:20px; background:rgba(16,13,10,0.62); backdrop-filter:blur(6px); display:none; align-items:center; justify-content:center; flex-direction:column; gap:10px; z-index:115; pointer-events:none; color:#fde68a; font-size:18px; font-weight:800; text-shadow:0 2px 12px rgba(0,0,0,0.9);';
+    cartridgeDropOverlay.innerHTML = `<div style="font-size:42px;">🎮</div><div>Drop Cartridge PNG to Load Map</div><div style="font-size:12.5px; font-weight:500; color:#d4c3aa;">Restores terrain, water, roads, flora, items, animals &amp; vehicle setup</div>`;
+    document.body.appendChild(cartridgeDropOverlay);
+
+    // IEEE 802.3 CRC32 Lookup Table for Valid PNG Chunk Checksums
+    const PNG_CRC32_TABLE = (() => {
+      const table = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) {
+          c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+        }
+        table[n] = c >>> 0;
+      }
+      return table;
+    })();
+
+    function computePngCrc32(typeBytes, dataBytes) {
+      let c = 0xffffffff;
+      for (let i = 0; i < typeBytes.length; i++) {
+        c = PNG_CRC32_TABLE[(c ^ typeBytes[i]) & 0xff] ^ (c >>> 8);
+      }
+      for (let i = 0; i < dataBytes.length; i++) {
+        c = PNG_CRC32_TABLE[(c ^ dataBytes[i]) & 0xff] ^ (c >>> 8);
+      }
+      return (c ^ 0xffffffff) >>> 0;
+    }
+
+    async function compressBytesGzip(rawUint8) {
+      if (typeof CompressionStream !== 'undefined') {
+        try {
+          const cs = new CompressionStream('gzip');
+          const writer = cs.writable.getWriter();
+          writer.write(rawUint8);
+          writer.close();
+          const buf = await new Response(cs.readable).arrayBuffer();
+          const gz = new Uint8Array(buf);
+          const out = new Uint8Array(1 + gz.length);
+          out[0] = 1; // 1 = Gzip compressed
+          out.set(gz, 1);
+          return out;
+        } catch (_) {}
+      }
+      const out = new Uint8Array(1 + rawUint8.length);
+      out[0] = 0; // 0 = Raw uncompressed
+      out.set(rawUint8, 1);
+      return out;
+    }
+
+    async function decompressBytesGzip(flaggedUint8) {
+      const mode = flaggedUint8[0];
+      const body = flaggedUint8.subarray(1);
+      if (mode === 1 && typeof DecompressionStream !== 'undefined') {
+        const ds = new DecompressionStream('gzip');
+        const writer = ds.writable.getWriter();
+        writer.write(body);
+        writer.close();
+        const buf = await new Response(ds.readable).arrayBuffer();
+        return new Uint8Array(buf);
+      }
+      return body;
+    }
+
+    function injectPngCartridgeChunk(pngArrayBuffer, chunkPayloadUint8) {
+      const png = new Uint8Array(pngArrayBuffer);
+      // Verify 8-byte PNG signature
+      if (png.length < 20 || png[0] !== 0x89 || png[1] !== 0x50 || png[2] !== 0x4e || png[3] !== 0x47) {
+        throw new Error('Invalid PNG header');
+      }
+      // Locate IEND chunk so we can insert `caRt` immediately before IEND
+      let offset = 8;
+      let iendOffset = png.length - 12;
+      const dv = new DataView(png.buffer, png.byteOffset, png.byteLength);
+      while (offset + 8 <= png.length) {
+        const len = dv.getUint32(offset, false);
+        const t0 = png[offset + 4];
+        const t1 = png[offset + 5];
+        const t2 = png[offset + 6];
+        const t3 = png[offset + 7];
+        if (t0 === 0x49 && t1 === 0x45 && t2 === 0x4e && t3 === 0x44) { // 'IEND'
+          iendOffset = offset;
+          break;
+        }
+        offset += 12 + len;
+      }
+
+      const chunkType = new Uint8Array([0x63, 0x61, 0x52, 0x74]); // 'caRt' (ancillary, safe-to-copy)
+      const chunkLen = chunkPayloadUint8.length;
+      const crc = computePngCrc32(chunkType, chunkPayloadUint8);
+
+      const out = new Uint8Array(png.length + 12 + chunkLen);
+      const outDv = new DataView(out.buffer);
+      // 1. Copy PNG up to IEND
+      out.set(png.subarray(0, iendOffset), 0);
+      // 2. Write `caRt` chunk: [4-byte length][4-byte 'caRt'][payload][4-byte CRC32]
+      let p = iendOffset;
+      outDv.setUint32(p, chunkLen, false); p += 4;
+      out.set(chunkType, p); p += 4;
+      out.set(chunkPayloadUint8, p); p += chunkLen;
+      outDv.setUint32(p, crc, false); p += 4;
+      // 3. Copy trailing IEND chunk
+      out.set(png.subarray(iendOffset), p);
+      return out;
+    }
+
+    function extractPngCartridgeChunk(pngArrayBuffer) {
+      const png = new Uint8Array(pngArrayBuffer);
+      if (png.length < 20 || png[0] !== 0x89 || png[1] !== 0x50 || png[2] !== 0x4e || png[3] !== 0x47) {
+        return null;
+      }
+      const dv = new DataView(png.buffer, png.byteOffset, png.byteLength);
+      let offset = 8;
+      while (offset + 12 <= png.length) {
+        const len = dv.getUint32(offset, false);
+        if (offset + 12 + len > png.length) break;
+        const t0 = png[offset + 4];
+        const t1 = png[offset + 5];
+        const t2 = png[offset + 6];
+        const t3 = png[offset + 7];
+        if (t0 === 0x63 && t1 === 0x61 && t2 === 0x52 && t3 === 0x74) { // 'caRt'
+          return png.subarray(offset + 8, offset + 8 + len);
+        }
+        if (t0 === 0x49 && t1 === 0x45 && t2 === 0x4e && t3 === 0x44) { // 'IEND'
+          break;
+        }
+        offset += 12 + len;
+      }
+      return null;
+    }
+
+    async function serializeWorldCartridgePayload(cartridgeTitle) {
+      const activeTerrainBtn = document.querySelector('.terrain-btn.active');
+      const saveCamPos = params.driveMode
+        ? driveState.savedOrbitPos
+        : (params.fpvMode ? fpvState.savedOrbitPos : camera.position);
+      const saveCamTarget = params.driveMode
+        ? driveState.savedOrbitTarget
+        : (params.fpvMode ? fpvState.savedOrbitTarget : controls.target);
+
+      const meta = {
+        magic: 'AEOLIAN_OASIS_CARTRIDGE_V1',
+        version: 1,
+        title: cartridgeTitle,
+        slug: titleToCartridgeSlug(cartridgeTitle),
+        savedAt: new Date().toISOString(),
+        grid: GRID,
+        terrainPreset: activeTerrainBtn ? activeTerrainBtn.dataset.terrain : 'craters',
+        params: {
+          fidelity: params.fidelity,
+          windSpeed: params.windSpeed,
+          windDirDeg: params.windDirDeg,
+          sandSupply: params.sandSupply,
+          rainRate: params.rainRate,
+          evapRate: params.evapRate,
+          absorptionRate: params.absorptionRate,
+          simSteps: params.simSteps,
+          brushRadius: params.brushRadius,
+          timeOfDay: params.timeOfDay,
+          autoDayNight: params.autoDayNight,
+          weatherMode: params.weatherMode,
+          autoWeather: params.autoWeather,
+          snowRate: params.snowRate,
+          showShadowOverlay: params.showShadowOverlay,
+          showMoistureOverlay: params.showMoistureOverlay,
+          showParticles: params.showParticles,
+          truckSmokeIntensity: params.truckSmokeIntensity,
+          truckSkidThreshold: params.truckSkidThreshold,
+          truckTopSpeed: params.truckTopSpeed,
+          truckSuspension: params.truckSuspension,
+          truckCounterweight: params.truckCounterweight,
+          truckTireTracking: params.truckTireTracking,
+          truckJumpLift: params.truckJumpLift,
+          truckAirBoost: params.truckAirBoost,
+          truckGear1Tune: params.truckGear1Tune,
+          truckGear2Tune: params.truckGear2Tune,
+          truckGear3Tune: params.truckGear3Tune,
+          truckGear4Tune: params.truckGear4Tune,
+          truckLightAngleDeg: params.truckLightAngleDeg,
+          truckLightDistance: params.truckLightDistance,
+          truckLightConeOpacity: params.truckLightConeOpacity,
+          truckLightColorHex: params.truckLightColorHex
+        },
+        camera: {
+          pos: [saveCamPos.x, saveCamPos.y, saveCamPos.z],
+          target: [saveCamTarget.x, saveCamTarget.y, saveCamTarget.z]
+        },
+        items: placedWorldItems.map((it) => ({
+          type: it.type,
+          x: it.x,
+          y: it.y,
+          z: it.z,
+          yaw: it.yaw || 0,
+          phase: it.phase || 0,
+          spurtStrength: it.spurtStrength ?? 1.0,
+          foodRemaining: it.foodRemaining ?? 1.0,
+          mothSupply: it.mothSupply ?? 0.0,
+          mothCooldown: it.mothCooldown ?? 4.0,
+          mothsActive: Boolean(it.mothsActive)
+        })),
+        fauna: faunaAgents.map((a) => ({
+          type: a.type,
+          state: a.state,
+          x: a.x,
+          y: a.y,
+          z: a.z,
+          heading: a.heading || 0,
+          speed: a.speed || 3.5,
+          scale: a.scale || 1.0,
+          colorHex: a.colorHex || 0xd97706,
+          skeletonTimer: a.skeletonTimer || 0
+        }))
+      };
+
+      const metaBytes = new TextEncoder().encode(JSON.stringify(meta));
+      // 11 Float32Arrays (11 * 4 * MAX_CELLS) + 3 Uint8Arrays (3 * 1 * MAX_CELLS)
+      const floatArrays = [
+        bedrock, sand, water, soilMoisture, waterProximity,
+        veg, vegHealth, snowCover, iceCover, lavaFrac, pondAge
+      ];
+      const byteArrays = [obstacleType, grassMask, surfaceMaterial];
+      const gridByteLen = floatArrays.length * 4 * MAX_CELLS + byteArrays.length * MAX_CELLS;
+
+      const totalRaw = new Uint8Array(4 + metaBytes.length + gridByteLen);
+      const dv = new DataView(totalRaw.buffer);
+      dv.setUint32(0, metaBytes.length, false);
+      let ptr = 4;
+      totalRaw.set(metaBytes, ptr);
+      ptr += metaBytes.length;
+
+      for (let f = 0; f < floatArrays.length; f++) {
+        const arr = floatArrays[f];
+        const u8 = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
+        totalRaw.set(u8, ptr);
+        ptr += u8.byteLength;
+      }
+      for (let b = 0; b < byteArrays.length; b++) {
+        const arr = byteArrays[b];
+        totalRaw.set(arr, ptr);
+        ptr += arr.byteLength;
+      }
+
+      return compressBytesGzip(totalRaw);
+    }
+
+    async function captureAndSaveScreenshot() {
       const wasRingVisible = brushRing.visible;
       brushRing.visible = false;
       renderer.render(scene, camera);
       brushRing.visible = wasRingVisible;
 
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const filename = `aeolian-oasis-${timestamp}.png`;
-
-      if (renderer.domElement.toBlob) {
-        renderer.domElement.toBlob((blob) => {
-          if (!blob) return;
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = filename;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          setTimeout(() => URL.revokeObjectURL(url), 2000);
-        }, 'image/png');
+      // Pick concise Cartridge title (auto-generate a fresh one if user hasn't typed a custom title)
+      let cartridgeTitle;
+      if (userEditedCartridgeTitle && inputCartridgeTitle && inputCartridgeTitle.value.trim()) {
+        cartridgeTitle = inputCartridgeTitle.value.trim();
       } else {
-        const dataUrl = renderer.domElement.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.href = dataUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        cartridgeTitle = generateCartridgeTitle(true);
+        if (inputCartridgeTitle) inputCartridgeTitle.value = cartridgeTitle;
       }
+      const slug = titleToCartridgeSlug(cartridgeTitle);
+      const filename = `${slug}.png`;
+      if (valCartridgeSlug) valCartridgeSlug.textContent = filename;
+
+      // Composite 3D WebGL screenshot with a sleek bottom Cartridge Card footer bar
+      const srcCanvas = renderer.domElement;
+      const w = srcCanvas.width;
+      const h = srcCanvas.height;
+      const cardCanvas = document.createElement('canvas');
+      cardCanvas.width = w;
+      cardCanvas.height = h;
+      const ctx = cardCanvas.getContext('2d');
+      ctx.drawImage(srcCanvas, 0, 0);
+
+      const barH = Math.max(38, Math.round(h * 0.052));
+      const grad = ctx.createLinearGradient(0, h - barH * 1.45, 0, h);
+      grad.addColorStop(0.0, 'rgba(12, 10, 8, 0.0)');
+      grad.addColorStop(0.32, 'rgba(12, 10, 8, 0.76)');
+      grad.addColorStop(1.0, 'rgba(10, 8, 6, 0.94)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, h - barH * 1.45, w, barH * 1.45);
+
+      ctx.strokeStyle = 'rgba(255, 197, 109, 0.48)';
+      ctx.lineWidth = Math.max(1, h / 650);
+      ctx.beginPath();
+      ctx.moveTo(16, h - barH);
+      ctx.lineTo(w - 16, h - barH);
+      ctx.stroke();
+
+      const fontSizeTitle = Math.max(13, Math.round(barH * 0.42));
+      const fontSizeMeta = Math.max(10, Math.round(barH * 0.28));
+      const centerY = h - barH * 0.46;
+
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#ffc56d';
+      ctx.font = `800 ${fontSizeTitle}px "Inter", -apple-system, sans-serif`;
+      ctx.fillText(`🎮 ${cartridgeTitle.toUpperCase()}`, 20, centerY);
+
+      const totalPlants = (params.junglePlantCount || 0) + (params.desertPlantCount || 0);
+      const hasTruck = Boolean(getLatestPlacedTruck());
+      const metaSummary = `${WEATHER_LABELS[params.weatherMode] || 'Oasis'}  ·  🌱 ${totalPlants}  ·  🐪 ${faunaAgents.length}${hasTruck ? '  ·  🛻 4x4' : ''}  ·  AEOLIAN & OASIS 3D CARTRIDGE (DROP PNG TO PLAY)`;
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#e7dac6';
+      ctx.font = `600 ${fontSizeMeta}px "SF Mono", Menlo, "Inter", sans-serif`;
+      ctx.fillText(metaSummary, w - 20, centerY);
+
+      const pngBlob = await new Promise((resolve) => cardCanvas.toBlob(resolve, 'image/png'));
+      if (!pngBlob) return;
+      const rawPngBuf = await pngBlob.arrayBuffer();
+      const compressedPayload = await serializeWorldCartridgePayload(cartridgeTitle);
+      const cartridgePngBytes = injectPngCartridgeChunk(rawPngBuf, compressedPayload);
+
+      const finalBlob = new Blob([cartridgePngBytes], { type: 'image/png' });
+      const url = URL.createObjectURL(finalBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 2500);
 
       const btn = document.getElementById('btn-screenshot');
-      const origText = btn.textContent;
-      btn.textContent = '✅ Saved PNG!';
-      setTimeout(() => { btn.textContent = origText; }, 1400);
+      if (btn) {
+        const origText = btn.textContent;
+        btn.textContent = `✅ ${cartridgeTitle}`;
+        setTimeout(() => { btn.textContent = origText; }, 1800);
+      }
+      if (valCartridgeStatus) {
+        valCartridgeStatus.textContent = 'Saved PNG!';
+        setTimeout(() => { valCartridgeStatus.textContent = 'Playable PNG'; }, 2000);
+      }
+      showCartridgeToast(`💾 Saved Cartridge: "${cartridgeTitle}" (${filename})`);
+    }
+
+    async function loadCartridgeFromPngFile(file) {
+      if (!file) return;
+      try {
+        const arrayBuf = await file.arrayBuffer();
+        const chunkData = extractPngCartridgeChunk(arrayBuf);
+        if (!chunkData) {
+          showCartridgeToast('⚠️ That PNG does not contain an Aeolian & Oasis 3D Cartridge!', true);
+          return;
+        }
+        const rawBytes = await decompressBytesGzip(chunkData);
+        const dv = new DataView(rawBytes.buffer, rawBytes.byteOffset, rawBytes.byteLength);
+        const metaLen = dv.getUint32(0, false);
+        if (metaLen <= 0 || 4 + metaLen > rawBytes.length) {
+          throw new Error('Corrupt cartridge header');
+        }
+        const metaJson = new TextDecoder().decode(rawBytes.subarray(4, 4 + metaLen));
+        const meta = JSON.parse(metaJson);
+        if (!meta || meta.magic !== 'AEOLIAN_OASIS_CARTRIDGE_V1' || meta.grid !== GRID) {
+          throw new Error('Incompatible cartridge version');
+        }
+
+        // Exit FPV or Drive Mode cleanly before restoring world state
+        if (params.driveMode) toggleDriveMode(false);
+        if (params.fpvMode) toggleFPVMode(false);
+
+        let ptr = 4 + metaLen;
+        const floatArrays = [
+          bedrock, sand, water, soilMoisture, waterProximity,
+          veg, vegHealth, snowCover, iceCover, lavaFrac, pondAge
+        ];
+        const byteArrays = [obstacleType, grassMask, surfaceMaterial];
+
+        for (let f = 0; f < floatArrays.length; f++) {
+          const arr = floatArrays[f];
+          const byteLen = arr.byteLength;
+          const srcU8 = rawBytes.subarray(ptr, ptr + byteLen);
+          new Uint8Array(arr.buffer, arr.byteOffset, byteLen).set(srcU8);
+          ptr += byteLen;
+        }
+        for (let b = 0; b < byteArrays.length; b++) {
+          const arr = byteArrays[b];
+          const byteLen = arr.byteLength;
+          arr.set(rawBytes.subarray(ptr, ptr + byteLen));
+          ptr += byteLen;
+        }
+
+        // Clear transient buffers
+        sandNext.set(sand);
+        waterNext.set(water);
+        moistureNext.set(soilMoisture);
+        waterProxNext.set(waterProximity);
+        lavaFracNext.set(lavaFrac);
+        plantBurnTimer.fill(0);
+        steamStageTimer.fill(0);
+        pendingRockHeight.fill(0);
+        plantSubmergedTimer.fill(0);
+
+        // Restore params & sync UI controls
+        if (meta.params) {
+          const p = meta.params;
+          const assignIfNum = (k) => { if (typeof p[k] === 'number' && !Number.isNaN(p[k])) params[k] = p[k]; };
+          const assignIfBool = (k) => { if (typeof p[k] === 'boolean') params[k] = p[k]; };
+          assignIfNum('windSpeed');
+          assignIfNum('windDirDeg');
+          assignIfNum('sandSupply');
+          assignIfNum('rainRate');
+          assignIfNum('evapRate');
+          assignIfNum('absorptionRate');
+          assignIfNum('simSteps');
+          assignIfNum('brushRadius');
+          assignIfNum('timeOfDay');
+          assignIfBool('autoDayNight');
+          assignIfBool('autoWeather');
+          assignIfNum('snowRate');
+          assignIfBool('showShadowOverlay');
+          assignIfBool('showMoistureOverlay');
+          assignIfBool('showParticles');
+          assignIfNum('truckSmokeIntensity');
+          assignIfNum('truckSkidThreshold');
+          assignIfNum('truckTopSpeed');
+          assignIfNum('truckSuspension');
+          assignIfNum('truckCounterweight');
+          assignIfNum('truckTireTracking');
+          assignIfNum('truckJumpLift');
+          assignIfNum('truckAirBoost');
+          assignIfNum('truckGear1Tune');
+          assignIfNum('truckGear2Tune');
+          assignIfNum('truckGear3Tune');
+          assignIfNum('truckGear4Tune');
+          assignIfNum('truckLightAngleDeg');
+          assignIfNum('truckLightDistance');
+          assignIfNum('truckLightConeOpacity');
+
+          if (typeof p.weatherMode === 'string') {
+            params.weatherMode = p.weatherMode;
+            document.querySelectorAll('.weather-btn').forEach((b) => {
+              b.classList.toggle('active', b.dataset.weather === params.weatherMode);
+            });
+          }
+          if (typeof p.fidelity === 'number' && typeof applyGraphicsFidelity === 'function') {
+            applyGraphicsFidelity(p.fidelity);
+            const sf = document.getElementById('slider-fidelity');
+            if (sf) sf.value = String(p.fidelity);
+          }
+          if (typeof p.truckLightColorHex === 'string' && typeof applyTruckLightColorHex === 'function') {
+            applyTruckLightColorHex(p.truckLightColorHex);
+          }
+          if (typeof updateTruckHeadlightConeGeometry === 'function') {
+            updateTruckHeadlightConeGeometry();
+          }
+
+          // Sync vehicle tuner sliders
+          const setSlider = (id, val, triggerInput = true) => {
+            const el = document.getElementById(id);
+            if (el && val !== undefined) {
+              el.value = String(val);
+              if (triggerInput) el.dispatchEvent(new Event('input'));
+            }
+          };
+          setSlider('slider-truck-smoke', Math.round((params.truckSmokeIntensity ?? 0.60) * 100));
+          setSlider('slider-truck-skid-thresh', params.truckSkidThreshold ?? 6.5);
+          setSlider('slider-truck-top-speed', Math.round(params.truckTopSpeed ?? 24));
+          setSlider('slider-truck-suspension', Math.round((params.truckSuspension ?? 0.31) * 100));
+          setSlider('slider-truck-counterweight', Math.round((params.truckCounterweight ?? 0.85) * 100));
+          setSlider('slider-truck-tracking', Math.round((params.truckTireTracking ?? 1.00) * 100));
+          setSlider('slider-truck-jump-lift', Math.round((params.truckJumpLift ?? 0.69) * 100));
+          setSlider('slider-truck-air-boost', Math.round((params.truckAirBoost ?? 0.78) * 100));
+          setSlider('slider-truck-gear1', Math.round(params.truckGear1Tune ?? 98));
+          setSlider('slider-truck-gear2', Math.round(params.truckGear2Tune ?? 108));
+          setSlider('slider-truck-gear3', Math.round(params.truckGear3Tune ?? 114));
+          setSlider('slider-truck-gear4', Math.round(params.truckGear4Tune ?? 123));
+          setSlider('slider-truck-light-angle', Math.round(params.truckLightAngleDeg ?? 33));
+          setSlider('slider-truck-light-dist', Math.round(params.truckLightDistance ?? 50));
+          setSlider('slider-truck-light-opacity', Math.round((params.truckLightConeOpacity ?? 0.02) * 100));
+        }
+
+        if (meta.terrainPreset) {
+          document.querySelectorAll('.terrain-btn').forEach((b) => {
+            b.classList.toggle('active', b.dataset.terrain === meta.terrainPreset);
+          });
+        }
+
+        // Restore Placed World Items (Water Taps, Feeders, Lanterns, Offroad Truck)
+        while (placedWorldItems.length > 0) {
+          destroyPlacedItemAtIndex(placedWorldItems.length - 1, false);
+        }
+        if (Array.isArray(meta.items)) {
+          for (const savedIt of meta.items) {
+            let mesh = null;
+            if (savedIt.type === 'item-tap') mesh = createWaterTapMesh();
+            else if (savedIt.type === 'item-feeder') mesh = createAnimalFeederMesh();
+            else if (savedIt.type === 'item-lantern') mesh = createHangingLanternMesh();
+            else if (savedIt.type === 'item-truck') mesh = createOffroadTruckMesh();
+            if (!mesh) continue;
+            const { groundY } = sampleHeightsAtWorld(savedIt.x, savedIt.z);
+            mesh.position.set(savedIt.x, groundY, savedIt.z);
+            mesh.rotation.y = savedIt.yaw || 0;
+            placedItemsGroup.add(mesh);
+            placedWorldItems.push({
+              type: savedIt.type,
+              x: savedIt.x,
+              y: groundY,
+              z: savedIt.z,
+              yaw: savedIt.yaw || 0,
+              phase: savedIt.phase || 0,
+              spurtTimer: 0.6,
+              spurtStrength: savedIt.spurtStrength ?? 1.0,
+              foodRemaining: savedIt.foodRemaining ?? 1.0,
+              mothCooldown: savedIt.mothCooldown ?? 4.0,
+              mothSupply: savedIt.mothSupply ?? 0.0,
+              mothSpawning: false,
+              mothsActive: Boolean(savedIt.mothsActive),
+              speed: 0.0,
+              steerAngle: 0.0,
+              driftSlipAngle: 0.0,
+              wheelSpin: 0.0,
+              suspPitch: 0.0,
+              suspRoll: 0.0,
+              mesh
+            });
+          }
+        }
+        updatePlacedItemsCountUI();
+
+        // Restore Fauna Agents
+        for (let i = 0; i < faunaAgents.length; i++) {
+          if (faunaAgents[i].rig && typeof disposeApexRig === 'function') {
+            disposeApexRig(faunaAgents[i]);
+          }
+        }
+        faunaAgents.length = 0;
+        if (Array.isArray(meta.fauna)) {
+          for (const fa of meta.fauna) {
+            const isApex = (fa.type === 'jaguar' || fa.type === 'lion' || fa.type === 'croc');
+            faunaAgents.push({
+              type: fa.type,
+              state: fa.state || 'alive',
+              submergedTime: 0,
+              skeletonTimer: fa.skeletonTimer || 0,
+              huntCooldown: 2.5 + Math.random() * 3.5,
+              croakTimer: 1.5 + Math.random() * 3.5,
+              hopPitch: 0,
+              apexPhase: 'PROWL',
+              stalkTimer: 0,
+              pounceTimer: 0,
+              lookYawOffset: 0,
+              animFreq: 6.0,
+              rig: (isApex && fa.state !== 'skeleton') ? createArticulatedApexRig(fa.type) : null,
+              x: fa.x,
+              y: fa.y,
+              z: fa.z,
+              heading: fa.heading || 0,
+              turnRate: 0,
+              speed: fa.speed || 3.5,
+              scale: fa.scale || 1.0,
+              phase: Math.random() * Math.PI * 2,
+              colorHex: fa.colorHex || 0xd97706
+            });
+          }
+        }
+
+        // Restore Camera Position & Target
+        if (meta.camera && Array.isArray(meta.camera.pos) && Array.isArray(meta.camera.target)) {
+          camera.position.set(meta.camera.pos[0], meta.camera.pos[1], meta.camera.pos[2]);
+          controls.target.set(meta.camera.target[0], meta.camera.target[1], meta.camera.target[2]);
+          controls.update();
+        }
+
+        if (meta.title && inputCartridgeTitle) {
+          inputCartridgeTitle.value = meta.title;
+          userEditedCartridgeTitle = false;
+          if (valCartridgeSlug) valCartridgeSlug.textContent = `${titleToCartridgeSlug(meta.title)}.png`;
+        }
+
+        computeWindShadowAndFlow();
+        updateSunPosition();
+        syncUILabels();
+        syncTerrainAndWaterMeshes();
+        rebuildFloraInstances();
+
+        const loadedTitle = meta.title || file.name.replace(/\.png$/i, '');
+        if (valCartridgeStatus) {
+          valCartridgeStatus.textContent = 'Loaded!';
+          setTimeout(() => { valCartridgeStatus.textContent = 'Playable PNG'; }, 2200);
+        }
+        showCartridgeToast(`🎮 Loaded Cartridge: "${loadedTitle}"`);
+      } catch (err) {
+        console.error('Cartridge PNG load error:', err);
+        showCartridgeToast('⚠️ Could not load Cartridge PNG', true);
+      }
     }
 
     document.getElementById('btn-screenshot').addEventListener('click', captureAndSaveScreenshot);
+    if (btnSaveCartridgePanel) {
+      btnSaveCartridgePanel.addEventListener('click', captureAndSaveScreenshot);
+    }
+    const triggerCartridgeFileDialog = () => {
+      if (inputCartridgeFile) {
+        inputCartridgeFile.value = '';
+        inputCartridgeFile.click();
+      }
+    };
+    if (btnLoadCartridgeTop) {
+      btnLoadCartridgeTop.addEventListener('click', triggerCartridgeFileDialog);
+    }
+    if (btnLoadCartridgePanel) {
+      btnLoadCartridgePanel.addEventListener('click', triggerCartridgeFileDialog);
+    }
+    if (inputCartridgeFile) {
+      inputCartridgeFile.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) loadCartridgeFromPngFile(file);
+      });
+    }
+
+    // Drag & Drop any Cartridge `.png` file anywhere onto the window to load and play it!
+    let dragEnterDepth = 0;
+    window.addEventListener('dragenter', (e) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
+        e.preventDefault();
+        dragEnterDepth++;
+        cartridgeDropOverlay.style.display = 'flex';
+      }
+    });
+    window.addEventListener('dragover', (e) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    });
+    window.addEventListener('dragleave', (e) => {
+      if (dragEnterDepth > 0) {
+        dragEnterDepth--;
+        if (dragEnterDepth === 0) {
+          cartridgeDropOverlay.style.display = 'none';
+        }
+      }
+    });
+    window.addEventListener('drop', (e) => {
+      dragEnterDepth = 0;
+      cartridgeDropOverlay.style.display = 'none';
+      const files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files.length > 0) {
+        e.preventDefault();
+        loadCartridgeFromPngFile(files[0]);
+      }
+    });
+
     btnFpvMode.addEventListener('click', () => {
       btnFpvMode.blur();
       toggleFPVMode();
@@ -13825,6 +14634,9 @@
     }
 
     window.addEventListener('keydown', (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+        return;
+      }
       if (e.code === 'KeyP') {
         captureAndSaveScreenshot();
         return;
