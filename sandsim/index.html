@@ -1913,9 +1913,17 @@
         <div class="control-row">
           <div class="control-label">
             <span>Dune Jump / Air Lift</span>
-            <span class="control-val" id="val-truck-jump-lift">69% · Normal</span>
+            <span class="control-val" id="val-truck-jump-lift">69% · Big Lift</span>
           </div>
-          <input type="range" id="slider-truck-jump-lift" min="0" max="100" step="1" value="69" title="0% = Stay glued to ground; 100% = Big air launches off dune crests" />
+          <input type="range" id="slider-truck-jump-lift" min="0" max="100" step="1" value="69" title="0% = Stay glued to ground; 100% = Massive air launches off dune crests" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>Upward Slope Air-Boost</span>
+            <span class="control-val" id="val-truck-air-boost">78% · High Boost</span>
+          </div>
+          <input type="range" id="slider-truck-air-boost" min="0" max="100" step="1" value="78" title="Detects when the truck is climbing an upward dune slope and boosts uphill punch, launch height &amp; hang-time!" />
         </div>
 
         <div class="zone-label" style="color:#fcd34d; margin-top:4px;">
@@ -2202,6 +2210,7 @@
       truckCounterweight: 0.85,      // 0.00 (Top-heavy easy rollover) .. 1.00 (Heavy low-CG anti-roll counterweight, never flips at 1.0)
       truckTireTracking: 1.00,       // 0.10 (Loose sideways drift) .. 1.00 (Locked-in tire tracking & fast slip recovery)
       truckJumpLift: 0.69,           // 0.00 (Glued to terrain) .. 1.00 (Big dune-crest air launches)
+      truckAirBoost: 0.78,           // 0.00 (Off) .. 1.00 (Detects upward slope travel & boosts climb punch + big-air launch!)
       truckGear1Tune: 98.0,          // Peak engine pitch in 1st Gear (Hz)
       truckGear2Tune: 108.0,         // Peak engine pitch in 2nd Gear (Hz)
       truckGear3Tune: 114.0,         // Peak engine pitch in 3rd Gear (Hz)
@@ -11220,10 +11229,17 @@
       roughness: 0.15
     });
     const sharedTruckTaillightMat = new THREE.MeshStandardMaterial({
-      color: 0x991b1b,
-      emissive: 0xff1a1a,
-      emissiveIntensity: 0.25,
-      roughness: 0.25
+      color: 0x3b0707,
+      emissive: 0x7f1d1d,
+      emissiveIntensity: 0.12,
+      roughness: 0.20
+    });
+    const sharedTruckBrakeGlowMat = new THREE.MeshBasicMaterial({
+      color: 0xff2a00,
+      transparent: true,
+      opacity: 0.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
     });
     const sharedTruckHeadlightBeamMat = new THREE.MeshBasicMaterial({
       color: 0xfff3c4,
@@ -11478,11 +11494,35 @@
         chassisGroup.add(beamCone);
         headlightBeams.push(beamCone);
 
-        // Rear Tail / Brake Light
-        const tailLight = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.20, 0.08), sharedTruckTaillightMat);
-        tailLight.position.set(side * 0.60, 0.90, -1.81);
+        // Rear Tail / Brake Light with Dark Bezel Housing & Additive Brake-Glow Halo
+        const tailBezel = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.26, 0.07), sharedTruckDarkMetalMat);
+        tailBezel.position.set(side * 0.60, 0.90, -1.80);
+        chassisGroup.add(tailBezel);
+
+        const tailLight = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.20, 0.09), sharedTruckTaillightMat);
+        tailLight.position.set(side * 0.60, 0.90, -1.82);
         chassisGroup.add(tailLight);
+
+        const tailGlow = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), sharedTruckBrakeGlowMat);
+        tailGlow.scale.set(1.25, 0.95, 0.55);
+        tailGlow.position.set(side * 0.60, 0.90, -1.86);
+        tailGlow.renderOrder = 19;
+        chassisGroup.add(tailGlow);
       }
+
+      // High-Mount 3rd LED Cab Roof Brake Light Bar + Additive Glow
+      const chmslBezel = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.11, 0.08), sharedTruckDarkMetalMat);
+      chmslBezel.position.set(0, 1.58, -0.60);
+      chassisGroup.add(chmslBezel);
+
+      const chmslLight = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.07, 0.09), sharedTruckTaillightMat);
+      chmslLight.position.set(0, 1.58, -0.615);
+      chassisGroup.add(chmslLight);
+
+      const chmslGlow = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.16, 0.14), sharedTruckBrakeGlowMat);
+      chmslGlow.position.set(0, 1.58, -0.64);
+      chmslGlow.renderOrder = 19;
+      chassisGroup.add(chmslGlow);
 
       // 6B. Upside-Down Jeep Bumper Sticker ("IF YOU CAN SEE THIS / TURN ME OVER")
       // Placed on the rear tailgate (facing the chase camera) and on both cab doors!
@@ -11882,26 +11922,36 @@
       }
 
       const gearBadge = document.getElementById('val-truck-gear-badge');
+      if (activeTruck.isAirborne && !activeTruck.isFlipped) {
+        gearLabel = `✈️ AIR · ${Math.round(absSpd)} m/s`;
+      }
       if (gearBadge && gearBadge.textContent !== gearLabel) {
         gearBadge.textContent = gearLabel;
       }
 
+      // Airborne unloaded tire spin-up: engine revs noticeably higher in pitch while catching air!
+      const targetAirRev = (activeTruck.isAirborne && !activeTruck.isFlipped)
+        ? (34.0 + Math.max(0.0, throttleInput) * 32.0 + clamp((activeTruck.velY || 0.0) * 2.2, -8.0, 16.0))
+        : 0.0;
+      activeTruck.airRevPitch = (activeTruck.airRevPitch || 0.0) + (targetAirRev - (activeTruck.airRevPitch || 0.0)) * (activeTruck.isAirborne ? 0.16 : 0.28);
+
       const accelLoad = Math.max(0.0, Math.abs(throttleInput));
-      const overdriveToneScale = isOverdrive4th ? clamp(g4Peak / 115.0, 0.42, 1.15) : 1.0;
+      const overdriveToneScale = (isOverdrive4th && !activeTruck.isAirborne) ? clamp(g4Peak / 115.0, 0.42, 1.15) : 1.0;
       const driftRevBoost = (isDrifting && absSpd > 2.0) ? 16.0 : 0.0;
-      const rpmJitter = Math.sin(time * 32.0) * 1.2;
-      const rpmFreq = baseRpmFreq + accelLoad * 18.0 * overdriveToneScale + driftRevBoost + rpmJitter;
+      const rpmJitter = Math.sin(time * (activeTruck.isAirborne ? 46.0 : 32.0)) * (activeTruck.isAirborne ? 2.4 : 1.2);
+      const rpmFreq = baseRpmFreq + accelLoad * 18.0 * overdriveToneScale + driftRevBoost + (activeTruck.airRevPitch || 0.0) + rpmJitter;
 
-      loops.engOsc1.frequency.setTargetAtTime(rpmFreq, now, 0.05);
-      loops.engOsc2.frequency.setTargetAtTime(rpmFreq * 0.5, now, 0.05);
-      loops.engOsc3.frequency.setTargetAtTime(rpmFreq * 1.498, now, 0.05);
-      loops.exhaustBP.frequency.setTargetAtTime(rpmFreq * 2.1, now, 0.05);
+      loops.engOsc1.frequency.setTargetAtTime(rpmFreq, now, 0.045);
+      loops.engOsc2.frequency.setTargetAtTime(rpmFreq * 0.5, now, 0.045);
+      loops.engOsc3.frequency.setTargetAtTime(rpmFreq * 1.498, now, 0.045);
+      loops.exhaustBP.frequency.setTargetAtTime(rpmFreq * 2.15, now, 0.045);
 
-      const filterCutoff = 125.0 + (accelLoad * 390.0 + clamp(absSpd / 25.0, 0.0, 1.0) * 230.0) * overdriveToneScale + (isDrifting ? 120.0 : 0.0);
-      loops.engineLP.frequency.setTargetAtTime(filterCutoff, now, 0.05);
+      const airFilterBoost = (activeTruck.airRevPitch || 0.0) * 6.5;
+      const filterCutoff = 125.0 + (accelLoad * 390.0 + clamp(absSpd / 25.0, 0.0, 1.0) * 230.0) * overdriveToneScale + (isDrifting ? 120.0 : 0.0) + airFilterBoost;
+      loops.engineLP.frequency.setTargetAtTime(filterCutoff, now, 0.045);
 
-      const targetEngGain = 0.065 + accelLoad * 0.14 + clamp(absSpd / 24.0, 0.0, 1.0) * 0.10;
-      loops.engineGain.gain.setTargetAtTime(targetEngGain, now, 0.05);
+      const targetEngGain = 0.065 + accelLoad * 0.14 + clamp(absSpd / 24.0, 0.0, 1.0) * 0.10 + (activeTruck.isAirborne ? 0.045 : 0.0);
+      loops.engineGain.gain.setTargetAtTime(targetEngGain, now, 0.045);
 
       // Speed squeal around corners + Spacebar drift tire screech & skid (scaled by user's Skid Threshold slider)!
       const skidThresh = params.truckSkidThreshold || 2.6;
@@ -12270,6 +12320,7 @@
           const counterweight = clamp(params.truckCounterweight ?? 0.85, 0.0, 1.0);
           const tireTracking = clamp(params.truckTireTracking ?? 1.00, 0.10, 1.0);
           const jumpLift = clamp(params.truckJumpLift ?? 0.69, 0.0, 1.0);
+          const airBoost = clamp(params.truckAirBoost ?? 0.78, 0.0, 1.0);
 
           const targetSteer = steerInput * 0.50;
           it.steerAngle = (it.steerAngle || 0.0) + (targetSteer - (it.steerAngle || 0.0)) * Math.min(1.0, dt * (8.5 + tireTracking * 5.0));
@@ -12370,8 +12421,12 @@
               it.suspRoll = 0.0;
             }
           } else if (it.isAirborne) {
-            // Airborne Jump Physics: parabolic flight + counterweight self-righting stabilization!
-            it.velY = (it.velY || 0.0) - 18.2 * dt;
+            // Airborne Jump Physics: parabolic flight + upward air-boost hang-time + counterweight self-righting stabilization!
+            // When rising in the air (velY > 0), airBoost reduces upward gravity pull so big dune jumps float higher and longer!
+            const gravityAccel = ((it.velY || 0.0) > 0.0)
+              ? (16.8 - airBoost * 5.2 - Math.max(0.0, throttleInput) * airBoost * 2.2)
+              : 18.2;
+            it.velY = (it.velY || 0.0) - gravityAccel * dt;
             it.y = (it.y ?? avgWheelGroundY) + it.velY * dt;
 
             // Counterweight produces a low-CG self-righting pendulum torque in mid-air that resists barrel-rolling
@@ -12391,6 +12446,7 @@
               it.velY = 0.0;
               it.isAirborne = false;
               it.prevGroundVelY = 0.0;
+              it.upwardClimbCharge = 0.0;
 
               // Compress suspension spring on landing (softer suspension compresses deeper)
               const compScale = 0.052 - suspStiff * 0.024;
@@ -12442,24 +12498,48 @@
             it.mesh.rotation.x = it.airPitch;
             it.mesh.rotation.z = it.airRoll;
           } else {
-            // Grounded Driving: check if launching off a dune crest / crater rim lip to catch air!
+            // Grounded Driving: Upward Slope Air-Boost detection + Dune Crest Big-Air Launch!
             const curClimbVel = Math.max(slopeClimbVel, groundClimbVel);
             const prevClimbVel = it.prevGroundVelY || 0.0;
             const crestDropRate = prevClimbVel - slopeClimbVel;
 
-            const minJumpSpd = 9.2 - jumpLift * 5.2;
-            const minClimbVel = 2.2 - jumpLift * 1.15;
-            const minCrestDrop = 2.4 - jumpLift * 1.15;
+            // Detect when the truck is actively traveling UP a slope and build an upward air-boost charge + forward climb surge!
+            const isClimbingUpward = (spd > 2.5 && (terrainPitch > 0.045 || curClimbVel > 0.65));
+            if (isClimbingUpward && airBoost > 0.02) {
+              const climbIntensity = clamp(Math.max(terrainPitch * 3.2, curClimbVel / 5.5), 0.1, 1.5);
+              it.upwardClimbCharge = clamp((it.upwardClimbCharge || 0.0) + climbIntensity * dt * 4.2, 0.0, 1.6);
+              if (throttleInput > 0.0) {
+                // Extra uphill speed boost so climbing steep dune ramps accelerates hard instead of bogging down!
+                it.speed = Math.min(maxFwdSpeed * (1.0 + airBoost * 0.14), it.speed + (6.5 * airBoost * climbIntensity) * dt);
+                spd = it.speed;
+              }
+            } else {
+              it.upwardClimbCharge = Math.max(0.0, (it.upwardClimbCharge || 0.0) - dt * 2.4);
+            }
 
-            if (jumpLift > 0.03 && absSpd > minJumpSpd && prevClimbVel > minClimbVel && crestDropRate > minCrestDrop) {
-              // Catch Air off the dune crest, scaled by Dune Jump / Air Lift slider!
-              const liftScale = 0.45 + jumpLift * 1.15;
+            const boostEase = airBoost * 0.65 * clamp(it.upwardClimbCharge || 0.0, 0.0, 1.2);
+            const minJumpSpd = Math.max(3.2, 8.2 - jumpLift * 4.6 - boostEase * 2.2);
+            const minClimbVel = Math.max(0.45, 1.85 - jumpLift * 1.05 - boostEase * 0.55);
+            const minCrestDrop = Math.max(0.45, 1.95 - jumpLift * 1.10 - boostEase * 0.65);
+
+            if (jumpLift > 0.03 && absSpd > minJumpSpd && (prevClimbVel > minClimbVel || (it.upwardClimbCharge || 0.0) > 0.42) && crestDropRate > minCrestDrop) {
+              // Catch Big Air off the dune crest, amplified by both Dune Jump / Air Lift AND Upward Slope Air-Boost!
+              const liftScale = 0.65 + jumpLift * 1.45 + airBoost * 0.95 * clamp(it.upwardClimbCharge || 0.35, 0.25, 1.4);
+              const upwardKick = (it.upwardClimbCharge || 0.0) * airBoost * 4.2;
               it.isAirborne = true;
-              it.velY = Math.max(prevClimbVel * (0.95 + jumpLift * 0.50), (1.7 + absSpd * 0.14) * liftScale);
+              it.velY = Math.max(
+                prevClimbVel * (1.10 + jumpLift * 0.65 + airBoost * 0.55) + upwardKick,
+                (2.4 + absSpd * 0.19) * liftScale + upwardKick * 0.6
+              );
+              // Give a forward air-boost surge off the lip of the jump!
+              if (throttleInput > 0.0 && airBoost > 0.05 && spd > 0.0) {
+                it.speed = Math.min(maxFwdSpeed * (1.0 + airBoost * 0.18), spd + airBoost * (1.4 + (it.upwardClimbCharge || 0.0) * 1.8));
+                spd = it.speed;
+              }
               it.y = avgWheelGroundY + it.velY * dt;
-              it.airPitch = -terrainPitch + (it.suspPitch || 0.0);
+              it.airPitch = -terrainPitch + (it.suspPitch || 0.0) - clamp(airBoost * 0.10, 0.0, 0.12);
               it.airRoll = terrainRoll + (it.suspRoll || 0.0);
-              it.airPitchVel = clamp(it.velY * 0.04 - 0.18, -0.75, 0.55) * (1.05 - counterweight * 0.60);
+              it.airPitchVel = clamp(it.velY * 0.035 - 0.16, -0.70, 0.50) * (1.05 - counterweight * 0.60);
               // Counterweight strongly damps initial takeoff roll angular velocity so jumps don't accidentally barrel-roll!
               const rollLaunchDamp = Math.max(0.08, 1.0 - counterweight * 0.86);
               it.airRollVel = (terrainRoll * 1.15 - steerInput * 0.85 - (it.driftSlipAngle || 0.0) * 1.05) *
@@ -12477,7 +12557,15 @@
             it.suspY = clamp((it.suspY || 0.0) + it.suspVelY * dt, -0.34, 0.30);
 
             const bodyFlex = 1.48 - suspStiff * 0.88; // Soft suspension = deep body lean/squat; Stiff = flat cornering
-            const targetSuspPitch = (throttleInput > 0.0 ? -0.095 : (throttleInput < 0.0 || isDrifting ? 0.11 : 0.0)) * bodyFlex;
+            // Rear acceleration squat recovers back to level lift as the truck approaches max speed!
+            const speedRatio = clamp(absSpd / Math.max(1.0, maxFwdSpeed), 0.0, 1.0);
+            const accelSquatDecay = Math.pow(1.0 - clamp((speedRatio - 0.28) / 0.50, 0.0, 1.0), 1.65);
+            const brakeDiveFactor = clamp(absSpd / 10.0, 0.0, 1.0);
+            const targetSuspPitch = (
+              throttleInput > 0.0
+                ? (-0.105 * accelSquatDecay)
+                : ((throttleInput < 0.0 || isDrifting) && spd > 0.4 ? (0.115 * brakeDiveFactor) : 0.0)
+            ) * bodyFlex;
             const cornerG = clamp((it.steerAngle * absSpd) / 11.0 + (it.driftSlipAngle || 0.0) * 0.85, -1.25, 1.25);
             const targetSuspRoll = cornerG * 0.18 * bodyFlex * (1.15 - counterweight * 0.35);
             const suspResp = 5.8 + suspStiff * 6.5;
@@ -12639,8 +12727,19 @@
           }
 
           if (isBeingDriven) {
-            // Brighten rear brake lights when braking or drifting
-            sharedTruckTaillightMat.emissiveIntensity = (throttleInput < 0.0 || isDrifting) ? 2.6 : (isNightTime ? 0.9 : 0.25);
+            // Brighten rear brake lights & 3rd high-mount brake bar + additive glow whenever foot-braking OR pulling E-brake (Spacebar / Mobile E-Brake)!
+            const isBrakingOrEBrake = (throttleInput < 0.0) || isDrifting || driveState.keys.drift || driveState.touchDrift;
+            if (isBrakingOrEBrake) {
+              sharedTruckTaillightMat.color.setHex(0xff4d38);
+              sharedTruckTaillightMat.emissive.setHex(0xff1e00);
+              sharedTruckTaillightMat.emissiveIntensity = 8.5;
+              sharedTruckBrakeGlowMat.opacity = 0.88;
+            } else {
+              sharedTruckTaillightMat.color.setHex(0x3b0707);
+              sharedTruckTaillightMat.emissive.setHex(0x7f1d1d);
+              sharedTruckTaillightMat.emissiveIntensity = isNightTime ? 0.65 : 0.10;
+              sharedTruckBrakeGlowMat.opacity = isNightTime ? 0.14 : 0.0;
+            }
 
             // Smooth 3rd-person offroad chase camera behind the truck
             const desiredCamYaw = it.yaw - (it.driftSlipAngle || 0.0) * 0.42;
@@ -14706,6 +14805,7 @@
     const sliderTruckCounterweight = document.getElementById('slider-truck-counterweight');
     const sliderTruckTracking = document.getElementById('slider-truck-tracking');
     const sliderTruckJumpLift = document.getElementById('slider-truck-jump-lift');
+    const sliderTruckAirBoost = document.getElementById('slider-truck-air-boost');
     const sliderTruckGear1 = document.getElementById('slider-truck-gear1');
     const sliderTruckGear2 = document.getElementById('slider-truck-gear2');
     const sliderTruckGear3 = document.getElementById('slider-truck-gear3');
@@ -14773,7 +14873,18 @@
         params.truckJumpLift = pct / 100.0;
         const el = document.getElementById('val-truck-jump-lift');
         if (el) {
-          const desc = pct <= 3 ? 'Grounded' : (pct < 40 ? 'Low Hop' : (pct < 72 ? 'Normal' : 'Big Air'));
+          const desc = pct <= 3 ? 'Grounded' : (pct < 40 ? 'Low Hop' : (pct < 75 ? 'Big Lift' : 'Extreme Air'));
+          el.textContent = `${pct}% · ${desc}`;
+        }
+      });
+    }
+    if (sliderTruckAirBoost) {
+      sliderTruckAirBoost.addEventListener('input', (e) => {
+        const pct = parseInt(e.target.value, 10);
+        params.truckAirBoost = pct / 100.0;
+        const el = document.getElementById('val-truck-air-boost');
+        if (el) {
+          const desc = pct <= 2 ? 'Off' : (pct < 45 ? 'Mild Boost' : (pct < 82 ? 'High Boost' : 'Nitro Launch'));
           el.textContent = `${pct}% · ${desc}`;
         }
       });
