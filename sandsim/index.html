@@ -11546,6 +11546,39 @@
       const px = clamp(wx, -halfBound, halfBound);
       const pz = clamp(wz, -halfBound, halfBound);
 
+      // Only allow 1 Offroad Truck on the map: placing another moves the existing vehicle to the new location!
+      if (type === 'item-truck') {
+        const existingTruck = getLatestPlacedTruck();
+        if (existingTruck) {
+          lastItemPlaceMs = nowMs;
+          const { groundY } = sampleHeightsAtWorld(px, pz);
+          existingTruck.x = px;
+          existingTruck.y = groundY;
+          existingTruck.z = pz;
+          existingTruck.prevGroundY = groundY;
+          existingTruck.prevGroundVelY = 0.0;
+          existingTruck.velY = 0.0;
+          existingTruck.isAirborne = false;
+          existingTruck.isFlipped = false;
+          existingTruck.flipTimer = 0.0;
+          existingTruck.speed = 0.0;
+          existingTruck.steerAngle = 0.0;
+          existingTruck.driftSlipAngle = 0.0;
+          existingTruck.suspPitch = 0.0;
+          existingTruck.suspRoll = 0.0;
+          existingTruck.suspY = 0.0;
+          existingTruck.suspVelY = 0.0;
+          existingTruck.mesh.position.set(px, groundY, pz);
+          existingTruck.mesh.rotation.set(0, existingTruck.yaw, 0);
+          for (let d = 0; d < 6; d++) {
+            const ang = (d / 6) * Math.PI * 2;
+            emitTruckSandDust(px + Math.cos(ang) * 0.9, groundY + 0.25, pz + Math.sin(ang) * 0.9, Math.cos(ang) * 1.8, 0.9, Math.sin(ang) * 1.8, 0, 0.55);
+          }
+          syncTerrainAndWaterMeshes();
+          return;
+        }
+      }
+
       // Avoid stacking two items right on top of each other (within 2.6m)
       for (let i = 0; i < placedWorldItems.length; i++) {
         const it = placedWorldItems[i];
