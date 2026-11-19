@@ -7790,10 +7790,12 @@
     }
 
     // ============================================================================
-    // 11F. 3D AERIAL FIREWORKS MORTAR & STARBURST ENGINE (Peony, Saturn Ring, Willow & Rainbow Shells)
+    // 11F. 3D AERIAL FIREWORKS MORTAR, MULTI-SECOND BRIGHT FLARE & 5-7s LINGERING DRIFT ENGINE
+    //      (Blue, Green, Red, Gold, Diamond Sparkle & Multi-Color Shells)
     // ============================================================================
-    const FIREWORK_SPARK_COUNT = 2600;
+    const FIREWORK_SPARK_COUNT = 3800;
     const MAX_ACTIVE_FIREWORK_ROCKETS = 18;
+    const MAX_ACTIVE_FIREWORK_FLARES = 16;
     let lastFireworkLaunchMs = 0;
 
     const fireworkSparkGeo = new THREE.BufferGeometry();
@@ -7805,6 +7807,8 @@
     const fireworkSparkRate = new Float32Array(FIREWORK_SPARK_COUNT);
     const fireworkSparkDrag = new Float32Array(FIREWORK_SPARK_COUNT);
     const fireworkSparkGrav = new Float32Array(FIREWORK_SPARK_COUNT);
+    const fireworkSparkTermVy = new Float32Array(FIREWORK_SPARK_COUNT);
+    // strobe mode: 0 = steady glow, 1 = twinkling glitter sparkle, 2 = intense diamond crackle sparkle
     const fireworkSparkStrobe = new Uint8Array(FIREWORK_SPARK_COUNT);
 
     for (let i = 0; i < FIREWORK_SPARK_COUNT; i++) {
@@ -7815,10 +7819,10 @@
     fireworkSparkGeo.setAttribute('color', new THREE.BufferAttribute(fireworkSparkCol, 3));
 
     const fireworkSparkMat = new THREE.PointsMaterial({
-      size: 1.95,
+      size: 2.25,
       vertexColors: true,
       transparent: true,
-      opacity: 0.96,
+      opacity: 0.98,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
@@ -7828,28 +7832,175 @@
     scene.add(fireworkSparkSystem);
     let fireworkSparkHead = 0;
 
-    const fireworkFlashLight = new THREE.PointLight(0xffffff, 0.0, 230.0, 1.15);
+    // Two dynamic high-intensity aerial point lights driven by active multi-second explosion flares
+    const fireworkFlashLight = new THREE.PointLight(0xffffff, 0.0, 260.0, 1.1);
     scene.add(fireworkFlashLight);
+    const fireworkFlashLight2 = new THREE.PointLight(0xffffff, 0.0, 260.0, 1.1);
+    scene.add(fireworkFlashLight2);
+
+    // 3D Aerial Explosion Flares (Large bright multi-layered core + halo + starburst rays lasting 2.8 - 3.8 seconds)
+    const fireworkFlaresGroup = new THREE.Group();
+    scene.add(fireworkFlaresGroup);
+    const activeFireworkFlares = [];
+    const flareCoreGeo = new THREE.SphereGeometry(1.5, 14, 12);
+    const flareHaloGeo = new THREE.SphereGeometry(5.6, 16, 14);
+    const flareRayGeo = new THREE.OctahedronGeometry(1.0, 0);
+
+    function spawnFireworkExplosionFlare(x, y, z, palette) {
+      while (activeFireworkFlares.length >= MAX_ACTIVE_FIREWORK_FLARES) {
+        const oldest = activeFireworkFlares.shift();
+        fireworkFlaresGroup.remove(oldest.group);
+        oldest.coreMat.dispose();
+        oldest.haloMat.dispose();
+        oldest.rayMat.dispose();
+      }
+
+      const group = new THREE.Group();
+      group.position.set(x, y, z);
+
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 1.0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const haloMat = new THREE.MeshBasicMaterial({
+        color: palette.flashHex,
+        transparent: true,
+        opacity: 0.62,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const rayMat = new THREE.MeshBasicMaterial({
+        color: palette.rayHex || palette.flashHex,
+        transparent: true,
+        opacity: 0.82,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+
+      const coreMesh = new THREE.Mesh(flareCoreGeo, coreMat);
+      const haloMesh = new THREE.Mesh(flareHaloGeo, haloMat);
+      group.add(coreMesh);
+      group.add(haloMesh);
+
+      // 3 orthogonal 3D starburst flare rays so the explosion creates a dazzling aerial flare from any viewing angle
+      const ray1 = new THREE.Mesh(flareRayGeo, rayMat);
+      ray1.scale.set(11.5, 0.55, 0.55);
+      const ray2 = new THREE.Mesh(flareRayGeo, rayMat);
+      ray2.scale.set(0.55, 10.5, 0.55);
+      const ray3 = new THREE.Mesh(flareRayGeo, rayMat);
+      ray3.scale.set(0.55, 0.55, 11.5);
+      group.add(ray1, ray2, ray3);
+
+      fireworkFlaresGroup.add(group);
+      activeFireworkFlares.push({
+        group,
+        coreMesh,
+        haloMesh,
+        ray1,
+        ray2,
+        ray3,
+        coreMat,
+        haloMat,
+        rayMat,
+        colorHex: palette.flashHex,
+        age: 0.0,
+        // Large bright flare persists for 2.8 to 3.8 seconds after detonation
+        maxAge: 2.8 + Math.random() * 1.0,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
 
     const activeFireworkRockets = [];
 
+    // Distinct Pyrotechnic Palettes: Blue, Green, Red, Gold, Sparkle/Silver-Glitter, Violet, and Multi-Color Festival
     const FIREWORK_PALETTES = [
-      // 0: Cyber Magenta & Electric Cyan
-      { primary: [1.00, 0.22, 0.82], secondary: [0.15, 0.95, 1.00], flashHex: 0xf43f5e },
-      // 1: Golden Brocade & Ruby Crimson
-      { primary: [1.00, 0.85, 0.28], secondary: [1.00, 0.18, 0.24], flashHex: 0xfbbf24 },
-      // 2: Emerald Jade & Solar Gold
-      { primary: [0.20, 1.00, 0.52], secondary: [1.00, 0.92, 0.35], flashHex: 0x34d399 },
-      // 3: Royal Violet & Tangerine Amber
-      { primary: [0.72, 0.32, 1.00], secondary: [1.00, 0.56, 0.14], flashHex: 0xc084fc },
-      // 4: Sapphire Blue & Diamond Silver Strobe
-      { primary: [0.28, 0.62, 1.00], secondary: [0.96, 0.98, 1.00], flashHex: 0x60a5fa },
-      // 5: Multi-Hue Prismatic Rainbow
-      { primary: [1.00, 0.40, 0.70], secondary: [0.30, 1.00, 0.85], flashHex: 0xe879f9, rainbow: true }
+      // 0: Sapphire & Electric Blue + White/Cyan Sparkle
+      {
+        name: 'blue',
+        primary: [0.16, 0.55, 1.00],
+        secondary: [0.35, 0.90, 1.00],
+        sparkle: [0.92, 0.98, 1.00],
+        flashHex: 0x3b82f6,
+        rayHex: 0x93c5fd
+      },
+      // 1: Emerald & Neon Green + Gold/Lime Sparkle
+      {
+        name: 'green',
+        primary: [0.10, 0.96, 0.42],
+        secondary: [0.55, 1.00, 0.25],
+        sparkle: [0.98, 1.00, 0.72],
+        flashHex: 0x10b981,
+        rayHex: 0x6ee7b7
+      },
+      // 2: Ruby & Crimson Red + Warm Gold/White Sparkle
+      {
+        name: 'red',
+        primary: [1.00, 0.14, 0.20],
+        secondary: [1.00, 0.42, 0.18],
+        sparkle: [1.00, 0.90, 0.65],
+        flashHex: 0xef4444,
+        rayHex: 0xfca5a5
+      },
+      // 3: Imperial Crown Gold & Champagne Brocade
+      {
+        name: 'gold',
+        primary: [1.00, 0.82, 0.22],
+        secondary: [1.00, 0.64, 0.12],
+        sparkle: [1.00, 0.97, 0.82],
+        flashHex: 0xf59e0b,
+        rayHex: 0xfde68a
+      },
+      // 4: Diamond Silver Sparkle & Strobe Glitter
+      {
+        name: 'sparkle',
+        primary: [0.96, 0.98, 1.00],
+        secondary: [1.00, 0.92, 0.68],
+        sparkle: [0.75, 0.94, 1.00],
+        flashHex: 0xf8fafc,
+        rayHex: 0xbae6fd,
+        allSparkle: true
+      },
+      // 5: Multi-Color Festival (Blue, Green, Red, Gold & Silver Sparkle together)
+      {
+        name: 'multicolor',
+        primary: [1.00, 0.22, 0.35],
+        secondary: [0.20, 0.72, 1.00],
+        sparkle: [1.00, 0.92, 0.45],
+        flashHex: 0xf472b6,
+        rayHex: 0xfef08a,
+        multiDiscrete: [
+          [0.18, 0.58, 1.00], // Blue
+          [0.12, 0.96, 0.44], // Green
+          [1.00, 0.16, 0.22], // Red
+          [1.00, 0.84, 0.24], // Gold
+          [0.98, 0.99, 1.00]  // Silver Sparkle
+        ]
+      },
+      // 6: Amethyst Violet & Rose Gold Sparkle
+      {
+        name: 'violet',
+        primary: [0.74, 0.28, 1.00],
+        secondary: [1.00, 0.30, 0.78],
+        sparkle: [1.00, 0.94, 0.78],
+        flashHex: 0xc084fc,
+        rayHex: 0xf5d0fe
+      }
     ];
-    const FIREWORK_PATTERNS = ['peony', 'saturn', 'willow', 'palm'];
+    const FIREWORK_PATTERNS = ['peony', 'willow', 'saturn', 'sparkle_crown', 'palm'];
 
-    function emitFireworkSpark(x, y, z, vx, vy, vz, r, g, b, duration, drag = 1.45, grav = 5.5, strobe = 0) {
+    function emitFireworkSpark(
+      x, y, z,
+      vx, vy, vz,
+      r, g, b,
+      duration,
+      drag = 1.65,
+      grav = 2.8,
+      strobe = 0,
+      termVy = -2.35
+    ) {
       const idxP = fireworkSparkHead;
       fireworkSparkHead = (fireworkSparkHead + 1) % FIREWORK_SPARK_COUNT;
       const i3 = idxP * 3;
@@ -7865,20 +8016,20 @@
       fireworkSparkCol[i3]     = r;
       fireworkSparkCol[i3 + 1] = g;
       fireworkSparkCol[i3 + 2] = b;
-      fireworkSparkLife[idxP]  = 0.01;
-      fireworkSparkRate[idxP]  = 1.0 / Math.max(0.18, duration);
-      fireworkSparkDrag[idxP]  = drag;
-      fireworkSparkGrav[idxP]  = grav;
+      fireworkSparkLife[idxP]   = 0.01;
+      fireworkSparkRate[idxP]   = 1.0 / Math.max(0.18, duration);
+      fireworkSparkDrag[idxP]   = drag;
+      fireworkSparkGrav[idxP]   = grav;
+      fireworkSparkTermVy[idxP] = termVy;
       fireworkSparkStrobe[idxP] = strobe;
     }
 
-    function hslToRgbFast(h, s, l) {
-      const a = s * Math.min(l, 1 - l);
-      const f = (n) => {
-        const k = (n + h * 12) % 12;
-        return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-      };
-      return [f(0), f(8), f(4)];
+    function pickPaletteStarColor(palette, index, isSecondary = false, isSparkleTip = false) {
+      if (palette.multiDiscrete) {
+        return palette.multiDiscrete[index % palette.multiDiscrete.length];
+      }
+      if (isSparkleTip) return palette.sparkle;
+      return isSecondary ? palette.secondary : palette.primary;
     }
 
     function launchFireworkAtWorld(wx, wz, forceImmediate = false) {
@@ -7886,7 +8037,6 @@
       if (!forceImmediate && nowMs - lastFireworkLaunchMs < 115) return;
       lastFireworkLaunchMs = nowMs;
 
-      const surfaceY = sampleSurfaceHeightAtWorld(wx, wz);
       // Launch 1-2 staggered aerial shells per click/drag pulse
       const count = (activeFireworkRockets.length < MAX_ACTIVE_FIREWORK_ROCKETS - 2 && Math.random() < 0.45) ? 2 : 1;
 
@@ -7903,10 +8053,10 @@
           x: jx,
           y: sy,
           z: jz,
-          vx: (Math.random() - 0.5) * 5.2,
-          vy: 28.0 + Math.random() * 11.5,
-          vz: (Math.random() - 0.5) * 5.2,
-          fuse: 0.85 + Math.random() * 0.38,
+          vx: (Math.random() - 0.5) * 4.8,
+          vy: 29.0 + Math.random() * 11.5,
+          vz: (Math.random() - 0.5) * 4.8,
+          fuse: 0.88 + Math.random() * 0.36,
           palette,
           pattern
         });
@@ -7919,9 +8069,9 @@
           emitFireworkSpark(
             jx, sy, jz,
             Math.cos(ang) * spd, 3.0 + Math.random() * 5.0, Math.sin(ang) * spd,
-            1.0, 0.82, 0.38,
-            0.35 + Math.random() * 0.2,
-            2.2, 9.8, 0
+            1.0, 0.84, 0.38,
+            0.40 + Math.random() * 0.2,
+            2.2, 9.8, 0, -12.0
           );
         }
       }
@@ -7929,123 +8079,125 @@
 
     function detonateFireworkRocket(r) {
       const { x, y, z, palette, pattern } = r;
-      const p1 = palette.primary;
-      const p2 = palette.secondary;
 
-      // Dynamic aerial flash light that illuminates the sky, clouds, water & dunes below!
-      fireworkFlashLight.position.set(x, y, z);
-      fireworkFlashLight.color.setHex(palette.flashHex);
-      fireworkFlashLight.intensity = 22.0;
+      // 1. Spawn a LARGE BRIGHT 3D AERIAL EXPLOSION FLARE that glows for 2.8 - 3.8 seconds!
+      spawnFireworkExplosionFlare(x, y, z, palette);
 
       // Soft puff of aerial pyrotechnic smoke
-      spawnSteamPuffAtWorld(x, y, z, 5);
+      spawnSteamPuffAtWorld(x, y, z, 6);
 
-      if (pattern === 'saturn') {
-        // Inner core sphere (65 stars) + tilted equatorial Saturn Ring (65 stars)
-        for (let i = 0; i < 65; i++) {
+      if (pattern === 'willow' || pattern === 'sparkle_crown') {
+        // Long-Lingering Willow / Brocade / Sparkle Crown:
+        // 145 stars that burst outward into a wide canopy, then linger for 5.4 to 7.4 SECONDS as they slowly drift down!
+        const count = 145;
+        for (let i = 0; i < count; i++) {
           const u = Math.random() * 2 - 1;
           const theta = Math.random() * Math.PI * 2;
           const rHoriz = Math.sqrt(Math.max(0, 1 - u * u));
-          const speed = (10.5 + Math.random() * 3.5);
-          const col = palette.rainbow ? hslToRgbFast(Math.random(), 0.95, 0.62) : p1;
+          const speed = 11.0 + Math.random() * 9.5;
+          const isSparkle = (pattern === 'sparkle_crown') || palette.allSparkle || (i % 3 === 0);
+          const col = pickPaletteStarColor(palette, i, i % 4 === 1, i % 5 === 0);
+          // Lingers for 5.4 to 7.4 seconds while slowly drifting downward at terminal velocity -1.7 to -2.6 m/s
+          const lingerDur = 5.4 + Math.random() * 2.0;
+          const termDescent = -(1.65 + Math.random() * 0.95);
+          emitFireworkSpark(
+            x, y, z,
+            rHoriz * Math.cos(theta) * speed,
+            u * speed + 2.8,
+            rHoriz * Math.sin(theta) * speed,
+            col[0], col[1], col[2],
+            lingerDur,
+            1.65, 2.5, isSparkle ? 2 : 1, termDescent
+          );
+        }
+      } else if (pattern === 'saturn') {
+        // Inner core sphere (75 stars) + tilted equatorial Saturn Ring (75 long-lingering sparkle stars)
+        for (let i = 0; i < 75; i++) {
+          const u = Math.random() * 2 - 1;
+          const theta = Math.random() * Math.PI * 2;
+          const rHoriz = Math.sqrt(Math.max(0, 1 - u * u));
+          const speed = 11.5 + Math.random() * 4.5;
+          const isLinger = i % 2 === 0;
+          const col = pickPaletteStarColor(palette, i, false, i % 5 === 0);
+          // 50% of inner core stars linger 5.2 - 6.8s slowly drifting down
+          const dur = isLinger ? (5.2 + Math.random() * 1.6) : (2.6 + Math.random() * 1.1);
           emitFireworkSpark(
             x, y, z,
             rHoriz * Math.cos(theta) * speed,
             u * speed,
             rHoriz * Math.sin(theta) * speed,
             col[0], col[1], col[2],
-            1.35 + Math.random() * 0.45,
-            1.55, 5.2, (i % 5 === 0) ? 1 : 0
+            dur,
+            1.75, 2.4, (palette.allSparkle || isLinger) ? 1 : 0, -2.1
           );
         }
-        // Tilted equatorial ring
+        // Tilted equatorial Saturn ring (lingers 5.4 - 7.0s as a glowing drifting halo)
         const tiltX = (Math.random() - 0.5) * 0.85;
         const tiltZ = (Math.random() - 0.5) * 0.85;
-        for (let i = 0; i < 68; i++) {
-          const ang = (i / 68) * Math.PI * 2 + (Math.random() - 0.5) * 0.05;
-          const ringSpd = 17.5 + Math.random() * 2.2;
+        for (let i = 0; i < 75; i++) {
+          const ang = (i / 75) * Math.PI * 2 + (Math.random() - 0.5) * 0.04;
+          const ringSpd = 18.0 + Math.random() * 2.5;
           const rx = Math.cos(ang) * ringSpd;
           const rz = Math.sin(ang) * ringSpd;
           const ry = rx * Math.sin(tiltX) + rz * Math.sin(tiltZ);
+          const col = pickPaletteStarColor(palette, i, true, i % 3 === 0);
           emitFireworkSpark(
             x, y, z,
             rx, ry, rz,
-            p2[0], p2[1], p2[2],
-            1.55 + Math.random() * 0.45,
-            1.40, 4.5, 1
-          );
-        }
-      } else if (pattern === 'willow') {
-        // Golden Brocade Willow: 130 long-burning stars with lower drag and graceful weeping gravity droop
-        const count = 130;
-        for (let i = 0; i < count; i++) {
-          const u = Math.random() * 2 - 1;
-          const theta = Math.random() * Math.PI * 2;
-          const rHoriz = Math.sqrt(Math.max(0, 1 - u * u));
-          const speed = 9.0 + Math.random() * 8.5;
-          const isGold = i % 3 !== 0;
-          const col = isGold ? [1.0, 0.84, 0.36] : p1;
-          emitFireworkSpark(
-            x, y, z,
-            rHoriz * Math.cos(theta) * speed,
-            u * speed + 2.5,
-            rHoriz * Math.sin(theta) * speed,
             col[0], col[1], col[2],
-            2.1 + Math.random() * 0.75,
-            1.05, 7.8, isGold ? 0 : 1
+            5.4 + Math.random() * 1.6,
+            1.68, 2.2, 2, -1.85
           );
         }
       } else if (pattern === 'palm') {
-        // Palm Burst: 10 thick high-velocity curving fronds with trail sparks + glittering white strobe tips
+        // Palm Burst: 12 thick high-velocity curving fronds whose glittering tips linger 5.3 - 7.0s slowly drifting down
         const fronds = 12;
         for (let f = 0; f < fronds; f++) {
-          const u = -0.25 + Math.random() * 1.15;
+          const u = -0.20 + Math.random() * 1.10;
           const clU = clamp(u, -0.95, 0.95);
-          const theta = (f / fronds) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
+          const theta = (f / fronds) * Math.PI * 2 + (Math.random() - 0.5) * 0.22;
           const rHoriz = Math.sqrt(Math.max(0, 1 - clU * clU));
           const dirX = rHoriz * Math.cos(theta);
           const dirY = clU;
           const dirZ = rHoriz * Math.sin(theta);
 
-          for (let s = 0; s < 11; s++) {
-            const frac = (s + 1) / 11;
-            const speed = 5.5 + frac * 14.5;
-            const isTip = s >= 9;
-            const col = isTip ? p2 : (palette.rainbow ? hslToRgbFast(f / fronds, 0.95, 0.62) : p1);
+          for (let s = 0; s < 12; s++) {
+            const frac = (s + 1) / 12;
+            const speed = 6.0 + frac * 15.5;
+            const isLingerTip = s >= 6;
+            const col = pickPaletteStarColor(palette, f + s, s >= 8, s >= 10);
+            const dur = isLingerTip ? (5.3 + Math.random() * 1.8) : (2.5 + frac * 1.4);
             emitFireworkSpark(
               x, y, z,
-              dirX * speed + (Math.random() - 0.5) * 1.2,
-              dirY * speed + (Math.random() - 0.5) * 1.2,
-              dirZ * speed + (Math.random() - 0.5) * 1.2,
+              dirX * speed + (Math.random() - 0.5) * 1.3,
+              dirY * speed + (Math.random() - 0.5) * 1.3,
+              dirZ * speed + (Math.random() - 0.5) * 1.3,
               col[0], col[1], col[2],
-              1.35 + frac * 0.65,
-              1.38, 6.2, isTip ? 1 : 0
+              dur,
+              1.65, 2.5, isLingerTip ? 2 : 1, -2.0
             );
           }
         }
       } else {
-        // Classic Multi-Layered Chrysanthemum / Peony Shell (outer shell + inner contrasting pistil core)
-        const count = 135;
+        // Classic Multi-Layered Chrysanthemum / Peony Shell + Lingering Sparkle Drifters (5.2 - 7.2 seconds)
+        const count = 150;
         for (let i = 0; i < count; i++) {
           const u = Math.random() * 2 - 1;
           const theta = Math.random() * Math.PI * 2;
           const rHoriz = Math.sqrt(Math.max(0, 1 - u * u));
-          const isOuter = i < 92;
-          const speed = isOuter ? (14.5 + Math.random() * 3.8) : (7.5 + Math.random() * 2.8);
-          let col;
-          if (palette.rainbow) {
-            col = hslToRgbFast((theta / (Math.PI * 2) + (u + 1) * 0.25) % 1.0, 0.95, 0.62);
-          } else {
-            col = isOuter ? p1 : p2;
-          }
+          const isOuter = i < 100;
+          const isLingeringDrifter = (i % 2 === 0) || palette.allSparkle;
+          const speed = isOuter ? (15.0 + Math.random() * 4.5) : (8.0 + Math.random() * 3.5);
+          const col = pickPaletteStarColor(palette, i, !isOuter, i % 4 === 0);
+          const dur = isLingeringDrifter ? (5.2 + Math.random() * 2.0) : (2.8 + Math.random() * 1.2);
           emitFireworkSpark(
             x, y, z,
             rHoriz * Math.cos(theta) * speed,
             u * speed,
             rHoriz * Math.sin(theta) * speed,
             col[0], col[1], col[2],
-            1.40 + Math.random() * 0.55,
-            1.48, 5.2, (!isOuter || i % 4 === 0) ? 1 : 0
+            dur,
+            1.72, 2.35, isLingeringDrifter ? 2 : 1, -(1.75 + Math.random() * 0.85)
           );
         }
       }
@@ -8054,14 +8206,69 @@
     function updateFireworks(dt) {
       const time = uniforms.uTime.value;
       const rad = THREE.MathUtils.degToRad(params.windDirDeg);
-      const windX = Math.cos(rad) * params.windSpeed * 0.12;
-      const windZ = Math.sin(rad) * params.windSpeed * 0.12;
+      const windX = Math.cos(rad) * params.windSpeed * 0.10;
+      const windZ = Math.sin(rad) * params.windSpeed * 0.10;
 
-      // 1. Decay aerial firework flash light
-      if (fireworkFlashLight.intensity > 0.01) {
-        fireworkFlashLight.intensity = Math.max(0.0, fireworkFlashLight.intensity - dt * 26.0);
+      // 1. Update 3D Multi-Second Aerial Explosion Flares & Dynamic PointLights
+      for (let i = activeFireworkFlares.length - 1; i >= 0; i--) {
+        const fl = activeFireworkFlares[i];
+        fl.age += dt;
+        if (fl.age >= fl.maxAge) {
+          fireworkFlaresGroup.remove(fl.group);
+          fl.coreMat.dispose();
+          fl.haloMat.dispose();
+          fl.rayMat.dispose();
+          activeFireworkFlares.splice(i, 1);
+          continue;
+        }
+
+        const t = fl.age / fl.maxAge;
+        // Rapid initial bloom in the first 0.18s, then a bright sustained glow for several seconds before smooth fade
+        const bloom = Math.min(1.0, fl.age / 0.14);
+        const sustain = Math.pow(1.0 - t, 1.35);
+        const pulse = 0.90 + 0.14 * Math.sin(time * 24.0 + fl.phase);
+
+        // Gently drift the glowing flare downward with the star canopy
+        fl.group.position.y -= 0.85 * dt;
+        fl.group.position.x += windX * 0.35 * dt;
+        fl.group.position.z += windZ * 0.35 * dt;
+
+        const coreScale = (0.85 + bloom * 1.45) * (0.55 + sustain * 0.65) * pulse;
+        const haloScale = (0.75 + bloom * 1.35 + t * 0.45) * pulse;
+        const rayScale = (0.80 + bloom * 1.30) * (0.45 + sustain * 0.75) * pulse;
+
+        fl.coreMesh.scale.setScalar(coreScale);
+        fl.haloMesh.scale.setScalar(haloScale);
+        fl.ray1.scale.set(12.5 * rayScale, 0.55 * coreScale, 0.55 * coreScale);
+        fl.ray2.scale.set(0.55 * coreScale, 11.5 * rayScale, 0.55 * coreScale);
+        fl.ray3.scale.set(0.55 * coreScale, 0.55 * coreScale, 12.5 * rayScale);
+        fl.group.rotation.y += dt * 0.85;
+        fl.group.rotation.z = Math.sin(time * 3.0 + fl.phase) * 0.25;
+
+        fl.coreMat.opacity = clamp(sustain * 1.15, 0.0, 1.0);
+        fl.haloMat.opacity = clamp(sustain * 0.58 * pulse, 0.0, 0.72);
+        fl.rayMat.opacity  = clamp(sustain * 0.82 * pulse, 0.0, 0.92);
+      }
+
+      // Bind the 2 newest active flares to fireworkFlashLight and fireworkFlashLight2 for multi-second landscape illumination
+      if (activeFireworkFlares.length > 0) {
+        const newest = activeFireworkFlares[activeFireworkFlares.length - 1];
+        const t1 = newest.age / newest.maxAge;
+        fireworkFlashLight.position.copy(newest.group.position);
+        fireworkFlashLight.color.setHex(newest.colorHex);
+        fireworkFlashLight.intensity = 24.0 * Math.pow(1.0 - t1, 1.25);
       } else {
         fireworkFlashLight.intensity = 0.0;
+      }
+
+      if (activeFireworkFlares.length > 1) {
+        const second = activeFireworkFlares[activeFireworkFlares.length - 2];
+        const t2 = second.age / second.maxAge;
+        fireworkFlashLight2.position.copy(second.group.position);
+        fireworkFlashLight2.color.setHex(second.colorHex);
+        fireworkFlashLight2.intensity = 20.0 * Math.pow(1.0 - t2, 1.25);
+      } else {
+        fireworkFlashLight2.intensity = 0.0;
       }
 
       // 2. Advance ascending mortar rockets & emit golden comet tail sparks
@@ -8083,8 +8290,8 @@
             -2.0 - Math.random() * 2.5,
             -r.vz * 0.15 + (Math.random() - 0.5) * 1.4,
             1.0, 0.86, 0.45,
-            0.28 + Math.random() * 0.14,
-            2.4, 4.0, 0
+            0.32 + Math.random() * 0.16,
+            2.4, 4.0, 0, -10.0
           );
         }
 
@@ -8094,7 +8301,7 @@
         }
       }
 
-      // 3. Advance 3D Aerial Starburst & Comet Tail Particles
+      // 3. Advance 3D Aerial Starburst & 5-7s Lingering Drifter Particles
       let activeSparks = 0;
       for (let i = 0; i < FIREWORK_SPARK_COUNT; i++) {
         let life = fireworkSparkLife[i];
@@ -8110,21 +8317,44 @@
 
         const dragFactor = Math.max(0.0, 1.0 - fireworkSparkDrag[i] * dt);
         fireworkSparkVel[i3]     *= dragFactor;
-        fireworkSparkVel[i3 + 1] = fireworkSparkVel[i3 + 1] * dragFactor - fireworkSparkGrav[i] * dt;
+        // Apply gravity but clamp downward speed to terminal drift velocity so lingering stars slowly float down over 5-7 seconds!
+        const nextVy = fireworkSparkVel[i3 + 1] * dragFactor - fireworkSparkGrav[i] * dt;
+        fireworkSparkVel[i3 + 1] = Math.max(fireworkSparkTermVy[i], nextVy);
         fireworkSparkVel[i3 + 2] *= dragFactor;
 
-        fireworkSparkPos[i3]     += (fireworkSparkVel[i3] + windX) * dt;
-        fireworkSparkPos[i3 + 1] += fireworkSparkVel[i3 + 1] * dt;
-        fireworkSparkPos[i3 + 2] += (fireworkSparkVel[i3 + 2] + windZ) * dt;
+        // Gentle atmospheric flutter as lingering stars slowly drift downward
+        const flutterScale = clamp(life * 1.8, 0.0, 1.0);
+        const flutterX = Math.sin(time * 2.4 + i * 1.7) * 0.95 * flutterScale;
+        const flutterZ = Math.cos(time * 2.1 + i * 2.3) * 0.95 * flutterScale;
 
-        // Smooth luminosity envelope + optional high-frequency crackle/strobe glitter
-        const fade = Math.pow(1.0 - life, 0.75);
-        let strobeMult = 1.0;
-        if (fireworkSparkStrobe[i] === 1 && life > 0.32) {
-          strobeMult = (Math.sin(time * 42.0 + i * 3.1) > -0.15) ? 1.35 : 0.22;
+        fireworkSparkPos[i3]     += (fireworkSparkVel[i3] + windX + flutterX) * dt;
+        fireworkSparkPos[i3 + 1] += fireworkSparkVel[i3 + 1] * dt;
+        fireworkSparkPos[i3 + 2] += (fireworkSparkVel[i3 + 2] + windZ + flutterZ) * dt;
+
+        // Prevent lingering drifting stars from sinking below terrain/water surface
+        const floorY = sampleSurfaceHeightAtWorld(fireworkSparkPos[i3], fireworkSparkPos[i3 + 2]);
+        if (fireworkSparkPos[i3 + 1] < floorY + 0.25) {
+          fireworkSparkPos[i3 + 1] = floorY + 0.25;
+          fireworkSparkVel[i3 + 1] = Math.abs(fireworkSparkVel[i3 + 1]) * 0.25;
         }
-        // Hot white-core flash right at burst birth (life < 0.15)
-        const coreBoost = Math.max(0.0, (0.16 - life) * 3.5);
+
+        // Sustained brightness envelope so lingering stars stay bright for 80%+ of their 5-7s drift before fading
+        const fade = life < 0.75 ? 1.0 : Math.pow((1.0 - life) / 0.25, 0.85);
+        let strobeMult = 1.0;
+        let sparkleWhiteBoost = 0.0;
+        const strobeMode = fireworkSparkStrobe[i];
+        if (strobeMode === 1 && life > 0.18) {
+          const wave = Math.sin(time * 32.0 + i * 3.7);
+          strobeMult = wave > -0.2 ? 1.25 : 0.35;
+        } else if (strobeMode === 2 && life > 0.14) {
+          // Diamond sparkle & crackle glitter: flashes pure white-gold peaks as it slowly drifts down
+          const wave = Math.sin(time * 46.0 + i * 5.3) * Math.cos(time * 19.0 + i * 2.1);
+          strobeMult = wave > -0.15 ? 1.45 : 0.25;
+          if (wave > 0.52) sparkleWhiteBoost = 0.55;
+        }
+
+        // Hot white-core flash right at burst birth (life < 0.14)
+        const coreBoost = Math.max(0.0, (0.14 - life) * 4.0) + sparkleWhiteBoost;
         fireworkSparkCol[i3]     = clamp((fireworkSparkBaseCol[i3] + coreBoost) * fade * strobeMult, 0.0, 1.0);
         fireworkSparkCol[i3 + 1] = clamp((fireworkSparkBaseCol[i3 + 1] + coreBoost) * fade * strobeMult, 0.0, 1.0);
         fireworkSparkCol[i3 + 2] = clamp((fireworkSparkBaseCol[i3 + 2] + coreBoost) * fade * strobeMult, 0.0, 1.0);
