@@ -1388,6 +1388,9 @@
       <button id="btn-fpv-mode" class="fpv-btn" title="Walk around on the terrain & dive underwater (Shortcut: V)">
         🚶 FPV Walk Mode
       </button>
+      <button id="btn-drive-mode" class="fpv-btn" style="display:none;" title="Drive the Offroad Truck with WASD / Arrow Keys & Spacebar to Drift!">
+        🛻 Drive
+      </button>
       <button id="btn-audio-toggle" class="audio-btn" title="Toggle Global Sound Effects On/Off (Shortcut: M)">
         🔊 Audio: ON
       </button>
@@ -1454,9 +1457,9 @@
     <button class="tool-btn" data-tool="rock" title="Place wind-blocking & water-damming boulders">🪨 Add Boulder</button>
     <button class="tool-btn" data-tool="wall" title="Draw dam / drift walls">🧱 Dam / Wall</button>
 
-    <!-- Items Popup Menu (Water Tap, Animal Feeder, Lantern) -->
+    <!-- Items Popup Menu (Water Tap, Animal Feeder, Lantern, Offroad Truck) -->
     <div class="dock-popup-wrap" id="popup-wrap-items">
-      <button type="button" class="dock-popup-trigger" id="btn-popup-items" title="Place destructible 3D world items (Water Tap, Animal Feeder, Lantern)">
+      <button type="button" class="dock-popup-trigger" id="btn-popup-items" title="Place destructible 3D world items (Water Tap, Animal Feeder, Lantern, Offroad Truck)">
         <span id="label-popup-items">📦 Items</span> <span>▴</span>
       </button>
       <div class="dock-popup-menu" id="popup-menu-items">
@@ -1464,6 +1467,7 @@
         <button class="tool-btn item-tool-btn" data-tool="item-tap" data-popup-group="items" data-short-label="🚰 Water Tap" title="Place an Artesian Water Tap that sticks in the ground and spurts water at a fluctuating rate to fill a pond until destroyed">🚰 Water Tap</button>
         <button class="tool-btn item-tool-btn" data-tool="item-feeder" data-popup-group="items" data-short-label="🌾 Animal Feeder" title="Place an Animal Feeder trough that attracts nearby deer/oryx, rabbits, camels & fennec foxes until it runs out of food or is destroyed">🌾 Animal Feeder</button>
         <button class="tool-btn item-tool-btn" data-tool="item-lantern" data-popup-group="items" data-short-label="🏮 Lantern" title="Place a Lantern hanging from a wooden stick that illuminates the surrounding area at night, attracts moths, and lures bats">🏮 Lantern</button>
+        <button class="tool-btn item-tool-btn" data-tool="item-truck" data-popup-group="items" data-short-label="🛻 Offroad Truck" title="Place a drivable 4x4 Offroad Baja Truck with twin night headlights, engine roar, cornering tire squeal & Spacebar drifting">🛻 Offroad Truck</button>
       </div>
     </div>
 
@@ -1655,7 +1659,8 @@
         <div class="btn-grid">
           <button class="tool-btn item-tool-btn" data-tool="item-tap" title="Sticks in the ground and spurts water like an artesian well to keep a pond filled until destroyed">🚰 Water Tap</button>
           <button class="tool-btn item-tool-btn" data-tool="item-feeder" title="Attracts nearby deer/oryx, rabbits, camels & fennec foxes to gather and feed until empty or destroyed">🌾 Animal Feeder</button>
-          <button class="tool-btn item-tool-btn" data-tool="item-lantern" style="grid-column: span 2;" title="Hangs from a wooden post, illuminates the surrounding area at night, attracts moths, and lures swooping bats">🏮 Lantern</button>
+          <button class="tool-btn item-tool-btn" data-tool="item-lantern" title="Hangs from a wooden post, illuminates the surrounding area at night, attracts moths, and lures swooping bats">🏮 Lantern</button>
+          <button class="tool-btn item-tool-btn" data-tool="item-truck" title="Place a drivable 4x4 Offroad Truck with twin night headlights, engine roar, cornering tire squeal & Spacebar drifting">🛻 Offroad Truck</button>
         </div>
         <div class="fidelity-details" style="margin-top:6px;">
           <span>Click terrain to place</span>
@@ -1857,6 +1862,7 @@
       activeParticleCap: 9000,
       floraSyncInterval: 3,
       fpvMode: false,
+      driveMode: false,
       fpvEquip: 'sculpt',     // 'sculpt' | 'none' | 'bow' | 'torch'
       isUnderwater: false,
       audioEnabled: true,
@@ -4599,8 +4605,9 @@
       const hrNow = ((params.timeOfDay % 24) + 24) % 24;
       const isNightTimeNow = (hrNow >= 18.2 || hrNow < 6.0) || (nightFactor > 0.35);
 
-      // Gather active night lanterns once per sync so they illuminate the terrain vertex colors with zero WebGL PointLight shader recompilation!
+      // Gather active night lanterns & offroad truck dual headlights once per sync so they illuminate the terrain vertex colors with zero WebGL PointLight shader recompilation!
       const activeNightLanterns = [];
+      const activeTruckHeadlights = [];
       if (isNightTimeNow && typeof placedWorldItems !== 'undefined') {
         const lanternNightGlow = clamp((nightFactor - 0.15) / 0.65, 0.28, 1.0);
         for (let k = 0; k < placedWorldItems.length; k++) {
@@ -4612,6 +4619,28 @@
               lz: it.z - Math.sin(it.yaw) * 1.02,
               strength: lanternNightGlow * flk
             });
+          } else if (it.type === 'item-truck') {
+            const fwdX = Math.sin(it.yaw);
+            const fwdZ = Math.cos(it.yaw);
+            const rightX = Math.cos(it.yaw);
+            const rightZ = -Math.sin(it.yaw);
+            // Left & Right front headlights projecting 2 twin beams out in front of the truck at night
+            activeTruckHeadlights.push(
+              {
+                hx: it.x + fwdX * 1.85 - rightX * 0.62,
+                hz: it.z + fwdZ * 1.85 - rightZ * 0.62,
+                dirX: Math.sin(it.yaw - 0.055),
+                dirZ: Math.cos(it.yaw - 0.055),
+                strength: lanternNightGlow * 1.15
+              },
+              {
+                hx: it.x + fwdX * 1.85 + rightX * 0.62,
+                hz: it.z + fwdZ * 1.85 + rightZ * 0.62,
+                dirX: Math.sin(it.yaw + 0.055),
+                dirZ: Math.cos(it.yaw + 0.055),
+                strength: lanternNightGlow * 1.15
+              }
+            );
           }
         }
       }
@@ -4843,6 +4872,34 @@
             tr = Math.min(1.0, tr + lb * 0.62);
             tg = Math.min(1.0, tg + lb * 0.40);
             tb = Math.min(1.0, tb + lb * 0.14);
+          }
+        }
+
+        // Offroad Truck Twin Headlight Beams Projected Out in Front of the Vehicle at Night
+        if (activeTruckHeadlights.length > 0) {
+          const cellWx = tPos[i3];
+          const cellWz = tPos[i3 + 2];
+          let beamBoost = 0.0;
+          for (let k = 0; k < activeTruckHeadlights.length; k++) {
+            const hl = activeTruckHeadlights[k];
+            const dx = cellWx - hl.hx;
+            const dz = cellWz - hl.hz;
+            const fwdDist = dx * hl.dirX + dz * hl.dirZ;
+            if (fwdDist > 0.3 && fwdDist < 34.0) {
+              const latDist = Math.abs(dx * (-hl.dirZ) + dz * hl.dirX);
+              const coneHalfW = 0.48 + fwdDist * 0.27;
+              if (latDist < coneHalfW) {
+                const latFalloff = 1.0 - (latDist / coneHalfW);
+                const distFalloff = 1.0 - (fwdDist / 34.0);
+                beamBoost += latFalloff * latFalloff * distFalloff * hl.strength;
+              }
+            }
+          }
+          if (beamBoost > 0.001) {
+            const bbVal = Math.min(1.35, beamBoost);
+            tr = Math.min(1.0, tr + bbVal * 0.72);
+            tg = Math.min(1.0, tg + bbVal * 0.66);
+            tb = Math.min(1.0, tb + bbVal * 0.50);
           }
         }
 
@@ -10772,32 +10829,244 @@
       return root;
     }
 
+    // ============================================================================
+    // 11G-2. DRIVABLE 4x4 OFFROAD BAJA TRUCK (Item + Drive Mode + Twin Night Headlights + V8/Drift Audio)
+    // ============================================================================
+    // Pre-allocated PointLight at startup (intensity = 0.0) so activating truck headlights at night has ZERO shader recompile stutter!
+    const truckHeadlightPoint = new THREE.PointLight(0xfff1c4, 0.0, 52.0, 1.30);
+    scene.add(truckHeadlightPoint);
+
+    const sharedTruckPaintMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.36, metalness: 0.38 });
+    const sharedTruckDarkMetalMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.62, metalness: 0.55 });
+    const sharedTruckChromeMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.25, metalness: 0.85 });
+    const sharedTruckGlassMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.15, metalness: 0.75 });
+    const sharedTruckTireMat = new THREE.MeshStandardMaterial({ color: 0x171717, roughness: 0.88, metalness: 0.10 });
+    const sharedTruckHeadlightLensMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 0xffe89e,
+      emissiveIntensity: 0.1,
+      roughness: 0.15
+    });
+    const sharedTruckTaillightMat = new THREE.MeshStandardMaterial({
+      color: 0x991b1b,
+      emissive: 0xff1a1a,
+      emissiveIntensity: 0.25,
+      roughness: 0.25
+    });
+    const sharedTruckHeadlightBeamMat = new THREE.MeshBasicMaterial({
+      color: 0xfff3c4,
+      transparent: true,
+      opacity: 0.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+
+    function createOffroadTruckWheelMesh() {
+      const wheelGroup = new THREE.Group();
+      const tireGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.38, 14);
+      tireGeo.rotateZ(Math.PI / 2);
+      const tire = new THREE.Mesh(tireGeo, sharedTruckTireMat);
+      tire.castShadow = true;
+      tire.receiveShadow = true;
+      wheelGroup.add(tire);
+
+      const rimGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.40, 10);
+      rimGeo.rotateZ(Math.PI / 2);
+      const rim = new THREE.Mesh(rimGeo, sharedTruckChromeMat);
+      wheelGroup.add(rim);
+
+      // Cross spoke bar so wheel rotation is clearly visible when driving & drifting
+      const spokeGeo = new THREE.BoxGeometry(0.41, 0.09, 0.44);
+      const spoke = new THREE.Mesh(spokeGeo, sharedTruckDarkMetalMat);
+      wheelGroup.add(spoke);
+      return wheelGroup;
+    }
+
+    function createOffroadTruckMesh() {
+      const root = new THREE.Group();
+
+      // Suspended chassis group (pitches under acceleration/braking and rolls during fast cornering & spacebar drifts!)
+      const chassisGroup = new THREE.Group();
+      root.add(chassisGroup);
+
+      // 1. Lower heavy-duty 4x4 frame & skid plate
+      const frameMesh = new THREE.Mesh(new THREE.BoxGeometry(1.38, 0.32, 3.55), sharedTruckDarkMetalMat);
+      frameMesh.position.set(0, 0.56, 0);
+      frameMesh.castShadow = true;
+      frameMesh.receiveShadow = true;
+      chassisGroup.add(frameMesh);
+
+      // 2. Front hood & engine bay (+Z is forward)
+      const hoodMesh = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.50, 1.24), sharedTruckPaintMat);
+      hoodMesh.position.set(0, 0.88, 1.14);
+      hoodMesh.castShadow = true;
+      hoodMesh.receiveShadow = true;
+      chassisGroup.add(hoodMesh);
+
+      // Raised matte-black V8 hood power-scoop
+      const scoopMesh = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.14, 0.76), sharedTruckDarkMetalMat);
+      scoopMesh.position.set(0, 1.16, 1.12);
+      scoopMesh.castShadow = true;
+      chassisGroup.add(scoopMesh);
+
+      // 3. Offroad Crew Cab & Tinted Windows
+      const cabMesh = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.74, 1.24), sharedTruckPaintMat);
+      cabMesh.position.set(0, 1.26, 0.02);
+      cabMesh.castShadow = true;
+      cabMesh.receiveShadow = true;
+      chassisGroup.add(cabMesh);
+
+      const glassMesh = new THREE.Mesh(new THREE.BoxGeometry(1.40, 0.42, 1.12), sharedTruckGlassMat);
+      glassMesh.position.set(0, 1.35, 0.05);
+      chassisGroup.add(glassMesh);
+
+      // 4. Rear Pickup Bed + Angled Baja Spare Tire
+      const bedMesh = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.52, 1.28), sharedTruckPaintMat);
+      bedMesh.position.set(0, 0.88, -1.16);
+      bedMesh.castShadow = true;
+      bedMesh.receiveShadow = true;
+      chassisGroup.add(bedMesh);
+
+      const bedLiner = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.12, 1.14), sharedTruckDarkMetalMat);
+      bedLiner.position.set(0, 1.12, -1.16);
+      chassisGroup.add(bedLiner);
+
+      const spareTire = createOffroadTruckWheelMesh();
+      spareTire.rotation.z = Math.PI / 2;
+      spareTire.rotation.x = -0.52;
+      spareTire.scale.setScalar(0.86);
+      spareTire.position.set(0, 1.26, -1.18);
+      chassisGroup.add(spareTire);
+
+      // 5. Steel Sport Rollbar & Fender Flares
+      for (const side of [-1, 1]) {
+        const rollBar = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.72, 7), sharedTruckDarkMetalMat);
+        rollBar.rotation.x = -0.52;
+        rollBar.position.set(side * 0.62, 1.38, -0.82);
+        chassisGroup.add(rollBar);
+
+        const flareF = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.92), sharedTruckDarkMetalMat);
+        flareF.position.set(side * 0.78, 0.76, 1.16);
+        chassisGroup.add(flareF);
+
+        const flareR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.92), sharedTruckDarkMetalMat);
+        flareR.position.set(side * 0.78, 0.76, -1.16);
+        chassisGroup.add(flareR);
+      }
+
+      // 6. Front Bullbar Bumper, Grille & Twin Night Headlights (+ Volumetric Headlight Beams!)
+      const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.26, 0.22), sharedTruckDarkMetalMat);
+      frontBumper.position.set(0, 0.64, 1.82);
+      chassisGroup.add(frontBumper);
+
+      const grille = new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.32, 0.08), sharedTruckDarkMetalMat);
+      grille.position.set(0, 0.88, 1.77);
+      chassisGroup.add(grille);
+
+      // Volumetric beam cone geometry (apex at origin (0,0,0), opening forward along +Z to length 15.5m)
+      const beamConeGeo = new THREE.ConeGeometry(2.35, 15.5, 14, 1, true);
+      beamConeGeo.translate(0, -15.5 * 0.5, 0);
+      beamConeGeo.rotateX(-Math.PI / 2);
+
+      const headlightBeams = [];
+      for (const side of [-1, 1]) {
+        // Front Headlight Lens
+        const hlLens = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.18, 0.08), sharedTruckHeadlightLensMat);
+        hlLens.position.set(side * 0.58, 0.90, 1.78);
+        chassisGroup.add(hlLens);
+
+        // Volumetric Forward Headlight Cone (shines out in front of the truck at night!)
+        const beamCone = new THREE.Mesh(beamConeGeo, sharedTruckHeadlightBeamMat);
+        beamCone.position.set(side * 0.58, 0.88, 1.82);
+        // Aim slightly downward toward the terrain ahead and slightly splayed outward
+        beamCone.rotation.x = 0.095;
+        beamCone.rotation.y = side * 0.05;
+        beamCone.renderOrder = 18;
+        beamCone.visible = false;
+        chassisGroup.add(beamCone);
+        headlightBeams.push(beamCone);
+
+        // Rear Tail / Brake Light
+        const tailLight = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.20, 0.08), sharedTruckTaillightMat);
+        tailLight.position.set(side * 0.60, 0.90, -1.81);
+        chassisGroup.add(tailLight);
+      }
+
+      // 7. Four Articulated Offroad Wheels (Front wheels have steering pivots, all 4 wheels spin!)
+      const steerFL = new THREE.Group();
+      steerFL.position.set(-0.84, 0.46, 1.16);
+      const wheelFL = createOffroadTruckWheelMesh();
+      steerFL.add(wheelFL);
+      root.add(steerFL);
+
+      const steerFR = new THREE.Group();
+      steerFR.position.set(0.84, 0.46, 1.16);
+      const wheelFR = createOffroadTruckWheelMesh();
+      steerFR.add(wheelFR);
+      root.add(steerFR);
+
+      const wheelRL = createOffroadTruckWheelMesh();
+      wheelRL.position.set(-0.84, 0.46, -1.16);
+      root.add(wheelRL);
+
+      const wheelRR = createOffroadTruckWheelMesh();
+      wheelRR.position.set(0.84, 0.46, -1.16);
+      root.add(wheelRR);
+
+      root.userData.chassisGroup = chassisGroup;
+      root.userData.steerFL = steerFL;
+      root.userData.steerFR = steerFR;
+      root.userData.wheels = [wheelFL, wheelFR, wheelRL, wheelRR];
+      root.userData.headlightBeams = headlightBeams;
+      return root;
+    }
+
+    function getLatestPlacedTruck() {
+      for (let i = placedWorldItems.length - 1; i >= 0; i--) {
+        if (placedWorldItems[i].type === 'item-truck') {
+          return placedWorldItems[i];
+        }
+      }
+      return null;
+    }
+
     function updatePlacedItemsCountUI() {
       const badge = document.getElementById('val-items-count');
       if (badge) {
         badge.textContent = `${placedWorldItems.length} Active`;
+      }
+      const btnDrive = document.getElementById('btn-drive-mode');
+      const hasTruck = Boolean(getLatestPlacedTruck());
+      if (btnDrive) {
+        btnDrive.style.display = hasTruck ? 'inline-flex' : 'none';
+      }
+      if (!hasTruck && params.driveMode && typeof toggleDriveMode === 'function') {
+        toggleDriveMode(false);
       }
     }
 
     function destroyPlacedItemAtIndex(idxItem, withExplosion = true) {
       if (idxItem < 0 || idxItem >= placedWorldItems.length) return;
       const item = placedWorldItems[idxItem];
-      const wasLantern = item.type === 'item-lantern';
+      const wasNightLit = (item.type === 'item-lantern' || item.type === 'item-truck');
       if (withExplosion) {
         const palette = item.type === 'item-tap'
           ? [0x38bdf8, 0x475569, 0xd97706]
           : (item.type === 'item-feeder'
             ? [0x854d0e, 0xeab308, 0x5c3a21]
-            : [0xff9e3b, 0x5c3a21, 0xfef08a]);
-        spawnExplosionShards(item.x, item.y + 0.9, item.z, 10, palette);
-        spawnSteamPuffAtWorld(item.x, item.y + 0.8, item.z, 5);
+            : (item.type === 'item-truck'
+              ? [0xdc2626, 0x1e293b, 0xf97316]
+              : [0xff9e3b, 0x5c3a21, 0xfef08a]));
+        spawnExplosionShards(item.x, item.y + 0.9, item.z, item.type === 'item-truck' ? 16 : 10, palette);
+        spawnSteamPuffAtWorld(item.x, item.y + 0.8, item.z, item.type === 'item-truck' ? 8 : 5);
       }
       if (item.mesh) {
         placedItemsGroup.remove(item.mesh);
       }
       placedWorldItems.splice(idxItem, 1);
       updatePlacedItemsCountUI();
-      if (wasLantern) {
+      if (wasNightLit) {
         syncTerrainAndWaterMeshes();
       }
     }
@@ -10822,7 +11091,7 @@
       const px = clamp(wx, -halfBound, halfBound);
       const pz = clamp(wz, -halfBound, halfBound);
 
-      // Avoid stacking two identical items right on top of each other (within 2.6m)
+      // Avoid stacking two items right on top of each other (within 2.6m)
       for (let i = 0; i < placedWorldItems.length; i++) {
         const it = placedWorldItems[i];
         if (Math.hypot(it.x - px, it.z - pz) < 2.6) {
@@ -10844,6 +11113,8 @@
         mesh = createAnimalFeederMesh();
       } else if (type === 'item-lantern') {
         mesh = createHangingLanternMesh();
+      } else if (type === 'item-truck') {
+        mesh = createOffroadTruckMesh();
       }
       if (!mesh) return;
 
@@ -10868,14 +11139,210 @@
         mothSupply: 0.0,
         mothSpawning: true,
         mothsActive: false,
+        // For Offroad Truck: driving physics state
+        speed: 0.0,
+        steerAngle: 0.0,
+        driftSlipAngle: 0.0,
+        wheelSpin: 0.0,
+        suspPitch: 0.0,
+        suspRoll: 0.0,
         mesh
       });
 
       // Small dust puff as the item is planted in the ground
       spawnSteamPuffAtWorld(px, groundY + 0.3, pz, 3);
       updatePlacedItemsCountUI();
-      if (type === 'item-lantern') {
+      if (type === 'item-lantern' || type === 'item-truck') {
         syncTerrainAndWaterMeshes();
+      }
+    }
+
+    const driveState = {
+      keys: { forward: false, backward: false, left: false, right: false, drift: false },
+      camYaw: 0.0,
+      savedOrbitPos: new THREE.Vector3(),
+      savedOrbitTarget: new THREE.Vector3()
+    };
+
+    let truckAudioLoops = null;
+
+    function ensureTruckAudioLoops() {
+      if (!params.audioEnabled) return null;
+      const ctx = ensureAudioContext();
+      if (!ctx || !whiteNoiseBuffer || !pinkNoiseBuffer) return null;
+      if (truckAudioLoops) return truckAudioLoops;
+
+      const now = ctx.currentTime;
+
+      // 1. V8 Offroad Engine & Acceleration Roar (3 harmonic oscillators + exhaust noise pulse)
+      const engOsc1 = ctx.createOscillator();
+      engOsc1.type = 'sawtooth';
+      engOsc1.frequency.setValueAtTime(46, now);
+
+      const engOsc2 = ctx.createOscillator();
+      engOsc2.type = 'triangle';
+      engOsc2.frequency.setValueAtTime(23, now);
+
+      const engOsc3 = ctx.createOscillator();
+      engOsc3.type = 'sawtooth';
+      engOsc3.frequency.setValueAtTime(69, now);
+
+      const osc3Gain = ctx.createGain();
+      osc3Gain.gain.setValueAtTime(0.45, now);
+      engOsc3.connect(osc3Gain);
+
+      const exhaustSrc = ctx.createBufferSource();
+      exhaustSrc.buffer = pinkNoiseBuffer;
+      exhaustSrc.loop = true;
+      const exhaustBP = ctx.createBiquadFilter();
+      exhaustBP.type = 'bandpass';
+      exhaustBP.frequency.setValueAtTime(110, now);
+      exhaustBP.Q.setValueAtTime(1.6, now);
+      const exhaustGain = ctx.createGain();
+      exhaustGain.gain.setValueAtTime(0.55, now);
+      exhaustSrc.connect(exhaustBP);
+      exhaustBP.connect(exhaustGain);
+
+      const engineLP = ctx.createBiquadFilter();
+      engineLP.type = 'lowpass';
+      engineLP.frequency.setValueAtTime(140, now);
+      engineLP.Q.setValueAtTime(2.6, now);
+
+      const engineGain = ctx.createGain();
+      engineGain.gain.setValueAtTime(0.0, now);
+
+      engOsc1.connect(engineLP);
+      engOsc2.connect(engineLP);
+      osc3Gain.connect(engineLP);
+      exhaustGain.connect(engineLP);
+      engineLP.connect(engineGain);
+      engineGain.connect(audioCompressor);
+
+      engOsc1.start(now);
+      engOsc2.start(now);
+      engOsc3.start(now);
+      exhaustSrc.start(now, Math.random() * 1.0);
+
+      // 2. Cornering Speed Tire Squeal & Spacebar Drift Skid Synthesizer
+      const squealOsc1 = ctx.createOscillator();
+      squealOsc1.type = 'sawtooth';
+      squealOsc1.frequency.setValueAtTime(860, now);
+
+      const squealOsc2 = ctx.createOscillator();
+      squealOsc2.type = 'triangle';
+      squealOsc2.frequency.setValueAtTime(945, now);
+
+      const squealBP = ctx.createBiquadFilter();
+      squealBP.type = 'bandpass';
+      squealBP.frequency.setValueAtTime(910, now);
+      squealBP.Q.setValueAtTime(5.8, now);
+
+      const squealGain = ctx.createGain();
+      squealGain.gain.setValueAtTime(0.0, now);
+
+      squealOsc1.connect(squealBP);
+      squealOsc2.connect(squealBP);
+      squealBP.connect(squealGain);
+      squealGain.connect(audioCompressor);
+
+      squealOsc1.start(now);
+      squealOsc2.start(now);
+
+      const skidSrc = ctx.createBufferSource();
+      skidSrc.buffer = whiteNoiseBuffer;
+      skidSrc.loop = true;
+      const skidBP = ctx.createBiquadFilter();
+      skidBP.type = 'bandpass';
+      skidBP.frequency.setValueAtTime(1350, now);
+      skidBP.Q.setValueAtTime(1.5, now);
+      const skidGain = ctx.createGain();
+      skidGain.gain.setValueAtTime(0.0, now);
+
+      skidSrc.connect(skidBP);
+      skidBP.connect(skidGain);
+      skidGain.connect(audioCompressor);
+      skidSrc.start(now, Math.random() * 1.0);
+
+      truckAudioLoops = {
+        engOsc1,
+        engOsc2,
+        engOsc3,
+        exhaustBP,
+        engineLP,
+        engineGain,
+        squealOsc1,
+        squealOsc2,
+        squealBP,
+        squealGain,
+        skidBP,
+        skidGain
+      };
+      return truckAudioLoops;
+    }
+
+    function updateTruckAudio(activeTruck, isDriving, throttleInput, isDrifting, cornerSquealLoad) {
+      if (!params.audioEnabled || !isDriving || !activeTruck) {
+        if (truckAudioLoops && audioCtx) {
+          const now = audioCtx.currentTime;
+          truckAudioLoops.engineGain.gain.setTargetAtTime(0.0, now, 0.06);
+          truckAudioLoops.squealGain.gain.setTargetAtTime(0.0, now, 0.05);
+          truckAudioLoops.skidGain.gain.setTargetAtTime(0.0, now, 0.05);
+        }
+        return;
+      }
+
+      const loops = ensureTruckAudioLoops();
+      if (!loops || !audioCtx) return;
+
+      const now = audioCtx.currentTime;
+      const time = uniforms.uTime.value || 0.0;
+      const absSpd = Math.abs(activeTruck.speed || 0.0);
+
+      // 3-speed offroad gear RPM curve so accelerating revs through gears with a throaty V8 roar!
+      let gearRatio = 0.0;
+      if (absSpd < 8.5) {
+        gearRatio = absSpd / 8.5;
+      } else if (absSpd < 17.5) {
+        gearRatio = 0.32 + ((absSpd - 8.5) / 9.0) * 0.68;
+      } else {
+        gearRatio = 0.42 + clamp((absSpd - 17.5) / 11.5, 0.0, 0.72);
+      }
+
+      const accelLoad = Math.max(0.0, Math.abs(throttleInput));
+      const driftRevBoost = (isDrifting && absSpd > 2.0) ? 22.0 : 0.0;
+      const rpmJitter = Math.sin(time * 32.0) * 1.4;
+      const rpmFreq = 42.0 + gearRatio * 78.0 + accelLoad * 26.0 + driftRevBoost + rpmJitter;
+
+      loops.engOsc1.frequency.setTargetAtTime(rpmFreq, now, 0.05);
+      loops.engOsc2.frequency.setTargetAtTime(rpmFreq * 0.5, now, 0.05);
+      loops.engOsc3.frequency.setTargetAtTime(rpmFreq * 1.498, now, 0.05);
+      loops.exhaustBP.frequency.setTargetAtTime(rpmFreq * 2.2, now, 0.05);
+
+      const filterCutoff = 130.0 + accelLoad * 440.0 + clamp(absSpd / 25.0, 0.0, 1.0) * 260.0 + (isDrifting ? 140.0 : 0.0);
+      loops.engineLP.frequency.setTargetAtTime(filterCutoff, now, 0.05);
+
+      const targetEngGain = 0.065 + accelLoad * 0.14 + clamp(absSpd / 24.0, 0.0, 1.0) * 0.10;
+      loops.engineGain.gain.setTargetAtTime(targetEngGain, now, 0.05);
+
+      // Speed squeal around corners + Spacebar drift tire screech & skid!
+      const driftLoad = (isDrifting && absSpd > 2.2)
+        ? clamp((absSpd - 1.8) / 9.0 + Math.abs(activeTruck.driftSlipAngle || 0.0) * 0.9, 0.30, 1.0)
+        : 0.0;
+      const totalSqueal = clamp(Math.max(cornerSquealLoad, driftLoad), 0.0, 1.0);
+
+      if (totalSqueal > 0.02) {
+        const pitchWobble = Math.sin(time * 29.0) * 34.0 + Math.cos(time * 43.0) * 22.0;
+        const baseSquealFreq = 835.0 + totalSqueal * 215.0;
+        loops.squealOsc1.frequency.setTargetAtTime(baseSquealFreq + pitchWobble, now, 0.03);
+        loops.squealOsc2.frequency.setTargetAtTime(baseSquealFreq * 1.09 - pitchWobble * 0.7, now, 0.03);
+        loops.squealBP.frequency.setTargetAtTime(890.0 + totalSqueal * 250.0, now, 0.04);
+        loops.squealGain.gain.setTargetAtTime(totalSqueal * 0.145, now, 0.04);
+
+        loops.skidBP.frequency.setTargetAtTime(1250.0 + totalSqueal * 650.0, now, 0.04);
+        loops.skidGain.gain.setTargetAtTime(totalSqueal * 0.21, now, 0.04);
+      } else {
+        loops.squealGain.gain.setTargetAtTime(0.0, now, 0.05);
+        loops.skidGain.gain.setTargetAtTime(0.0, now, 0.05);
       }
     }
 
@@ -10888,21 +11355,27 @@
       const windX = Math.cos(rad) * params.windSpeed;
       const windZ = Math.sin(rad) * params.windSpeed;
 
-      // Update shared lantern glass & halo materials once per frame (zero per-lantern material or PointLight overhead!)
+      // Update shared lantern & offroad truck headlight materials once per frame
       if (isNightTime) {
         const nightGlow = clamp((nightFactor - 0.20) / 0.65, 0.25, 1.0);
         const sharedFlicker = 0.92 + 0.08 * Math.sin(time * 11.0);
         sharedLanternGlassMat.emissiveIntensity = 1.85 * nightGlow * sharedFlicker;
         sharedLanternHaloMat.opacity = 0.44 * nightGlow * sharedFlicker;
         sharedLanternGroundPoolMat.opacity = 0.17 * nightGlow * sharedFlicker;
+        sharedTruckHeadlightLensMat.emissiveIntensity = 2.4 * nightGlow;
+        sharedTruckHeadlightBeamMat.opacity = 0.22 * nightGlow;
       } else {
         sharedLanternGlassMat.emissiveIntensity = 0.04;
         sharedLanternHaloMat.opacity = 0.0;
         sharedLanternGroundPoolMat.opacity = 0.0;
+        sharedTruckHeadlightLensMat.emissiveIntensity = 0.08;
+        sharedTruckHeadlightBeamMat.opacity = 0.0;
       }
 
       let waterAddedByTaps = false;
       let hasActiveLanterns = false;
+      let hasActiveTrucks = false;
+      const activeDrivenTruck = params.driveMode ? getLatestPlacedTruck() : null;
 
       for (let i = placedWorldItems.length - 1; i >= 0; i--) {
         const it = placedWorldItems[i];
@@ -11111,10 +11584,240 @@
             if (haloSphere) haloSphere.visible = false;
             if (outerHaloSphere) outerHaloSphere.visible = false;
           }
+
+        } else if (it.type === 'item-truck') {
+          hasActiveTrucks = true;
+          const isBeingDriven = (params.driveMode && it === activeDrivenTruck);
+          const headlightBeams = it.mesh.userData.headlightBeams;
+          if (headlightBeams) {
+            for (let b = 0; b < headlightBeams.length; b++) {
+              headlightBeams[b].visible = isNightTime;
+            }
+          }
+
+          let throttleInput = 0.0;
+          let steerInput = 0.0;
+          let isDrifting = false;
+          if (isBeingDriven) {
+            if (driveState.keys.forward) throttleInput += 1.0;
+            if (driveState.keys.backward) throttleInput -= 1.0;
+            if (driveState.keys.left) steerInput += 1.0;
+            if (driveState.keys.right) steerInput -= 1.0;
+            isDrifting = driveState.keys.drift;
+          }
+
+          // Surface traction & speed boost on Paved Road (2) or Brick Road (3)
+          const gx = clamp(Math.round(((it.x / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+          const gz = clamp(Math.round(((it.z / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+          const cIdx = idx(gx, gz);
+          const isRoadSurface = (surfaceMaterial[cIdx] >= 2);
+          const maxFwdSpeed = isRoadSurface ? 28.5 : 23.5;
+          const maxRevSpeed = -10.5;
+          const accelRate = isRoadSurface ? 23.0 : 19.0;
+
+          // 1. Longitudinal Acceleration, Braking & Rolling Drag
+          let spd = it.speed || 0.0;
+          if (throttleInput > 0.0) {
+            if (spd < 0.0) {
+              spd = Math.min(0.0, spd + 34.0 * dt); // Braking from reverse
+            } else {
+              const torqueCurve = 1.0 - 0.35 * clamp(spd / maxFwdSpeed, 0.0, 1.0);
+              spd = Math.min(maxFwdSpeed, spd + accelRate * torqueCurve * dt);
+            }
+          } else if (throttleInput < 0.0) {
+            if (spd > 0.3) {
+              spd = Math.max(0.0, spd - 34.0 * dt); // Hard front+rear brakes
+            } else {
+              spd = Math.max(maxRevSpeed, spd - 14.0 * dt);
+            }
+          } else {
+            spd *= Math.exp(-2.1 * dt);
+            if (Math.abs(spd) < 0.04) spd = 0.0;
+          }
+
+          // Water wading drag if driving through an oasis pond
+          if (waterDepth > 0.15) {
+            const waterDrag = clamp(waterDepth * 1.4, 0.2, 2.8);
+            spd *= Math.exp(-waterDrag * dt);
+          }
+
+          // Spacebar Handbrake / Drift Scrub
+          if (isDrifting) {
+            // If no throttle held, handbrake scrubs speed faster; if throttle held, sustains a high-angle power-drift!
+            const driftDrag = (throttleInput > 0.0) ? 0.55 : 3.2;
+            spd *= Math.exp(-driftDrag * dt);
+          }
+          it.speed = spd;
+
+          // 2. Front Wheel Steering & Spacebar Drift Oversteer Physics
+          const targetSteer = steerInput * 0.48;
+          it.steerAngle = (it.steerAngle || 0.0) + (targetSteer - (it.steerAngle || 0.0)) * Math.min(1.0, dt * 11.0);
+
+          const absSpd = Math.abs(spd);
+          const speedDir = spd >= 0.0 ? 1.0 : -1.0;
+          let targetSlip = 0.0;
+          if (isDrifting && absSpd > 2.2) {
+            // Spacebar breaks rear traction and swings the tail out into a power-slide drift!
+            targetSlip = steerInput * 0.66 * speedDir;
+            it.driftSlipAngle = (it.driftSlipAngle || 0.0) + (targetSlip - (it.driftSlipAngle || 0.0)) * Math.min(1.0, dt * 6.5);
+          } else {
+            // High-speed cornering induces subtle lateral tire slip; otherwise tires regain grip
+            if (absSpd > 9.5 && Math.abs(it.steerAngle) > 0.18) {
+              targetSlip = steerInput * 0.17 * clamp((absSpd - 9.0) / 14.0, 0.0, 1.0) * speedDir;
+            }
+            it.driftSlipAngle = (it.driftSlipAngle || 0.0) + (targetSlip - (it.driftSlipAngle || 0.0)) * Math.min(1.0, dt * 7.8);
+          }
+
+          const turnFactor = clamp(absSpd / 7.5, 0.0, 1.25) * (1.0 - clamp(absSpd / 52.0, 0.0, 0.35));
+          const yawRate = (it.steerAngle * 1.85 + (it.driftSlipAngle || 0.0) * (isDrifting ? 1.35 : 0.45)) * turnFactor * speedDir;
+          it.yaw += yawRate * dt;
+
+          // Velocity vector is offset by driftSlipAngle so the truck visibly slides sideways during drifts!
+          const travelYaw = it.yaw - (it.driftSlipAngle || 0.0);
+          const halfBound = WORLD_SIZE * 0.465;
+          const nextX = clamp(it.x + Math.sin(travelYaw) * spd * dt, -halfBound, halfBound);
+          const nextZ = clamp(it.z + Math.cos(travelYaw) * spd * dt, -halfBound, halfBound);
+          if (Math.abs(nextX) >= halfBound - 0.05 || Math.abs(nextZ) >= halfBound - 0.05) {
+            it.speed *= 0.5;
+          }
+          it.x = nextX;
+          it.z = nextZ;
+
+          // 3. 4-Wheel Terrain Surface Alignment & Dynamic Suspension Pitch/Roll
+          const fwdX = Math.sin(it.yaw);
+          const fwdZ = Math.cos(it.yaw);
+          const rightX = Math.cos(it.yaw);
+          const rightZ = -Math.sin(it.yaw);
+
+          const hFL = sampleHeightsAtWorld(it.x + fwdX * 1.16 - rightX * 0.84, it.z + fwdZ * 1.16 - rightZ * 0.84).groundY;
+          const hFR = sampleHeightsAtWorld(it.x + fwdX * 1.16 + rightX * 0.84, it.z + fwdZ * 1.16 + rightZ * 0.84).groundY;
+          const hRL = sampleHeightsAtWorld(it.x - fwdX * 1.16 - rightX * 0.84, it.z - fwdZ * 1.16 - rightZ * 0.84).groundY;
+          const hRR = sampleHeightsAtWorld(it.x - fwdX * 1.16 + rightX * 0.84, it.z - fwdZ * 1.16 + rightZ * 0.84).groundY;
+
+          const avgWheelGroundY = 0.25 * (hFL + hFR + hRL + hRR);
+          it.y = avgWheelGroundY;
+          it.mesh.position.set(it.x, avgWheelGroundY, it.z);
+
+          const terrainPitch = Math.atan2(((hFL + hFR) * 0.5) - ((hRL + hRR) * 0.5), 2.32);
+          const terrainRoll = Math.atan2(((hFL + hRL) * 0.5) - ((hFR + hRR) * 0.5), 1.68);
+
+          it.mesh.rotation.order = 'YXZ';
+          it.mesh.rotation.y = it.yaw;
+          it.mesh.rotation.x = -terrainPitch;
+          it.mesh.rotation.z = terrainRoll;
+
+          // Dynamic chassis suspension squat under acceleration, dive under braking, and body roll in corners/drifts
+          const targetSuspPitch = (throttleInput > 0.0 ? -0.055 : (throttleInput < 0.0 || isDrifting ? 0.065 : 0.0));
+          const cornerG = clamp((it.steerAngle * absSpd) / 14.0 + (it.driftSlipAngle || 0.0) * 0.7, -1.0, 1.0);
+          const targetSuspRoll = -cornerG * 0.11;
+          it.suspPitch = (it.suspPitch || 0.0) + (targetSuspPitch - (it.suspPitch || 0.0)) * Math.min(1.0, dt * 9.0);
+          it.suspRoll = (it.suspRoll || 0.0) + (targetSuspRoll - (it.suspRoll || 0.0)) * Math.min(1.0, dt * 9.0);
+
+          const chassisGroup = it.mesh.userData.chassisGroup;
+          if (chassisGroup) {
+            chassisGroup.rotation.x = it.suspPitch;
+            chassisGroup.rotation.z = it.suspRoll;
+          }
+
+          // Rotate front steering knuckles and spin all 4 offroad tires
+          const steerFL = it.mesh.userData.steerFL;
+          const steerFR = it.mesh.userData.steerFR;
+          if (steerFL && steerFR) {
+            steerFL.rotation.y = it.steerAngle;
+            steerFR.rotation.y = it.steerAngle;
+          }
+          it.wheelSpin = (it.wheelSpin || 0.0) + (spd / 0.46) * dt;
+          const wheels = it.mesh.userData.wheels;
+          if (wheels) {
+            for (let wIdx = 0; wIdx < wheels.length; wIdx++) {
+              // Rear wheels lock or spin wildly when handbrake drifting!
+              const spinAngle = (isDrifting && wIdx >= 2 && throttleInput <= 0.0)
+                ? wheels[wIdx].rotation.x
+                : it.wheelSpin;
+              wheels[wIdx].rotation.x = spinAngle;
+            }
+          }
+
+          // 4. Tire Rooster-Tail Dust / Drift Smoke & Pond Splash FX + Audio
+          const cornerSquealLoad = (absSpd > 7.5 && Math.abs(it.steerAngle) > 0.16)
+            ? clamp(((Math.abs(it.steerAngle) * absSpd) - 2.6) / 4.8, 0.0, 1.0)
+            : 0.0;
+          const isSkidding = (isDrifting && absSpd > 2.5) || (cornerSquealLoad > 0.25);
+
+          if (isSkidding && Math.random() < 0.75) {
+            const rearX = it.x - fwdX * 1.25;
+            const rearZ = it.z - fwdZ * 1.25;
+            spawnSteamPuffAtWorld(rearX - rightX * 0.78, avgWheelGroundY + 0.25, rearZ - rightZ * 0.78, isDrifting ? 2 : 1);
+            spawnSteamPuffAtWorld(rearX + rightX * 0.78, avgWheelGroundY + 0.25, rearZ + rightZ * 0.78, isDrifting ? 2 : 1);
+          } else if (absSpd > 5.0 && waterDepth > 0.08 && Math.random() < 0.85) {
+            emitTapWaterDroplet(
+              it.x - fwdX * 1.1 + (Math.random() - 0.5) * 1.4,
+              avgWheelGroundY + 0.45,
+              it.z - fwdZ * 1.1 + (Math.random() - 0.5) * 1.4,
+              -fwdX * absSpd * 0.35 + (Math.random() - 0.5) * 3.2,
+              2.2 + Math.random() * 2.5,
+              -fwdZ * absSpd * 0.35 + (Math.random() - 0.5) * 3.2
+            );
+          }
+
+          if (isBeingDriven) {
+            // Brighten rear brake lights when braking or drifting
+            sharedTruckTaillightMat.emissiveIntensity = (throttleInput < 0.0 || isDrifting) ? 2.6 : (isNightTime ? 0.9 : 0.25);
+
+            // Smooth 3rd-person offroad chase camera behind the truck
+            const desiredCamYaw = it.yaw - (it.driftSlipAngle || 0.0) * 0.42;
+            let yawDiff = desiredCamYaw - driveState.camYaw;
+            while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+            while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+            driveState.camYaw += yawDiff * Math.min(1.0, dt * 5.2);
+
+            const camBackX = Math.sin(driveState.camYaw);
+            const camBackZ = Math.cos(driveState.camYaw);
+            const camTargetX = it.x - camBackX * 10.8;
+            const camTargetZ = it.z - camBackZ * 10.8;
+            const camGroundY = sampleHeightsAtWorld(camTargetX, camTargetZ).groundY;
+            const camTargetY = Math.max(avgWheelGroundY + 4.4, camGroundY + 2.2);
+
+            camera.position.x += (camTargetX - camera.position.x) * Math.min(1.0, dt * 8.5);
+            camera.position.y += (camTargetY - camera.position.y) * Math.min(1.0, dt * 7.5);
+            camera.position.z += (camTargetZ - camera.position.z) * Math.min(1.0, dt * 8.5);
+
+            const lookAheadX = it.x + fwdX * 3.4;
+            const lookAheadY = avgWheelGroundY + 1.35;
+            const lookAheadZ = it.z + fwdZ * 3.4;
+            controls.target.set(lookAheadX, lookAheadY, lookAheadZ);
+            camera.lookAt(lookAheadX, lookAheadY, lookAheadZ);
+
+            updateTruckAudio(it, true, throttleInput, isDrifting, cornerSquealLoad);
+          }
         }
       }
 
-      if ((waterAddedByTaps && frameCount % 3 === 0) || (hasActiveLanterns && isNightTime && frameCount % 6 === 0)) {
+      if (!params.driveMode || !activeDrivenTruck) {
+        updateTruckAudio(null, false, 0, false, 0);
+      }
+
+      // Position the pre-allocated 3D headlight PointLight in front of the active/latest truck at night (lights up 3D plants, cacti & animals with zero shader-compile cost!)
+      const headlightTruck = activeDrivenTruck || getLatestPlacedTruck();
+      if (isNightTime && headlightTruck) {
+        const nightGlow = clamp((nightFactor - 0.15) / 0.65, 0.30, 1.0);
+        const fwdX = Math.sin(headlightTruck.yaw);
+        const fwdZ = Math.cos(headlightTruck.yaw);
+        truckHeadlightPoint.position.set(
+          headlightTruck.x + fwdX * 6.8,
+          headlightTruck.y + 2.1,
+          headlightTruck.z + fwdZ * 6.8
+        );
+        truckHeadlightPoint.intensity = 3.8 * nightGlow;
+      } else {
+        truckHeadlightPoint.intensity = 0.0;
+      }
+
+      if (
+        (waterAddedByTaps && frameCount % 3 === 0) ||
+        (hasActiveLanterns && isNightTime && frameCount % 6 === 0) ||
+        (hasActiveTrucks && isNightTime && (params.driveMode || frameCount % 4 === 0))
+      ) {
         syncTerrainAndWaterMeshes();
       }
 
@@ -11175,7 +11878,7 @@
     fireflyGeo.setAttribute('color', new THREE.BufferAttribute(fireflyCol, 3));
 
     const fireflyMat = new THREE.PointsMaterial({
-      size: 1.55,
+      size: 0.14,
       vertexColors: true,
       transparent: true,
       opacity: 0.96,
@@ -11224,10 +11927,10 @@
 
       const isNiceNightForFireflies = isNightTime && (nightFactor > 0.38) && isGoodWeatherMode && isNotCold && isNotRaining && isNotTooWindy;
 
-      const targetBlend = isNiceNightForFireflies ? clamp((nightFactor - 0.35) / 0.50, 0.0, 1.0) : 0.0;
+      const targetBlend = (params.fpvMode && isNiceNightForFireflies) ? clamp((nightFactor - 0.35) / 0.50, 0.0, 1.0) : 0.0;
       fireflyBlend += (targetBlend - fireflyBlend) * Math.min(1.0, dt * 1.4);
 
-      if (fireflyBlend <= 0.01) {
+      if (!params.fpvMode || fireflyBlend <= 0.01) {
         fireflySystem.visible = false;
         return;
       }
@@ -11814,7 +12517,7 @@
         if (!hitAnimal && typeof placedWorldItems !== 'undefined') {
           for (let k = placedWorldItems.length - 1; k >= 0; k--) {
             const it = placedWorldItems[k];
-            const itemRadius = it.type === 'item-feeder' ? 1.55 : 1.15;
+            const itemRadius = it.type === 'item-truck' ? 2.15 : (it.type === 'item-feeder' ? 1.55 : 1.15);
             const itemHeight = it.type === 'item-lantern' ? 3.2 : 2.3;
             const dx = pos.x - it.x;
             const dz = pos.z - it.z;
@@ -11839,7 +12542,7 @@
     }
 
     function syncSculptDockVisibility() {
-      const hideSculptDock = params.fpvMode && params.fpvEquip !== 'sculpt';
+      const hideSculptDock = (params.fpvMode && params.fpvEquip !== 'sculpt') || params.driveMode;
       document.body.classList.toggle('sculpt-dock-hidden', hideSculptDock);
       if (hideSculptDock) {
         document.querySelectorAll('.dock-popup-wrap.open').forEach((w) => w.classList.remove('open'));
@@ -11883,15 +12586,68 @@
       });
     });
 
+    const btnDriveMode = document.getElementById('btn-drive-mode');
+    const origFpvBannerHTML = fpvBanner.innerHTML;
+
+    function toggleDriveMode(forceState) {
+      const truck = getLatestPlacedTruck();
+      const nextState = forceState !== undefined ? forceState : !params.driveMode;
+      if (nextState && !truck) return;
+      if (nextState === params.driveMode) return;
+
+      if (nextState && params.fpvMode) {
+        toggleFPVMode(false);
+      }
+
+      params.driveMode = nextState;
+      driveState.keys.forward = false;
+      driveState.keys.backward = false;
+      driveState.keys.left = false;
+      driveState.keys.right = false;
+      driveState.keys.drift = false;
+
+      if (btnDriveMode) {
+        btnDriveMode.classList.toggle('active', params.driveMode);
+        btnDriveMode.textContent = params.driveMode ? '🎥 Exit Drive' : '🛻 Drive';
+      }
+
+      if (params.driveMode && truck) {
+        driveState.savedOrbitPos.copy(camera.position);
+        driveState.savedOrbitTarget.copy(controls.target);
+        driveState.camYaw = truck.yaw;
+        controls.enabled = false;
+        brushRing.visible = false;
+
+        fpvBanner.innerHTML = `<kbd>WASD</kbd> / <kbd>Arrows</kbd> Drive & Steer · <kbd>SPACE</kbd> Handbrake Drift · Click <kbd>Exit Drive</kbd> or <kbd>ESC</kbd> to Exit`;
+        fpvBanner.style.display = 'block';
+        ensureAudioContext();
+      } else {
+        updateTruckAudio(null, false, 0, false, 0);
+        fpvBanner.innerHTML = origFpvBannerHTML;
+        fpvBanner.style.display = params.fpvMode ? 'block' : 'none';
+        if (!params.fpvMode) {
+          controls.enabled = true;
+          camera.position.copy(driveState.savedOrbitPos);
+          controls.target.copy(driveState.savedOrbitTarget);
+          controls.update();
+        }
+      }
+      syncSculptDockVisibility();
+    }
+
     function toggleFPVMode(forceState) {
       const nextState = forceState !== undefined ? forceState : !params.fpvMode;
       if (nextState === params.fpvMode) return;
+      if (nextState && params.driveMode) {
+        toggleDriveMode(false);
+      }
       // If the player is underwater when ice freezes the surface hard, they remain trapped until the thaw!
       if (!nextState && fpvState.trappedUnderIce) {
         underwaterBadge.textContent = `🧊 TRAPPED UNDER ICE · Cannot Exit Until Thaw!`;
         return;
       }
       params.fpvMode = nextState;
+      fpvBanner.innerHTML = origFpvBannerHTML;
 
       btnFpvMode.classList.toggle('active', params.fpvMode);
       btnFpvMode.textContent = params.fpvMode ? '🎥 Exit FPV (Orbit)' : '🚶 FPV Walk Mode';
@@ -11983,7 +12739,16 @@
     }
 
     document.getElementById('btn-screenshot').addEventListener('click', captureAndSaveScreenshot);
-    btnFpvMode.addEventListener('click', () => toggleFPVMode());
+    btnFpvMode.addEventListener('click', () => {
+      btnFpvMode.blur();
+      toggleFPVMode();
+    });
+    if (btnDriveMode) {
+      btnDriveMode.addEventListener('click', () => {
+        btnDriveMode.blur();
+        toggleDriveMode();
+      });
+    }
 
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyP') {
@@ -11992,6 +12757,18 @@
       }
       if (e.code === 'KeyV') {
         toggleFPVMode();
+        return;
+      }
+      if (e.code === 'Escape' && params.driveMode) {
+        toggleDriveMode(false);
+        return;
+      }
+      if (params.driveMode) {
+        if (e.code === 'KeyW' || e.code === 'ArrowUp')    { driveState.keys.forward = true; e.preventDefault(); }
+        if (e.code === 'KeyS' || e.code === 'ArrowDown')  { driveState.keys.backward = true; e.preventDefault(); }
+        if (e.code === 'KeyA' || e.code === 'ArrowLeft')  { driveState.keys.left = true; e.preventDefault(); }
+        if (e.code === 'KeyD' || e.code === 'ArrowRight') { driveState.keys.right = true; e.preventDefault(); }
+        if (e.code === 'Space')                           { driveState.keys.drift = true; e.preventDefault(); }
         return;
       }
       if (!params.fpvMode) return;
@@ -12021,12 +12798,12 @@
     }, { passive: true });
 
     window.addEventListener('keyup', (e) => {
-      if (e.code === 'KeyW' || e.code === 'ArrowUp') fpvState.keys.forward = false;
-      if (e.code === 'KeyS' || e.code === 'ArrowDown') fpvState.keys.backward = false;
-      if (e.code === 'KeyA' || e.code === 'ArrowLeft') fpvState.keys.left = false;
-      if (e.code === 'KeyD' || e.code === 'ArrowRight') fpvState.keys.right = false;
+      if (e.code === 'KeyW' || e.code === 'ArrowUp')    { fpvState.keys.forward = false; driveState.keys.forward = false; }
+      if (e.code === 'KeyS' || e.code === 'ArrowDown')  { fpvState.keys.backward = false; driveState.keys.backward = false; }
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft')  { fpvState.keys.left = false; driveState.keys.left = false; }
+      if (e.code === 'KeyD' || e.code === 'ArrowRight') { fpvState.keys.right = false; driveState.keys.right = false; }
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') fpvState.keys.sprint = false;
-      if (e.code === 'Space') fpvState.keys.jump = false;
+      if (e.code === 'Space')                           { fpvState.keys.jump = false; driveState.keys.drift = false; }
     });
 
     window.addEventListener('mousemove', (e) => {
@@ -12306,7 +13083,7 @@
         launchFireworkAtWorld(wx, wz);
         return;
       }
-      if (params.tool === 'item-tap' || params.tool === 'item-feeder' || params.tool === 'item-lantern') {
+      if (params.tool === 'item-tap' || params.tool === 'item-feeder' || params.tool === 'item-lantern' || params.tool === 'item-truck') {
         placeWorldItemAtWorld(params.tool, wx, wz);
         return;
       }
@@ -12518,7 +13295,7 @@
     let fpvLookLastY = 0;
 
     function updatePointerRay(e) {
-      if (params.fpvMode && params.fpvEquip !== 'sculpt') {
+      if (params.driveMode || (params.fpvMode && params.fpvEquip !== 'sculpt')) {
         brushRing.visible = false;
         return null;
       }
@@ -12556,6 +13333,9 @@
         }
       }
 
+      if (params.driveMode) {
+        return;
+      }
       if (params.fpvMode) {
         if (e.pointerType === 'touch') {
           // On touch screens in FPV mode, dragging on the 3D canvas looks around!
@@ -12944,7 +13724,7 @@
 
         // Update Materials & Items popup trigger button active states & labels
         const isMaterialTool = ['pour', 'mat-dirt', 'mat-paved', 'mat-brick'].includes(params.tool);
-        const isItemTool = ['item-tap', 'item-feeder', 'item-lantern'].includes(params.tool);
+        const isItemTool = ['item-tap', 'item-feeder', 'item-lantern', 'item-truck'].includes(params.tool);
         if (btnPopupMaterials) {
           btnPopupMaterials.classList.toggle('has-active-child', isMaterialTool);
           if (labelPopupMaterials) {
@@ -12982,6 +13762,7 @@
           'item-tap': 0x06b6d4,
           'item-feeder': 0xeab308,
           'item-lantern': 0xf59e0b,
+          'item-truck': 0xdc2626,
           erase: 0xef4444
         };
         brushRingMat.color.setHex(ringColors[params.tool] || 0xffc56d);
