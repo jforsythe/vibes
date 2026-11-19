@@ -2420,9 +2420,17 @@
         </div>
         <div class="btn-grid" style="margin-top:4px;">
           <button type="button" id="btn-locate-voxel-human" title="Focus camera on the wandering Voxel Human artist">👁️ Find Artist</button>
-          <button type="button" id="btn-trigger-human-paint" title="Prompt the Voxel Human to set up their chair &amp; easel right here (or finish their active painting so you can click 🖼️)">🎨 Paint / Finish</button>
+          <button type="button" id="btn-trigger-human-wander" title="Have the Oasis Artist pack up and wander across the landscape">🚶 Wander</button>
+          <button type="button" id="btn-trigger-human-paint-landscape" title="Start a 1–3 minute Plein-Air 3D Landscape painting (click again while painting to finish immediately)">🏜️ Paint Landscape</button>
+          <button type="button" id="btn-trigger-human-paint-animal" title="Start a single-animal wildlife portrait painting (click again while painting to finish immediately)">🦁 Paint Animal</button>
+          <button type="button" id="btn-trigger-human-paint-famous" title="Start recreating 1 of 4 famous masterpieces (click again while painting to finish immediately)">🏛️ Famous Art</button>
+          <button type="button" id="btn-trigger-human-paint-abstract" title="Start a 20-second procedural abstract painting (click again while painting to finish immediately)">🌀 20s Abstract</button>
+          <button type="button" id="btn-trigger-human-paint" title="Immediately finish the active painting (or open the finished painting viewer / start a new painting)">🖼️ Finish / View Art</button>
+          <button type="button" id="btn-trigger-human-fish" title="Relocate to a pond shoreline (if needed) and set up a chair &amp; fishing rod to fish">🎣 Pond Fish</button>
+          <button type="button" id="btn-trigger-human-kite" title="Have the Oasis Artist fly their 3D diamond kite in the desert wind">🪁 Fly Kite</button>
           <button type="button" id="btn-trigger-human-telescope" title="Switch to Night (if needed) &amp; have the Oasis Artist set up their 3D Telescope to stargaze">🔭 Stargaze (Night)</button>
           <button type="button" id="btn-trigger-human-birdwatch" title="Have the Oasis Artist take out their 3D Binoculars for birdwatching">🦜 Birdwatch</button>
+          <button type="button" id="btn-trigger-human-rest" title="Have the Oasis Artist unfold their camp chair and rest">🪑 Camp Rest</button>
         </div>
       </div>
 
@@ -12037,48 +12045,135 @@
       });
     }
 
+    function ensureVoxelHumanActiveForAdminTask() {
+      if (!voxelHuman.active) {
+        voxelHuman.respawnCooldown = 0.0;
+        if (!spawnOrRelocateVoxelHuman()) {
+          showCartridgeToast(`🌊 No safe dry land available to place the Oasis Artist right now!`, true);
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function triggerSpecificHumanPaintingMode(pickedMode) {
+      if (!ensureVoxelHumanActiveForAdminTask()) return;
+      startVoxelHumanPaintingRoutine(pickedMode);
+      if (!voxelHuman.active) return;
+      const modeLabels = {
+        landscape: 'Plein-Air 3D Landscape (1-3 min)',
+        animal:    `Animal Portrait: "${voxelHuman.customPaintTitle}"`,
+        famous:    `Famous Masterpiece: "${voxelHuman.customPaintTitle}"`,
+        abstract:  `20-Second Abstract: "${voxelHuman.customPaintTitle}"`
+      };
+      showCartridgeToast(`🎨 Oasis Artist started painting ${modeLabels[pickedMode]}!`);
+    }
+
+    const btnTriggerHumanWander = document.getElementById('btn-trigger-human-wander');
+    if (btnTriggerHumanWander) {
+      btnTriggerHumanWander.addEventListener('click', () => {
+        if (!ensureVoxelHumanActiveForAdminTask()) return;
+        closeVoxelHumanPaintingModal();
+        closeVoxelHumanOpticsModal();
+        voxelHuman.routine = 'WANDER';
+        voxelHuman.routineTimer = 0.0;
+        voxelHuman.routineDuration = 14.0 + Math.random() * 10.0;
+        voxelHuman.targetHeading = voxelHuman.heading + (Math.random() - 0.5) * 2.0;
+        setVoxelHumanBubble('🧭', 3.5);
+        showCartridgeToast(`🚶 Oasis Artist packed up and started wandering`);
+      });
+    }
+
+    const btnTriggerPaintLandscape = document.getElementById('btn-trigger-human-paint-landscape');
+    if (btnTriggerPaintLandscape) {
+      btnTriggerPaintLandscape.addEventListener('click', () => triggerSpecificHumanPaintingMode('landscape'));
+    }
+    const btnTriggerPaintAnimal = document.getElementById('btn-trigger-human-paint-animal');
+    if (btnTriggerPaintAnimal) {
+      btnTriggerPaintAnimal.addEventListener('click', () => triggerSpecificHumanPaintingMode('animal'));
+    }
+    const btnTriggerPaintFamous = document.getElementById('btn-trigger-human-paint-famous');
+    if (btnTriggerPaintFamous) {
+      btnTriggerPaintFamous.addEventListener('click', () => triggerSpecificHumanPaintingMode('famous'));
+    }
+    const btnTriggerPaintAbstract = document.getElementById('btn-trigger-human-paint-abstract');
+    if (btnTriggerPaintAbstract) {
+      btnTriggerPaintAbstract.addEventListener('click', () => triggerSpecificHumanPaintingMode('abstract'));
+    }
+
     const btnTriggerHumanPaint = document.getElementById('btn-trigger-human-paint');
     if (btnTriggerHumanPaint) {
       btnTriggerHumanPaint.addEventListener('click', () => {
-        if (!voxelHuman.active) {
-          voxelHuman.respawnCooldown = 0.0;
-          if (!spawnOrRelocateVoxelHuman()) {
-            showCartridgeToast(`🌊 No safe dry land available to place the Oasis Artist right now!`, true);
-            return;
-          }
-        }
+        if (!ensureVoxelHumanActiveForAdminTask()) return;
         if (voxelHuman.routine === 'LANDSCAPE_PAINTING') {
           // If already painting, complete the painting immediately so the player can click 🖼️ right away!
           finishVoxelHumanPaintingRoutine();
+          openVoxelHumanPaintingModal();
         } else if (voxelHuman.routine === 'PAINTING_READY') {
           openVoxelHumanPaintingModal();
         } else {
           const modes = ['landscape', 'animal', 'famous', 'abstract'];
           nextForcedPaintModeIdx = (nextForcedPaintModeIdx + 1) % modes.length;
-          const pickedMode = modes[nextForcedPaintModeIdx];
-          startVoxelHumanPaintingRoutine(pickedMode);
-          if (!voxelHuman.active) return;
-          const modeLabels = {
-            landscape: 'Plein-Air 3D Landscape (1-3 min)',
-            animal:    `Animal Portrait: "${voxelHuman.customPaintTitle}"`,
-            famous:    `Famous Masterpiece: "${voxelHuman.customPaintTitle}"`,
-            abstract:  `20-Second Abstract: "${voxelHuman.customPaintTitle}"`
-          };
-          showCartridgeToast(`🎨 Oasis Artist started painting ${modeLabels[pickedMode]}!`);
+          triggerSpecificHumanPaintingMode(modes[nextForcedPaintModeIdx]);
         }
+      });
+    }
+
+    const btnTriggerHumanFish = document.getElementById('btn-trigger-human-fish');
+    if (btnTriggerHumanFish) {
+      btnTriggerHumanFish.addEventListener('click', () => {
+        if (!ensureVoxelHumanActiveForAdminTask()) return;
+        let fishHeading = findNearbyFishingWaterHeading(voxelHuman.x, voxelHuman.z);
+        // If not currently standing next to a pond shoreline, search the map for a dry shoreline bank next to water!
+        if (fishHeading === null) {
+          let bestShore = null;
+          let bestDist = 1e9;
+          for (let gz = 6; gz < GRID - 6; gz += 2) {
+            for (let gx = 6; gx < GRID - 6; gx += 2) {
+              const tx = ((gx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+              const tz = ((gz / (GRID - 1)) - 0.5) * WORLD_SIZE;
+              const ev = evaluateVoxelHumanSpawnLocation(tx, tz, true);
+              if (!ev.compatible) continue;
+              const fh = findNearbyFishingWaterHeading(tx, tz);
+              if (fh !== null) {
+                const d = Math.hypot(tx - voxelHuman.x, tz - voxelHuman.z);
+                if (d < bestDist) {
+                  bestDist = d;
+                  bestShore = { x: tx, z: tz, heading: fh };
+                }
+              }
+            }
+          }
+          if (bestShore) {
+            const { groundY } = sampleHeightsAtWorld(bestShore.x, bestShore.z);
+            voxelHuman.x = bestShore.x;
+            voxelHuman.y = groundY;
+            voxelHuman.z = bestShore.z;
+            fishHeading = bestShore.heading;
+          }
+        }
+        if (fishHeading === null) {
+          showCartridgeToast(`🏜️ No pond water found on the map to fish in! Pour some water first.`, true);
+          return;
+        }
+        startVoxelHumanFishingRoutine(fishHeading);
+        showCartridgeToast(`🎣 Oasis Artist set up their chair & fishing rod by the pond!`);
+      });
+    }
+
+    const btnTriggerHumanKite = document.getElementById('btn-trigger-human-kite');
+    if (btnTriggerHumanKite) {
+      btnTriggerHumanKite.addEventListener('click', () => {
+        if (!ensureVoxelHumanActiveForAdminTask()) return;
+        startVoxelHumanKiteRoutine();
+        showCartridgeToast(`🪁 Oasis Artist launched their high-altitude diamond kite!`);
       });
     }
 
     const btnTriggerHumanTelescope = document.getElementById('btn-trigger-human-telescope');
     if (btnTriggerHumanTelescope) {
       btnTriggerHumanTelescope.addEventListener('click', () => {
-        if (!voxelHuman.active) {
-          voxelHuman.respawnCooldown = 0.0;
-          if (!spawnOrRelocateVoxelHuman()) {
-            showCartridgeToast(`🌊 No safe dry land available to place the Oasis Artist right now!`, true);
-            return;
-          }
-        }
+        if (!ensureVoxelHumanActiveForAdminTask()) return;
         // Telescope stargazing only happens at night: if currently daytime, advance timeOfDay to starry midnight (22.5h)!
         const hrNow = ((params.timeOfDay % 24) + 24) % 24;
         const isNightNow = (hrNow >= 18.8 || hrNow < 5.5);
@@ -12096,16 +12191,24 @@
     const btnTriggerHumanBirdwatch = document.getElementById('btn-trigger-human-birdwatch');
     if (btnTriggerHumanBirdwatch) {
       btnTriggerHumanBirdwatch.addEventListener('click', () => {
-        if (!voxelHuman.active) {
-          voxelHuman.respawnCooldown = 0.0;
-          if (!spawnOrRelocateVoxelHuman()) {
-            showCartridgeToast(`🌊 No safe dry land available to place the Oasis Artist right now!`, true);
-            return;
-          }
-        }
+        if (!ensureVoxelHumanActiveForAdminTask()) return;
         startVoxelHumanBirdwatchingRoutine();
         const bMeta = BIRDWATCH_SPECIES_CATALOG[voxelHuman.birdwatchSpecies] || BIRDWATCH_SPECIES_CATALOG.macaw;
         showCartridgeToast(`${bMeta.emoji} Oasis Artist is birdwatching with binoculars! Click their speech bubble to look through them`);
+      });
+    }
+
+    const btnTriggerHumanRest = document.getElementById('btn-trigger-human-rest');
+    if (btnTriggerHumanRest) {
+      btnTriggerHumanRest.addEventListener('click', () => {
+        if (!ensureVoxelHumanActiveForAdminTask()) return;
+        voxelHuman.routine = 'CAMP_REST';
+        voxelHuman.routineTimer = 0.0;
+        voxelHuman.routineDuration = 12.0 + Math.random() * 8.0;
+        const hr = ((params.timeOfDay % 24) + 24) % 24;
+        const isNight = (hr >= 19.0 || hr < 5.5);
+        setVoxelHumanBubble(isNight ? '🌙' : '🪑', 4.5);
+        showCartridgeToast(`🪑 Oasis Artist unfolded their camp chair to rest`);
       });
     }
 
