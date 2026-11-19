@@ -242,6 +242,7 @@
       display: flex;
       align-items: center;
       gap: 14px;
+      margin-left: auto;
       background: var(--bg-panel);
       backdrop-filter: blur(14px);
       border: 1px solid var(--border);
@@ -249,6 +250,34 @@
       border-radius: 14px;
       font-size: 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      transition: all 0.22s ease;
+    }
+
+    .stats-bar.collapsed .extra-stat {
+      display: none !important;
+    }
+
+    .stats-expand-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 5px 8px;
+      min-width: 26px;
+      height: 28px;
+      border-radius: 8px;
+      font-size: 11px;
+      line-height: 1;
+      background: rgba(232, 168, 76, 0.14);
+      border: 1px solid rgba(255, 197, 109, 0.38);
+      color: var(--accent-bright);
+      cursor: pointer;
+      transition: all 0.16s ease;
+    }
+
+    .stats-expand-btn:hover {
+      background: rgba(232, 168, 76, 0.28);
+      border-color: var(--accent-bright);
+      transform: translateY(-1px);
     }
 
     .stat-item {
@@ -896,11 +925,15 @@
         border-radius: 10px;
         gap: 6px;
       }
-      /* Hide bulky telemetry text items on mobile landscape, keeping FPV button, Screenshot, and Weather/FPS */
-      .stats-bar .stat-item {
+      /* Hide bulky telemetry text items on mobile landscape when collapsed, but show all when expanded */
+      .stats-bar.collapsed .stat-item {
         display: none;
       }
-      .stats-bar .stat-item.keep-mobile {
+      .stats-bar.collapsed .stat-item.keep-mobile {
+        display: flex;
+        min-width: auto;
+      }
+      .stats-bar:not(.collapsed) .stat-item {
         display: flex;
         min-width: auto;
       }
@@ -1171,7 +1204,7 @@
       </div>
     </div>
 
-    <div class="stats-bar">
+    <div class="stats-bar collapsed" id="stats-bar">
       <button id="btn-fpv-mode" class="fpv-btn" title="Walk around on the terrain & dive underwater (Shortcut: V)">
         🚶 FPV Walk Mode
       </button>
@@ -1185,27 +1218,28 @@
         <span class="stat-label">Weather</span>
         <span class="stat-value" style="color:#bae6fd;" id="stat-weather">🌤️ Clear Oasis</span>
       </div>
-      <div class="stat-item">
+      <button id="btn-toggle-stats-bar" class="stats-expand-btn" title="Expand full telemetry stats (Wind, Water, Flora, Wildlife, FPS)">▸</button>
+      <div class="stat-item extra-stat">
         <span class="stat-label">Wind Vector</span>
         <span class="stat-value" id="stat-wind">13.0 m/s · E</span>
       </div>
-      <div class="stat-item">
+      <div class="stat-item extra-stat">
         <span class="stat-label">Pooled Water</span>
         <span class="stat-value water-val" id="stat-water">0 m³</span>
       </div>
-      <div class="stat-item">
+      <div class="stat-item extra-stat">
         <span class="stat-label">Jungle</span>
         <span class="stat-value jungle-val" id="stat-jungle">0</span>
       </div>
-      <div class="stat-item">
+      <div class="stat-item extra-stat">
         <span class="stat-label">Cacti</span>
         <span class="stat-value cactus-val" id="stat-desert-flora">0</span>
       </div>
-      <div class="stat-item">
+      <div class="stat-item extra-stat">
         <span class="stat-label">Wildlife</span>
         <span class="stat-value" style="color:#f472b6;" id="stat-fauna">0</span>
       </div>
-      <div class="stat-item keep-mobile">
+      <div class="stat-item extra-stat keep-mobile">
         <span class="stat-label">FPS</span>
         <span class="stat-value" id="stat-fps">60</span>
       </div>
@@ -11809,6 +11843,62 @@
         resetPanelAutoCollapseTimer();
       }, { passive: true });
     });
+
+    // ============================================================================
+    // 14C. COLLAPSIBLE STATS BAR (10-SECOND AUTO-COLLAPSE ON INACTIVITY)
+    // ============================================================================
+    const statsBar = document.getElementById('stats-bar');
+    const btnToggleStatsBar = document.getElementById('btn-toggle-stats-bar');
+    let statsBarAutoCollapseTimer = null;
+    const STATS_BAR_IDLE_TIMEOUT_MS = 10000;
+
+    function collapseStatsBar() {
+      if (!statsBar) return;
+      statsBar.classList.add('collapsed');
+      if (btnToggleStatsBar) {
+        btnToggleStatsBar.textContent = '▸';
+        btnToggleStatsBar.title = 'Expand full telemetry stats (Wind, Water, Flora, Wildlife, FPS)';
+      }
+      if (statsBarAutoCollapseTimer) {
+        clearTimeout(statsBarAutoCollapseTimer);
+        statsBarAutoCollapseTimer = null;
+      }
+    }
+
+    function resetStatsBarAutoCollapseTimer() {
+      if (!statsBar || statsBar.classList.contains('collapsed')) return;
+      if (statsBarAutoCollapseTimer) clearTimeout(statsBarAutoCollapseTimer);
+      statsBarAutoCollapseTimer = setTimeout(() => {
+        collapseStatsBar();
+      }, STATS_BAR_IDLE_TIMEOUT_MS);
+    }
+
+    function expandStatsBar() {
+      if (!statsBar) return;
+      statsBar.classList.remove('collapsed');
+      if (btnToggleStatsBar) {
+        btnToggleStatsBar.textContent = '◂';
+        btnToggleStatsBar.title = 'Collapse telemetry stats bar';
+      }
+      resetStatsBarAutoCollapseTimer();
+    }
+
+    if (btnToggleStatsBar && statsBar) {
+      btnToggleStatsBar.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (statsBar.classList.contains('collapsed')) {
+          expandStatsBar();
+        } else {
+          collapseStatsBar();
+        }
+      });
+
+      ['pointerdown', 'pointermove', 'click', 'wheel', 'touchstart'].forEach((evt) => {
+        statsBar.addEventListener(evt, () => {
+          resetStatsBarAutoCollapseTimer();
+        }, { passive: true });
+      });
+    }
 
     // ============================================================================
     // 15. MAIN SIMULATION & RENDER LOOP + BACKGROUND SUSPEND / MEMORY UNLOAD
