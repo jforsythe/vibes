@@ -90,6 +90,85 @@
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     }
 
+    /* Spacebar Select Pointer & Isometric Object Camera Follow HUD */
+    #select-follow-badge {
+      position: absolute;
+      top: 66px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(16, 15, 13, 0.92);
+      border: 1.5px solid rgba(255, 197, 109, 0.72);
+      color: #fef3c7;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      z-index: 22;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.68);
+      backdrop-filter: blur(10px);
+      white-space: nowrap;
+    }
+
+    #select-follow-badge.pointer-ready {
+      border-color: rgba(56, 189, 248, 0.82);
+      color: #e0f2fe;
+    }
+
+    #select-follow-badge .unfollow-hint {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--text-dim);
+      opacity: 0.9;
+    }
+
+    #btn-stop-object-follow {
+      background: rgba(224, 108, 85, 0.22);
+      border: 1px solid rgba(224, 108, 85, 0.65);
+      color: #fecaca;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 10.5px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    #btn-stop-object-follow:hover {
+      background: rgba(224, 108, 85, 0.42);
+    }
+
+    #select-hover-tooltip {
+      position: fixed;
+      transform: translate(-50%, -140%);
+      background: rgba(15, 13, 10, 0.94);
+      border: 1.5px solid rgba(56, 189, 248, 0.85);
+      color: #f0f9ff;
+      padding: 5px 11px;
+      border-radius: 9px;
+      font-size: 11.5px;
+      font-weight: 700;
+      pointer-events: none;
+      z-index: 125;
+      display: none;
+      white-space: nowrap;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.72);
+    }
+
+    #select-hover-tooltip .tooltip-sub {
+      font-size: 10px;
+      font-weight: 600;
+      color: #7dd3fc;
+      margin-left: 6px;
+    }
+
+    body.select-pointer-mode #canvas-container,
+    body.select-pointer-mode canvas {
+      cursor: crosshair !important;
+    }
+
     /* FPV Crosshair & HUD Banner */
     #fpv-crosshair {
       position: absolute;
@@ -2153,9 +2232,17 @@
     <button class="tool-btn" data-tool="erase" title="Clear obstacles, roads, flora & placed items in brush radius">🧹 Erase</button>
     <button id="btn-dock-reset-water-plants" class="danger" title="Remove all water, plants, and aquatic/jungle animals from the current map">🔄 Reset Water & Life</button>
     <span class="dock-hint">
-      <kbd>WASD</kbd> / <kbd>✋ L-Drag</kbd> Pan · <kbd>R-Drag</kbd> Orbit · <kbd>V</kbd> Walk Mode
+      <kbd>WASD</kbd> / <kbd>✋ L-Drag</kbd> Pan · <kbd>Hold SPACE</kbd> Select &amp; Follow · <kbd>R-Drag</kbd> Orbit · <kbd>V</kbd> Walk
     </span>
   </div>
+
+  <!-- Spacebar Select Pointer & Isometric Object Camera Follow HUD -->
+  <div id="select-follow-badge">
+    <span id="select-follow-badge-text">🎯 Select Pointer Active — Click any Animal, Plant, or Person</span>
+    <span class="unfollow-hint" id="select-follow-badge-sub">Pan (WASD / Drag) to stop following</span>
+    <button type="button" id="btn-stop-object-follow" style="display:none;">✕ Unfollow</button>
+  </div>
+  <div id="select-hover-tooltip"></div>
 
   <!-- Bottom-Right Developer Mode Stat Bar (Shows Camera Distance to Nearby Animals & Audio Proximity Range) -->
   <div class="dev-stats-bar" id="dev-stats-bar">
@@ -2710,6 +2797,14 @@
 
         <div class="control-row">
           <div class="control-label">
+            <span>Selected Object Zoom Level</span>
+            <span class="control-val" id="val-select-zoom">11.0 m · Close Detail</span>
+          </div>
+          <input type="range" id="slider-select-zoom" min="3.5" max="36" step="0.5" value="11" title="Isometric camera zoom distance when holding Spacebar in Pan Mode and clicking an animal, plant, or person (Lower = closer macro zoom)" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
             <span>Time of Day (Sun & Night Cycle)</span>
             <span class="control-val" id="val-sun-angle">10:30 AM · Day</span>
           </div>
@@ -2850,6 +2945,7 @@
       audioEnabled: true,
       devMode: false,
       animalAudioMaxDist: 40.0, // Only play animal sounds when the camera is within <= 40m of the animal!
+      selectZoomDistance: 11.0, // Isometric camera zoom distance (m) when holding Spacebar in Pan Mode & clicking an animal, plant, or person!
       skyColorHex: 0xd5a87a,
       skyFogDensity: 0.0020
     };
@@ -2924,7 +3020,7 @@
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
     controls.maxPolarAngle = Math.PI * 0.485;
-    controls.minDistance = 8;
+    controls.minDistance = 3.0;
     controls.maxDistance = 360;
     controls.target.set(0, 4, 0);
 
@@ -21229,6 +21325,7 @@
           absorptionRate: params.absorptionRate,
           simSteps: params.simSteps,
           brushRadius: params.brushRadius,
+          selectZoomDistance: params.selectZoomDistance,
           timeOfDay: params.timeOfDay,
           autoDayNight: params.autoDayNight,
           weatherMode: params.weatherMode,
@@ -21475,6 +21572,7 @@
           assignIfNum('absorptionRate');
           assignIfNum('simSteps');
           assignIfNum('brushRadius');
+          assignIfNum('selectZoomDistance');
           assignIfNum('timeOfDay');
           assignIfBool('autoDayNight');
           assignIfBool('autoWeather');
@@ -21539,6 +21637,7 @@
           setSlider('slider-truck-light-angle', Math.round(params.truckLightAngleDeg ?? 33));
           setSlider('slider-truck-light-dist', Math.round(params.truckLightDistance ?? 50));
           setSlider('slider-truck-light-opacity', Math.round((params.truckLightConeOpacity ?? 0.02) * 100));
+          setSlider('slider-select-zoom', params.selectZoomDistance ?? 11.0, false);
         }
 
         if (meta.terrainPreset) {
@@ -21764,6 +21863,9 @@
           toggleFPVMode(false);
           return;
         }
+        if (typeof objectSelectState !== 'undefined' && objectSelectState.followedTarget) {
+          stopFollowingSelectedObject(false);
+        }
         // In Omniscient Observer mode: Escape always closes any open popout and selects the ✋ hand pan tool!
         if (typeof closeAllDockPopups === 'function') {
           closeAllDockPopups();
@@ -21795,7 +21897,23 @@
       if (e.code === 'KeyA' || e.code === 'ArrowLeft') fpvState.keys.left = true;
       if (e.code === 'KeyD' || e.code === 'ArrowRight') fpvState.keys.right = true;
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') fpvState.keys.sprint = true;
-      if (!params.fpvMode) return;
+      if (!params.fpvMode) {
+        // In Omniscient Pan Mode (✋): holding Spacebar brings up the Select Pointer to highlight & click any animal, plant, or person!
+        if (e.code === 'Space' && isPanModeAvailableForSelect()) {
+          e.preventDefault();
+          if (!objectSelectState.spaceHeld) {
+            objectSelectState.spaceHeld = true;
+            // Temporarily unbind Left-Click Pan while Spacebar is held so Left-Click selects the highlighted object!
+            controls.mouseButtons.LEFT = null;
+            objectSelectState.hoveredTarget = findSelectableObjectAtPointer(
+              objectSelectState.pointerClientX,
+              objectSelectState.pointerClientY
+            );
+            syncSelectFollowBadgeUI();
+          }
+        }
+        return;
+      }
       if (e.code === 'Digit1') { setFpvEquipment('sculpt'); return; }
       if (e.code === 'Digit2') { setFpvEquipment('none'); return; }
       if (e.code === 'Digit3') { setFpvEquipment('bow'); return; }
@@ -21822,7 +21940,31 @@
       if (e.code === 'KeyA' || e.code === 'ArrowLeft')  { fpvState.keys.left = false; driveState.keys.left = false; }
       if (e.code === 'KeyD' || e.code === 'ArrowRight') { fpvState.keys.right = false; driveState.keys.right = false; }
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') fpvState.keys.sprint = false;
-      if (e.code === 'Space')                           { fpvState.keys.jump = false; driveState.keys.drift = false; }
+      if (e.code === 'Space') {
+        fpvState.keys.jump = false;
+        driveState.keys.drift = false;
+        if (objectSelectState.spaceHeld) {
+          objectSelectState.spaceHeld = false;
+          objectSelectState.hoveredTarget = null;
+          if (selectHoverTooltipEl) selectHoverTooltipEl.style.display = 'none';
+          if (!params.fpvMode && !params.driveMode && (!params.tool || params.tool === 'none')) {
+            controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+          }
+          syncSelectFollowBadgeUI();
+        }
+      }
+    });
+
+    window.addEventListener('blur', () => {
+      if (objectSelectState.spaceHeld) {
+        objectSelectState.spaceHeld = false;
+        objectSelectState.hoveredTarget = null;
+        if (selectHoverTooltipEl) selectHoverTooltipEl.style.display = 'none';
+        if (!params.fpvMode && !params.driveMode && (!params.tool || params.tool === 'none')) {
+          controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+        }
+        syncSelectFollowBadgeUI();
+      }
     });
 
     window.addEventListener('mousemove', (e) => {
@@ -22390,6 +22532,21 @@
       // In Omniscient Observer Mode: if tool is 'none' (✋ Pan) or touch is set to 'orbit', let OrbitControls handle panning / camera movement
       if (!params.tool || params.tool === 'none' || (e.pointerType === 'touch' && touchOneFingerMode === 'orbit')) {
         brushRing.visible = false;
+        objectSelectState.pointerClientX = e.clientX;
+        objectSelectState.pointerClientY = e.clientY;
+        if (objectSelectState.spaceHeld && e.button === 0) {
+          // Clicking while holding Spacebar in Pan Mode selects the highlighted animal, plant, or person and zooms in to follow!
+          const picked = findSelectableObjectAtPointer(e.clientX, e.clientY);
+          if (picked) {
+            selectAndFollowTarget(picked);
+          }
+          return;
+        }
+        if (e.button === 0 && !objectSelectState.spaceHeld) {
+          objectSelectState.isPanDragging = true;
+          objectSelectState.panDownX = e.clientX;
+          objectSelectState.panDownY = e.clientY;
+        }
         return;
       }
 
@@ -22401,6 +22558,17 @@
     });
 
     window.addEventListener('pointermove', (e) => {
+      objectSelectState.pointerClientX = e.clientX;
+      objectSelectState.pointerClientY = e.clientY;
+
+      // If the player is actively following a selected object and pans off with left-drag in Pan Mode, disable object camera follow!
+      if (objectSelectState.isPanDragging && objectSelectState.followedTarget && !objectSelectState.spaceHeld) {
+        const dragDist = Math.hypot(e.clientX - objectSelectState.panDownX, e.clientY - objectSelectState.panDownY);
+        if (dragDist > 6) {
+          stopFollowingSelectedObject(false);
+        }
+      }
+
       if (params.fpvMode && e.pointerType === 'touch' && e.pointerId === fpvLookPointerId) {
         const dx = e.clientX - fpvLookLastX;
         const dy = e.clientY - fpvLookLastY;
@@ -22431,6 +22599,598 @@
       }
     });
 
+    // ============================================================================
+    // 13B. SPACEBAR SELECT POINTER & ISOMETRIC OBJECT CAMERA FOLLOW (PAN MODE)
+    //      - Hold Spacebar in Pan Mode (✋) to activate the Select Pointer
+    //      - Hover over any Animal, Plant, or Person (Voxel Artist) to highlight it
+    //        with a 3D glowing selection reticle & bounding wireframe box
+    //      - Click while holding Spacebar to zoom in like an isometric game (to the
+    //        configurable Selected Object Zoom Level) and smoothly follow that target
+    //      - Panning off the selection (WASD / Arrow keys or Left-Click Pan Drag)
+    //        immediately disables object camera follow!
+    // ============================================================================
+    const selectFollowBadgeEl = document.getElementById('select-follow-badge');
+    const selectFollowBadgeTextEl = document.getElementById('select-follow-badge-text');
+    const selectFollowBadgeSubEl = document.getElementById('select-follow-badge-sub');
+    const btnStopObjectFollowEl = document.getElementById('btn-stop-object-follow');
+    const selectHoverTooltipEl = document.getElementById('select-hover-tooltip');
+
+    const objectSelectState = {
+      spaceHeld: false,
+      pointerClientX: window.innerWidth * 0.5,
+      pointerClientY: window.innerHeight * 0.5,
+      hoveredTarget: null,   // { kind: 'person'|'animal'|'plant', label, subLabel, agent?, cellIdx?, wx, wy, wz, radius, height, colorHex }
+      followedTarget: null,  // Same descriptor structure
+      zoomTransitionActive: false,
+      isPanDragging: false,
+      panDownX: 0,
+      panDownY: 0
+    };
+
+    // 3D Selection Highlight Reticle Group (Ground Ring + Rotating brackets + Vertical Beacon + 3D Bounding Box)
+    const selectionHighlightGroup = new THREE.Group();
+    selectionHighlightGroup.visible = false;
+    scene.add(selectionHighlightGroup);
+
+    const selOuterRingGeo = new THREE.RingGeometry(0.84, 1.0, 36);
+    selOuterRingGeo.rotateX(-Math.PI / 2);
+    const selOuterRingMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.92,
+      depthWrite: false
+    });
+    const selOuterRingMesh = new THREE.Mesh(selOuterRingGeo, selOuterRingMat);
+    selOuterRingMesh.renderOrder = 24;
+    selectionHighlightGroup.add(selOuterRingMesh);
+
+    const selInnerRingGeo = new THREE.RingGeometry(0.52, 0.62, 32);
+    selInnerRingGeo.rotateX(-Math.PI / 2);
+    const selInnerRingMat = new THREE.MeshBasicMaterial({
+      color: 0xffc56d,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.78,
+      depthWrite: false
+    });
+    const selInnerRingMesh = new THREE.Mesh(selInnerRingGeo, selInnerRingMat);
+    selInnerRingMesh.renderOrder = 24;
+    selectionHighlightGroup.add(selInnerRingMesh);
+
+    // 3D Wireframe Highlight Box around the hovered/selected entity
+    const selBoxEdgesGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
+    const selBoxLineMat = new THREE.LineBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false
+    });
+    const selBoxWireframe = new THREE.LineSegments(selBoxEdgesGeo, selBoxLineMat);
+    selBoxWireframe.renderOrder = 25;
+    selectionHighlightGroup.add(selBoxWireframe);
+
+    // Floating overhead diamond marker above the highlighted/followed target
+    const selMarkerGeo = new THREE.OctahedronGeometry(0.24, 0);
+    const selMarkerMat = new THREE.MeshBasicMaterial({
+      color: 0xffc56d,
+      transparent: true,
+      opacity: 0.94
+    });
+    const selMarkerMesh = new THREE.Mesh(selMarkerGeo, selMarkerMat);
+    selMarkerMesh.renderOrder = 25;
+    selectionHighlightGroup.add(selMarkerMesh);
+
+    const SELECT_FAUNA_LABELS = {
+      camel:    { icon: '🐪', name: 'Desert Camel',       radius: 1.55, height: 2.35 },
+      oryx:     { icon: '🦌', name: 'Arabian Oryx',       radius: 1.25, height: 1.85 },
+      rabbit:   { icon: '🐇', name: 'Desert Cottontail',  radius: 0.80, height: 0.95 },
+      fennec:   { icon: '🦊', name: 'Fennec Fox',         radius: 0.90, height: 1.05 },
+      flamingo: { icon: '🦩', name: 'Oasis Flamingo',     radius: 1.05, height: 1.75 },
+      macaw:    { icon: '🦜', name: 'Scarlet Macaw',      radius: 1.10, height: 1.25 },
+      bat:      { icon: '🦇', name: 'Nocturnal Fruit Bat',radius: 0.95, height: 1.05 },
+      fish:     { icon: '🐠', name: 'Oasis Koi Fish',     radius: 0.85, height: 0.75 },
+      hawk:     { icon: '🦅', name: 'Desert Red-Tail Hawk', radius: 1.35, height: 1.35 },
+      owl:      { icon: '🦉', name: 'Great Horned Night Owl', radius: 1.15, height: 1.45 },
+      frog:     { icon: '🐸', name: 'Coquí Tree Frog',    radius: 0.75, height: 0.75 },
+      jaguar:   { icon: '🐆', name: 'Oasis Jaguar (Apex)',radius: 1.55, height: 1.65 },
+      lion:     { icon: '🦁', name: 'Desert Lion (Apex)', radius: 1.65, height: 1.85 },
+      croc:     { icon: '🐊', name: 'Oasis Crocodile (Apex)', radius: 1.85, height: 1.10 }
+    };
+
+    function isPanModeAvailableForSelect() {
+      return !params.fpvMode && !params.driveMode && (!params.tool || params.tool === 'none') && !isOpticsGameplayPaused;
+    }
+
+    function describePlantAtCell(cellIdx) {
+      const x = cellIdx % GRID;
+      const y = Math.floor(cellIdx / GRID);
+      const v = veg[cellIdx];
+      const pAge = pondAge[cellIdx];
+      const w = water[cellIdx];
+      const halfWorld = WORLD_SIZE * 0.49;
+
+      // Check for mature pond Lily Pad / Water-Lily Lotus first if water cell
+      if (v < 0.12 && pAge >= 10.0 && w >= 0.09 && w <= 2.6 && lavaFrac[cellIdx] < 0.20) {
+        const wx = clamp(((x / (GRID - 1)) - 0.5) * WORLD_SIZE + (fastRand(x, y, 179) - 0.5) * 0.85, -halfWorld, halfWorld);
+        const wz = clamp(((y / (GRID - 1)) - 0.5) * WORLD_SIZE + (fastRand(y, x, 181) - 0.5) * 0.85, -halfWorld, halfWorld);
+        const { waterSurfaceY } = sampleHeightsAtWorld(wx, wz);
+        const hasLotus = pAge >= 13.5 && fastRand(x, y, 211) < 0.58;
+        return {
+          kind: 'plant',
+          cellIdx,
+          isLilyPad: true,
+          label: hasLotus ? '🪷 Blooming Water-Lily Pad' : '🌿 Floating Pond Lily Pad',
+          subLabel: `Pond Flora · Age ${Math.round(pAge)}s`,
+          wx,
+          wy: waterSurfaceY,
+          wz,
+          radius: 1.05,
+          height: 0.45,
+          colorHex: 0x34d399
+        };
+      }
+
+      if (v < 0.12) return null;
+
+      const wx = clamp(((x / (GRID - 1)) - 0.5) * WORLD_SIZE + (fastRand(x, y, 3) - 0.5) * 0.82, -halfWorld, halfWorld);
+      const wz = clamp(((y / (GRID - 1)) - 0.5) * WORLD_SIZE + (fastRand(y, x, 5) - 0.5) * 0.82, -halfWorld, halfWorld);
+      const { groundY } = sampleHeightsAtWorld(wx, wz);
+      const isJungle = waterProximity[cellIdx] >= 0.38;
+      const tier = v < 1.15 ? 0 : (v < 2.15 ? 1 : 2);
+      const healthPct = Math.round(clamp(vegHealth[cellIdx], 0, 1) * 100);
+
+      let label = '🌱 Desert Flora';
+      let radius = 1.15;
+      let height = 1.6;
+      if (grassMask[cellIdx] === 1) {
+        label = isJungle ? '🌿 Riparian Slope Grass' : '🌾 Desert Dune Grass';
+        radius = 1.10;
+        height = 0.75;
+      } else if (isJungle) {
+        if (tier === 0) {
+          label = '🌿 Oasis Marsh Fern';
+          radius = 1.10;
+          height = 1.25;
+        } else if (tier === 1) {
+          label = '🪴 Tropical Monstera Bush';
+          radius = 1.45;
+          height = 1.95;
+        } else {
+          const isTree = fastRand(x, y, 101) < 0.45;
+          label = isTree ? '🌴 Riparian Rainforest Palm' : '🌳 Dense Jungle Canopy Shrub';
+          radius = isTree ? 2.10 : 1.65;
+          height = isTree ? 4.60 : 2.35;
+        }
+      } else {
+        if (tier === 0) {
+          label = '🌾 Arid Desert Sage Scrub';
+          radius = 1.05;
+          height = 1.10;
+        } else if (tier === 1) {
+          label = '🌵 Prickly Pear Paddle Cactus';
+          radius = 1.35;
+          height = 1.85;
+        } else {
+          label = '🌵 Giant Saguaro Cactus';
+          radius = 1.65;
+          height = 4.25;
+        }
+      }
+
+      return {
+        kind: 'plant',
+        cellIdx,
+        isLilyPad: false,
+        label,
+        subLabel: `${isJungle ? 'Jungle Biome' : 'Desert Biome'} · Health ${healthPct}%`,
+        wx,
+        wy: groundY,
+        wz,
+        radius,
+        height,
+        colorHex: isJungle ? 0x10b981 : 0xa3e635
+      };
+    }
+
+    const _pickProjVec = new THREE.Vector3();
+
+    function findSelectableObjectAtPointer(clientX, clientY) {
+      if (!isPanModeAvailableForSelect()) return null;
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+
+      // 1. Screen-space proximity + 3D ray distance check for the Wandering Voxel Human Artist & all Living Wildlife Agents
+      let bestEntity = null;
+      let bestEntityScore = 1e9;
+
+      const evalScreenCandidate = (wx, wy, wz, hitRadiusPx, factoryFn) => {
+        _pickProjVec.set(wx, wy, wz).project(camera);
+        if (_pickProjVec.z < -1.0 || _pickProjVec.z > 1.0) return;
+        const sx = rect.left + (_pickProjVec.x * 0.5 + 0.5) * rect.width;
+        const sy = rect.top + (-_pickProjVec.y * 0.5 + 0.5) * rect.height;
+        const screenDistPx = Math.hypot(clientX - sx, clientY - sy);
+        if (screenDistPx <= hitRadiusPx) {
+          const camDist = camera.position.distanceTo(_pickProjVec.set(wx, wy, wz));
+          const score = screenDistPx + camDist * 0.04;
+          if (score < bestEntityScore) {
+            bestEntityScore = score;
+            bestEntity = factoryFn();
+          }
+        }
+      };
+
+      // Check Wandering Voxel Human Artist first (slight priority bonus so the person is always easy to pick!)
+      if (typeof voxelHuman !== 'undefined' && voxelHuman.active) {
+        const humanCenterY = voxelHuman.y + 1.15 * (voxelHuman.scale || 1.15);
+        evalScreenCandidate(voxelHuman.x, humanCenterY, voxelHuman.z, 46, () => {
+          const routineNames = {
+            WANDER: 'Wandering the Oasis',
+            SURVEY_HORIZON: 'Surveying the Horizon',
+            CAMP_REST: 'Resting in Camp Chair',
+            NATURE_OBSERVE: 'Observing Nature',
+            POND_FISHING: 'Fishing by the Pond',
+            FLY_KITE: 'Flying a Diamond Kite',
+            STARGAZE_TELESCOPE: 'Stargazing with Telescope',
+            BIRDWATCHING: 'Birdwatching with Binoculars',
+            GATHER_FLOWERS: 'Gathering Wildflowers',
+            MAKE_CAMP: voxelHuman.campSubState === 'SLEEP_IN_TENT' ? 'Sleeping in Tent' : 'Warming by Campfire',
+            LANDSCAPE_PAINTING: 'Painting on Easel',
+            PAINTING_READY: 'Finished Painting Ready'
+          };
+          return {
+            kind: 'person',
+            label: '🧑‍🎨 Wandering Oasis Artist',
+            subLabel: routineNames[voxelHuman.routine] || 'Explorer',
+            wx: voxelHuman.x,
+            wy: voxelHuman.y,
+            wz: voxelHuman.z,
+            radius: 1.35,
+            height: 2.45,
+            colorHex: 0xfde047
+          };
+        });
+      }
+
+      // Check all Living Wildlife Agents (Ground, Aquatic & Flying Birds/Bats/Owls)
+      for (let i = 0; i < faunaAgents.length; i++) {
+        const a = faunaAgents[i];
+        if (a.state !== 'alive') continue;
+        const meta = SELECT_FAUNA_LABELS[a.type] || { icon: '🐾', name: a.type, radius: 1.2, height: 1.5 };
+        const centerY = a.y + meta.height * 0.45 * (a.scale || 1.0);
+        evalScreenCandidate(a.x, centerY, a.z, 40, () => ({
+          kind: 'animal',
+          agent: a,
+          label: `${meta.icon} ${meta.name}`,
+          subLabel: a.owlState === 'PERCHED'
+            ? 'Perched on Saguaro'
+            : (a.isNightSleeping ? 'Sleeping (Night)' : 'Active Wildlife'),
+          wx: a.x,
+          wy: a.y,
+          wz: a.z,
+          radius: meta.radius * Math.max(0.85, a.scale || 1.0),
+          height: meta.height * Math.max(0.85, a.scale || 1.0),
+          colorHex: 0x38bdf8
+        }));
+      }
+
+      if (bestEntity) {
+        return bestEntity;
+      }
+
+      // 2. Raycast against terrain & water to pick any 3D Plant (Jungle Tree, Palm, Bush, Fern, Saguaro, Barrel Cactus, Scrub, or Pond Lily Pad)
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      // Also check direct ray intersection against all 3D flora InstancedMeshes for tall trees/saguaros
+      const plantHits = raycaster.intersectObjects(allPlantPools, false);
+      if (plantHits.length > 0) {
+        const hitPt = plantHits[0].point;
+        const gx = clamp(Math.round(((hitPt.x / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+        const gz = clamp(Math.round(((hitPt.z / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+        let bestCell = -1;
+        let bestDist = 1e9;
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            const cx = gx + dx;
+            const cy = gz + dy;
+            if (cx < 1 || cx >= GRID - 1 || cy < 1 || cy >= GRID - 1) continue;
+            const ci = idx(cx, cy);
+            if (veg[ci] >= 0.12 || (pondAge[ci] >= 10.0 && water[ci] >= 0.09)) {
+              const wxC = ((cx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+              const wzC = ((cy / (GRID - 1)) - 0.5) * WORLD_SIZE;
+              const d = Math.hypot(wxC - hitPt.x, wzC - hitPt.z);
+              if (d < bestDist) {
+                bestDist = d;
+                bestCell = ci;
+              }
+            }
+          }
+        }
+        if (bestCell >= 0) {
+          const plantDesc = describePlantAtCell(bestCell);
+          if (plantDesc) return plantDesc;
+        }
+      }
+
+      // Fallback: raycast terrain surface and search within a 3.6m radius for the closest plant cell
+      const terrainHits = raycaster.intersectObject(terrainMesh, false);
+      if (terrainHits.length > 0) {
+        const pt = terrainHits[0].point;
+        const gx = clamp(Math.round(((pt.x / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+        const gz = clamp(Math.round(((pt.z / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
+        let bestCell = -1;
+        let bestDist = 3.8;
+        for (let dy = -3; dy <= 3; dy++) {
+          for (let dx = -3; dx <= 3; dx++) {
+            const cx = gx + dx;
+            const cy = gz + dy;
+            if (cx < 1 || cx >= GRID - 1 || cy < 1 || cy >= GRID - 1) continue;
+            const ci = idx(cx, cy);
+            if (veg[ci] >= 0.12 || (pondAge[ci] >= 10.0 && water[ci] >= 0.09)) {
+              const wxC = ((cx / (GRID - 1)) - 0.5) * WORLD_SIZE;
+              const wzC = ((cy / (GRID - 1)) - 0.5) * WORLD_SIZE;
+              const d = Math.hypot(wxC - pt.x, wzC - pt.z);
+              if (d < bestDist) {
+                bestDist = d;
+                bestCell = ci;
+              }
+            }
+          }
+        }
+        if (bestCell >= 0) {
+          return describePlantAtCell(bestCell);
+        }
+      }
+
+      return null;
+    }
+
+    function syncSelectFollowBadgeUI() {
+      if (!selectFollowBadgeEl) return;
+      const isPan = isPanModeAvailableForSelect();
+      if (!isPan) {
+        selectFollowBadgeEl.style.display = 'none';
+        if (selectHoverTooltipEl) selectHoverTooltipEl.style.display = 'none';
+        document.body.classList.remove('select-pointer-mode');
+        return;
+      }
+
+      document.body.classList.toggle('select-pointer-mode', objectSelectState.spaceHeld);
+
+      if (objectSelectState.followedTarget) {
+        const t = objectSelectState.followedTarget;
+        selectFollowBadgeEl.style.display = 'inline-flex';
+        selectFollowBadgeEl.classList.remove('pointer-ready');
+        if (selectFollowBadgeTextEl) {
+          selectFollowBadgeTextEl.textContent = `🎥 Following: ${t.label}`;
+        }
+        if (selectFollowBadgeSubEl) {
+          selectFollowBadgeSubEl.textContent = objectSelectState.spaceHeld
+            ? `Click another target to switch · Pan to stop`
+            : `Zoom: ${(params.selectZoomDistance || 11).toFixed(1)}m · Pan (WASD / Drag) to unfollow`;
+        }
+        if (btnStopObjectFollowEl) {
+          btnStopObjectFollowEl.style.display = 'inline-block';
+        }
+      } else if (objectSelectState.spaceHeld) {
+        selectFollowBadgeEl.style.display = 'inline-flex';
+        selectFollowBadgeEl.classList.add('pointer-ready');
+        const h = objectSelectState.hoveredTarget;
+        if (selectFollowBadgeTextEl) {
+          selectFollowBadgeTextEl.textContent = h
+            ? `🎯 Click to Lock & Zoom: ${h.label}`
+            : `🎯 Select Pointer Active — Hover & Click any Animal, Plant, or Person`;
+        }
+        if (selectFollowBadgeSubEl) {
+          selectFollowBadgeSubEl.textContent = `Zoom Level: ${(params.selectZoomDistance || 11).toFixed(1)}m`;
+        }
+        if (btnStopObjectFollowEl) {
+          btnStopObjectFollowEl.style.display = 'none';
+        }
+      } else {
+        selectFollowBadgeEl.style.display = 'none';
+      }
+    }
+
+    function stopFollowingSelectedObject(showNotification = false) {
+      if (!objectSelectState.followedTarget) return;
+      objectSelectState.followedTarget = null;
+      objectSelectState.zoomTransitionActive = false;
+      syncSelectFollowBadgeUI();
+      if (showNotification && typeof showCartridgeToast === 'function') {
+        showCartridgeToast(`✋ Camera Follow disabled — Free Pan Mode resumed`);
+      }
+    }
+
+    function selectAndFollowTarget(targetDesc) {
+      if (!targetDesc) return;
+      objectSelectState.followedTarget = targetDesc;
+      objectSelectState.zoomTransitionActive = true;
+      syncSelectFollowBadgeUI();
+      if (typeof showCartridgeToast === 'function') {
+        showCartridgeToast(`🎥 Following ${targetDesc.label} (${(params.selectZoomDistance || 11).toFixed(1)}m Isometric Zoom) — Pan to unfollow`);
+      }
+    }
+
+    if (btnStopObjectFollowEl) {
+      btnStopObjectFollowEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        stopFollowingSelectedObject(false);
+      });
+    }
+
+    function updateObjectSelectAndCameraFollow(dt) {
+      const isPan = isPanModeAvailableForSelect();
+      if (!isPan) {
+        if (objectSelectState.spaceHeld) {
+          objectSelectState.spaceHeld = false;
+          controls.mouseButtons.LEFT = (!params.tool || params.tool === 'none') ? THREE.MOUSE.PAN : null;
+        }
+        if (objectSelectState.followedTarget) {
+          objectSelectState.followedTarget = null;
+          objectSelectState.zoomTransitionActive = false;
+        }
+        selectionHighlightGroup.visible = false;
+        syncSelectFollowBadgeUI();
+        return;
+      }
+
+      // 1. If Spacebar is held in Pan Mode, continuously pick the hovered animal, plant, or person under the cursor
+      if (objectSelectState.spaceHeld) {
+        objectSelectState.hoveredTarget = findSelectableObjectAtPointer(
+          objectSelectState.pointerClientX,
+          objectSelectState.pointerClientY
+        );
+        if (selectHoverTooltipEl) {
+          const h = objectSelectState.hoveredTarget;
+          if (h) {
+            selectHoverTooltipEl.style.display = 'block';
+            selectHoverTooltipEl.style.left = `${Math.round(objectSelectState.pointerClientX)}px`;
+            selectHoverTooltipEl.style.top = `${Math.round(objectSelectState.pointerClientY - 12)}px`;
+            selectHoverTooltipEl.innerHTML = `${h.label}<span class="tooltip-sub">${h.subLabel || 'Click to Follow'}</span>`;
+          } else {
+            selectHoverTooltipEl.style.display = 'none';
+          }
+        }
+      } else {
+        objectSelectState.hoveredTarget = null;
+        if (selectHoverTooltipEl) {
+          selectHoverTooltipEl.style.display = 'none';
+        }
+      }
+
+      // 2. Refresh live 3D coordinates of the currently followed target (and verify it hasn't died/burned/despawned)
+      const f = objectSelectState.followedTarget;
+      if (f) {
+        let stillValid = true;
+        if (f.kind === 'person') {
+          if (typeof voxelHuman === 'undefined' || !voxelHuman.active) {
+            stillValid = false;
+          } else {
+            f.wx = voxelHuman.x;
+            f.wy = voxelHuman.y;
+            f.wz = voxelHuman.z;
+          }
+        } else if (f.kind === 'animal') {
+          const a = f.agent;
+          if (!a || a.state !== 'alive' || !faunaAgents.includes(a)) {
+            stillValid = false;
+          } else {
+            f.wx = a.x;
+            f.wy = a.y;
+            f.wz = a.z;
+          }
+        } else if (f.kind === 'plant') {
+          const updatedPlant = describePlantAtCell(f.cellIdx);
+          if (!updatedPlant) {
+            stillValid = false;
+          } else {
+            f.wx = updatedPlant.wx;
+            f.wy = updatedPlant.wy;
+            f.wz = updatedPlant.wz;
+            f.height = updatedPlant.height;
+            f.radius = updatedPlant.radius;
+            f.label = updatedPlant.label;
+          }
+        }
+
+        if (!stillValid) {
+          stopFollowingSelectedObject(false);
+        } else {
+          // Smooth Isometric Camera Follow & Close Detail Zoom!
+          const focusY = f.wy + f.height * 0.48;
+          const prevTargetX = controls.target.x;
+          const prevTargetY = controls.target.y;
+          const prevTargetZ = controls.target.z;
+
+          const followLerp = Math.min(1.0, dt * 11.5);
+          const nextTargetX = prevTargetX + (f.wx - prevTargetX) * followLerp;
+          const nextTargetY = prevTargetY + (focusY - prevTargetY) * followLerp;
+          const nextTargetZ = prevTargetZ + (f.wz - prevTargetZ) * followLerp;
+
+          const dTx = nextTargetX - prevTargetX;
+          const dTy = nextTargetY - prevTargetY;
+          const dTz = nextTargetZ - prevTargetZ;
+
+          controls.target.set(nextTargetX, nextTargetY, nextTargetZ);
+          // Translate camera alongside the moving target so user right-drag orbit rotation around the character works seamlessly!
+          camera.position.x += dTx;
+          camera.position.y += dTy;
+          camera.position.z += dTz;
+
+          // Smoothly zoom camera to the configured isometric follow distance & comfortable isometric elevation angle
+          if (objectSelectState.zoomTransitionActive) {
+            const desiredDist = clamp(params.selectZoomDistance || 11.0, 3.5, 45.0);
+            let offX = camera.position.x - controls.target.x;
+            let offY = camera.position.y - controls.target.y;
+            let offZ = camera.position.z - controls.target.z;
+            let curDist = Math.hypot(offX, offY, offZ);
+            if (curDist < 0.01) {
+              offX = 0.7; offY = 0.7; offZ = 0.7;
+              curDist = Math.hypot(offX, offY, offZ);
+            }
+
+            // Isometric elevation polish: ensure camera has a clear ~30°–52° isometric look-down angle (sin(pitch) between 0.45 and 0.78)
+            let dirX = offX / curDist;
+            let dirY = offY / curDist;
+            let dirZ = offZ / curDist;
+            const targetPitchY = clamp(dirY, 0.46, 0.76);
+            dirY = dirY + (targetPitchY - dirY) * Math.min(1.0, dt * 6.5);
+            const horizScale = Math.sqrt(Math.max(0.05, 1.0 - dirY * dirY)) / Math.max(0.001, Math.hypot(dirX, dirZ));
+            dirX *= horizScale;
+            dirZ *= horizScale;
+
+            const nextDist = curDist + (desiredDist - curDist) * Math.min(1.0, dt * 7.5);
+            camera.position.set(
+              controls.target.x + dirX * nextDist,
+              Math.max(f.wy + 1.15, controls.target.y + dirY * nextDist),
+              controls.target.z + dirZ * nextDist
+            );
+
+            if (Math.abs(nextDist - desiredDist) < 0.08 && Math.abs(f.wx - controls.target.x) < 0.12 && Math.abs(f.wz - controls.target.z) < 0.12) {
+              objectSelectState.zoomTransitionActive = false;
+            }
+          }
+        }
+      }
+
+      // 3. Position & animate the 3D Selection Highlight Reticle on the hovered target (if Spacebar held) or the actively followed target
+      const activeVisualTarget = objectSelectState.hoveredTarget || objectSelectState.followedTarget;
+      if (activeVisualTarget) {
+        const timeNow = uniforms.uTime.value || 0;
+        const pulse = 1.0 + Math.sin(timeNow * 6.5) * 0.08;
+        const r = Math.max(0.75, activeVisualTarget.radius || 1.2);
+        const h = Math.max(0.75, activeVisualTarget.height || 1.6);
+        const isHovered = Boolean(objectSelectState.hoveredTarget);
+
+        selectionHighlightGroup.visible = true;
+        selectionHighlightGroup.position.set(activeVisualTarget.wx, activeVisualTarget.wy + 0.08, activeVisualTarget.wz);
+
+        selOuterRingMesh.scale.setScalar(r * pulse);
+        selOuterRingMesh.rotation.z = timeNow * 1.4;
+        selOuterRingMat.color.setHex(isHovered ? 0x38bdf8 : 0xffc56d);
+
+        selInnerRingMesh.scale.setScalar(r * (1.0 - Math.sin(timeNow * 6.5) * 0.06));
+        selInnerRingMesh.rotation.z = -timeNow * 2.1;
+
+        selBoxWireframe.visible = isHovered || objectSelectState.spaceHeld;
+        selBoxWireframe.scale.set(r * 1.35 * pulse, h * 1.08, r * 1.35 * pulse);
+        selBoxWireframe.position.set(0, h * 0.54, 0);
+        selBoxLineMat.color.setHex(activeVisualTarget.colorHex || 0x38bdf8);
+
+        selMarkerMesh.position.set(0, h + 0.55 + Math.sin(timeNow * 5.2) * 0.14, 0);
+        selMarkerMesh.rotation.y = timeNow * 2.8;
+        selMarkerMat.color.setHex(isHovered ? 0x38bdf8 : 0xffc56d);
+      } else {
+        selectionHighlightGroup.visible = false;
+      }
+
+      syncSelectFollowBadgeUI();
+    }
+
     function handlePointerUpOrCancel(e) {
       if (e && e.pointerType === 'touch') {
         activeTouchPointers.delete(e.pointerId);
@@ -22447,6 +23207,7 @@
       if (activeTouchPointers.size === 0) {
         isPointerDown = false;
       }
+      objectSelectState.isPanDragging = false;
     }
 
     window.addEventListener('pointerup', handlePointerUpOrCancel);
@@ -22667,7 +23428,16 @@
     const sliderSupply = document.getElementById('slider-supply');
     const sliderSimSteps = document.getElementById('slider-sim-steps');
     const sliderBrushSize = document.getElementById('slider-brush-size');
+    const sliderSelectZoom = document.getElementById('slider-select-zoom');
     const sliderSunAngle = document.getElementById('slider-sun-angle');
+
+    function formatSelectZoomLabel(distM) {
+      const d = Number(distM) || 11.0;
+      if (d <= 6.5) return `${d.toFixed(1)} m · Macro Detail`;
+      if (d <= 14.0) return `${d.toFixed(1)} m · Close Detail`;
+      if (d <= 24.0) return `${d.toFixed(1)} m · Medium Iso`;
+      return `${d.toFixed(1)} m · Wide Iso`;
+    }
 
     sliderFidelity.addEventListener('input', (e) => {
       applyFidelityTier(parseInt(e.target.value, 10));
@@ -22697,6 +23467,8 @@
       document.getElementById('val-supply').textContent = `${Math.round(params.sandSupply * 100)}%`;
       document.getElementById('val-sim-steps').textContent = `${params.simSteps.toFixed(3)}x`;
       document.getElementById('val-brush-size').textContent = `${Math.round(params.brushRadius)} m`;
+      const selZoomEl = document.getElementById('val-select-zoom');
+      if (selZoomEl) selZoomEl.textContent = formatSelectZoomLabel(params.selectZoomDistance);
       document.getElementById('val-sun-angle').textContent = formatTimeOfDayLabel(params.timeOfDay);
 
       const arrow = document.getElementById('compass-arrow');
@@ -22749,6 +23521,18 @@
       params.brushRadius = parseFloat(e.target.value);
       syncUILabels();
     });
+
+    if (sliderSelectZoom) {
+      sliderSelectZoom.addEventListener('input', (e) => {
+        params.selectZoomDistance = parseFloat(e.target.value);
+        syncUILabels();
+        // If actively following a selected object, smoothly zoom to the newly adjusted zoom level!
+        if (objectSelectState.followedTarget) {
+          objectSelectState.zoomTransitionActive = true;
+          syncSelectFollowBadgeUI();
+        }
+      });
+    }
 
     sliderSunAngle.addEventListener('input', (e) => {
       params.timeOfDay = parseFloat(e.target.value);
@@ -23094,13 +23878,24 @@
       // Update OrbitControls mouse & touch bindings:
       // In 'none' (✋ Pan) mode, left-click drag and 1-finger touch pan across the landscape!
       // When any sculpt tool is active, left-click drag and 1-finger touch apply the sculpt tool!
-      controls.mouseButtons.LEFT = isPanMode ? THREE.MOUSE.PAN : null;
+      controls.mouseButtons.LEFT = (isPanMode && !(typeof objectSelectState !== 'undefined' && objectSelectState.spaceHeld)) ? THREE.MOUSE.PAN : null;
       if (touchOneFingerMode !== 'orbit') {
         controls.touches.ONE = isPanMode ? THREE.TOUCH.PAN : null;
       }
       if (isPanMode) {
         isPointerDown = false;
         brushRing.visible = false;
+      } else if (typeof objectSelectState !== 'undefined') {
+        if (objectSelectState.spaceHeld) {
+          objectSelectState.spaceHeld = false;
+          objectSelectState.hoveredTarget = null;
+          if (typeof selectHoverTooltipEl !== 'undefined' && selectHoverTooltipEl) {
+            selectHoverTooltipEl.style.display = 'none';
+          }
+        }
+        if (typeof syncSelectFollowBadgeUI === 'function') {
+          syncSelectFollowBadgeUI();
+        }
       }
 
       document.querySelectorAll('.tool-btn').forEach((b) => {
@@ -24498,6 +25293,10 @@
           const moveRight = kR - kL;
 
           if (moveFwd !== 0 || moveRight !== 0) {
+            // Panning with WASD / Arrow Keys disables any active object camera follow!
+            if (objectSelectState.followedTarget) {
+              stopFollowingSelectedObject(false);
+            }
             // Compute horizontal camera-facing forward & right vectors in the XZ plane
             let fwdX = controls.target.x - camera.position.x;
             let fwdZ = controls.target.z - camera.position.z;
@@ -24532,6 +25331,8 @@
             camera.position.x += stepX;
             camera.position.z += stepZ;
           }
+
+          updateObjectSelectAndCameraFollow(dt);
 
           controls.update();
 
