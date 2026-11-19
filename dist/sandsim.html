@@ -1858,18 +1858,18 @@
 
         <div class="control-row">
           <div class="control-label">
-            <span>Tire Smoke / Dust Intensity</span>
-            <span class="control-val" id="val-truck-smoke">25%</span>
+            <span>Tire Sand / Dust Intensity</span>
+            <span class="control-val" id="val-truck-smoke">60%</span>
           </div>
-          <input type="range" id="slider-truck-smoke" min="0" max="100" step="1" value="25" title="0% = No tire dust/smoke; 100% = Heavy drift smoke plumes" />
+          <input type="range" id="slider-truck-smoke" min="0" max="100" step="1" value="60" title="0% = No tire sand/dust; 100% = Heavy offroad sand & dust rooster-tails" />
         </div>
 
         <div class="control-row">
           <div class="control-label">
             <span>Skid / Squeal Sound Threshold</span>
-            <span class="control-val" id="val-truck-skid-thresh">2.6 · Balanced</span>
+            <span class="control-val" id="val-truck-skid-thresh">6.5 · High</span>
           </div>
-          <input type="range" id="slider-truck-skid-thresh" min="0.5" max="6.5" step="0.1" value="2.6" title="Lower = tires squeal on gentle corners; Higher = only on hard high-speed turns & drifts" />
+          <input type="range" id="slider-truck-skid-thresh" min="0.5" max="9.0" step="0.1" value="6.5" title="Lower = tires squeal on gentle corners; Higher = only on hard high-speed turns & drifts" />
         </div>
 
         <div class="zone-label" style="color:#fcd34d; margin-top:4px;">
@@ -1915,17 +1915,25 @@
         <div class="control-row">
           <div class="control-label">
             <span>Headlight Beam Angle (Spread)</span>
-            <span class="control-val" id="val-truck-light-angle">28°</span>
+            <span class="control-val" id="val-truck-light-angle">33°</span>
           </div>
-          <input type="range" id="slider-truck-light-angle" min="10" max="65" step="1" value="28" />
+          <input type="range" id="slider-truck-light-angle" min="10" max="65" step="1" value="33" />
         </div>
 
         <div class="control-row">
           <div class="control-label">
             <span>Headlight Throw Distance</span>
-            <span class="control-val" id="val-truck-light-dist">78 m</span>
+            <span class="control-val" id="val-truck-light-dist">50 m</span>
           </div>
-          <input type="range" id="slider-truck-light-dist" min="20" max="140" step="2" value="78" />
+          <input type="range" id="slider-truck-light-dist" min="20" max="140" step="2" value="50" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-label">
+            <span>Headlight Cone Opacity</span>
+            <span class="control-val" id="val-truck-light-opacity">35%</span>
+          </div>
+          <input type="range" id="slider-truck-light-opacity" min="0" max="100" step="1" value="35" title="0% = Off (no 3D cone mesh); 100% = Solid beam cone" />
         </div>
 
         <div class="control-row" style="margin-top:4px;">
@@ -2141,14 +2149,15 @@
       floraSyncInterval: 3,
       fpvMode: false,
       driveMode: false,
-      truckSmokeIntensity: 0.25,     // 0.0 (Off) .. 1.0 (Heavy drift smoke plumes)
-      truckSkidThreshold: 2.6,       // Cornering/drift threshold before tire squeal triggers (0.5 .. 6.5)
+      truckSmokeIntensity: 0.60,     // 0.0 (Off) .. 1.0 (Heavy offroad sand & dust rooster-tails)
+      truckSkidThreshold: 6.5,       // Cornering/drift threshold before tire squeal triggers (0.5 .. 9.0)
       truckGear1Tune: 98.0,          // Peak engine pitch in 1st Gear (Hz)
       truckGear2Tune: 108.0,         // Peak engine pitch in 2nd Gear (Hz)
       truckGear3Tune: 114.0,         // Peak engine pitch in 3rd Gear (Hz)
       truckGear4Tune: 70.0,          // Engine cruise pitch in 4th Gear Overdrive (Hz)
-      truckLightAngleDeg: 28.0,      // Headlight beam cone angle in degrees (10° .. 65°)
-      truckLightDistance: 78.0,      // Headlight throw distance in meters (20m .. 140m)
+      truckLightAngleDeg: 33.0,      // Headlight beam cone angle in degrees (10° .. 65°)
+      truckLightDistance: 50.0,      // Headlight throw distance in meters (20m .. 140m)
+      truckLightConeOpacity: 0.35,   // 3D Headlight cone opacity: 0.0 (Off) .. 1.0 (Solid)
       truckLightColorHex: '#fff1c4', // Headlight color hex
       truckLightRGB: [1.0, 0.945, 0.769],
       fpvEquip: 'sculpt',     // 'sculpt' | 'none' | 'bow' | 'torch'
@@ -11174,6 +11183,125 @@
       side: THREE.DoubleSide
     });
 
+    // Classic Offroad 4x4 Jeep Bumper Sticker: "IF YOU CAN SEE THIS / TURN ME OVER"
+    // Drawn UPSIDE DOWN when the vehicle is standing normally right-side up, so when the truck flips onto its roof it reads right-side up!
+    const sharedJeepStickerMat = (() => {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 160;
+      const ctx = c.getContext('2d');
+
+      // Rotate canvas 180° so the sticker text is normally upside down!
+      ctx.save();
+      ctx.translate(c.width * 0.5, c.height * 0.5);
+      ctx.rotate(Math.PI);
+      ctx.translate(-c.width * 0.5, -c.height * 0.5);
+
+      // High-contrast offroad yellow-and-black bumper sticker plaque
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(4, 4, c.width - 8, c.height - 8);
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = '#facc15';
+      ctx.strokeRect(10, 10, c.width - 20, c.height - 20);
+
+      ctx.fillStyle = '#fef08a';
+      ctx.font = '900 34px "Inter", "Arial Black", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('IF YOU CAN SEE THIS', c.width * 0.5, 54);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 44px "Inter", "Arial Black", sans-serif';
+      ctx.fillText('TURN ME OVER', c.width * 0.5, 110);
+      ctx.restore();
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.needsUpdate = true;
+      return new THREE.MeshBasicMaterial({
+        map: tex,
+        side: THREE.FrontSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -1
+      });
+    })();
+
+    // Dedicated 3D Offroad Sand & Dust Rooster-Tail Particle System (Golden Sand & Earthy Brown Dirt — NEVER White Steam!)
+    const TRUCK_DUST_COUNT = 540;
+    const truckDustGeo = new THREE.BufferGeometry();
+    const truckDustPos = new Float32Array(TRUCK_DUST_COUNT * 3);
+    const truckDustCol = new Float32Array(TRUCK_DUST_COUNT * 3);
+    const truckDustVel = new Float32Array(TRUCK_DUST_COUNT * 3);
+    const truckDustLife = new Float32Array(TRUCK_DUST_COUNT);
+    const truckDustMaxLife = new Float32Array(TRUCK_DUST_COUNT);
+    for (let i = 0; i < TRUCK_DUST_COUNT; i++) {
+      truckDustPos[i * 3 + 1] = -999;
+      truckDustLife[i] = 2.0;
+      truckDustMaxLife[i] = 1.0;
+    }
+    truckDustGeo.setAttribute('position', new THREE.BufferAttribute(truckDustPos, 3));
+    truckDustGeo.setAttribute('color', new THREE.BufferAttribute(truckDustCol, 3));
+
+    const truckDustTex = (() => {
+      const c = document.createElement('canvas');
+      c.width = 64;
+      c.height = 64;
+      const ctx = c.getContext('2d');
+      const g = ctx.createRadialGradient(32, 32, 3, 32, 32, 30);
+      g.addColorStop(0.0, 'rgba(255, 240, 210, 0.92)');
+      g.addColorStop(0.45, 'rgba(235, 200, 145, 0.58)');
+      g.addColorStop(1.0, 'rgba(180, 140, 85, 0.0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 64, 64);
+      return new THREE.CanvasTexture(c);
+    })();
+
+    const truckDustMat = new THREE.PointsMaterial({
+      size: 1.45,
+      map: truckDustTex,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.86,
+      depthWrite: false
+    });
+    const truckDustSystem = new THREE.Points(truckDustGeo, truckDustMat);
+    truckDustSystem.frustumCulled = false;
+    truckDustSystem.renderOrder = 16;
+    truckDustSystem.visible = false;
+    scene.add(truckDustSystem);
+    let truckDustHead = 0;
+
+    function emitTruckSandDust(wx, wy, wz, vx, vy, vz, surfMat = 0, duration = 0.55) {
+      const idxD = truckDustHead;
+      truckDustHead = (truckDustHead + 1) % TRUCK_DUST_COUNT;
+      const i3 = idxD * 3;
+      truckDustPos[i3]     = wx;
+      truckDustPos[i3 + 1] = wy;
+      truckDustPos[i3 + 2] = wz;
+      truckDustVel[i3]     = vx;
+      truckDustVel[i3 + 1] = vy;
+      truckDustVel[i3 + 2] = vz;
+      truckDustLife[idxD]  = 0.01;
+      truckDustMaxLife[idxD] = duration;
+
+      const shade = 0.84 + Math.random() * 0.24;
+      if (surfMat === 1) {
+        // Rich Loamy Brown Dirt & Dust
+        truckDustCol[i3]     = 0.56 * shade;
+        truckDustCol[i3 + 1] = 0.41 * shade;
+        truckDustCol[i3 + 2] = 0.26 * shade;
+      } else if (surfMat >= 2) {
+        // Dark Warm Tan/Gray Tire Scrub on Road
+        truckDustCol[i3]     = 0.58 * shade;
+        truckDustCol[i3 + 1] = 0.52 * shade;
+        truckDustCol[i3 + 2] = 0.44 * shade;
+      } else {
+        // Warm Golden Desert Sand & Ochre Dust (Offroad Sand)
+        truckDustCol[i3]     = 0.86 * shade;
+        truckDustCol[i3 + 1] = 0.69 * shade;
+        truckDustCol[i3 + 2] = 0.43 * shade;
+      }
+    }
+
     function createOffroadTruckWheelMesh() {
       const wheelGroup = new THREE.Group();
       const tireGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.38, 14);
@@ -11303,6 +11431,21 @@
         const tailLight = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.20, 0.08), sharedTruckTaillightMat);
         tailLight.position.set(side * 0.60, 0.90, -1.81);
         chassisGroup.add(tailLight);
+      }
+
+      // 6B. Upside-Down Jeep Bumper Sticker ("IF YOU CAN SEE THIS / TURN ME OVER")
+      // Placed on the rear tailgate (facing the chase camera) and on both cab doors!
+      const rearStickerGeo = new THREE.PlaneGeometry(0.88, 0.27);
+      const rearSticker = new THREE.Mesh(rearStickerGeo, sharedJeepStickerMat);
+      rearSticker.position.set(0, 0.89, -1.805);
+      rearSticker.rotation.y = Math.PI;
+      chassisGroup.add(rearSticker);
+
+      for (const side of [-1, 1]) {
+        const doorSticker = new THREE.Mesh(new THREE.PlaneGeometry(0.76, 0.23), sharedJeepStickerMat);
+        doorSticker.position.set(side * 0.765, 1.02, 0.02);
+        doorSticker.rotation.y = side * (Math.PI * 0.5);
+        chassisGroup.add(doorSticker);
       }
 
       // 7. Four Articulated Offroad Wheels (Front wheels have steering pivots, all 4 wheels spin!)
@@ -11712,7 +11855,7 @@
         sharedLanternHaloMat.opacity = 0.44 * nightGlow * sharedFlicker;
         sharedLanternGroundPoolMat.opacity = 0.17 * nightGlow * sharedFlicker;
         sharedTruckHeadlightLensMat.emissiveIntensity = 3.8 * nightGlow;
-        sharedTruckHeadlightBeamMat.opacity = 0.34 * nightGlow;
+        sharedTruckHeadlightBeamMat.opacity = clamp(params.truckLightConeOpacity ?? 0.35, 0.0, 1.0) * nightGlow;
       } else {
         sharedLanternGlassMat.emissiveIntensity = 0.04;
         sharedLanternHaloMat.opacity = 0.0;
@@ -11949,13 +12092,14 @@
           const isBeingDriven = (params.driveMode && it === activeDrivenTruck);
           const headlightBeams = it.mesh.userData.headlightBeams;
           if (headlightBeams) {
-            const beamLenScale = (params.truckLightDistance || 78.0) / 78.0;
-            const halfAngRad = THREE.MathUtils.degToRad((params.truckLightAngleDeg || 28.0) * 0.5);
+            const beamLenScale = (params.truckLightDistance || 50.0) / 34.0;
+            const halfAngRad = THREE.MathUtils.degToRad((params.truckLightAngleDeg || 33.0) * 0.5);
             const baseHalfAngRad = THREE.MathUtils.degToRad(14.0);
             const beamRadScale = (Math.tan(halfAngRad) / Math.tan(baseHalfAngRad)) * beamLenScale;
+            const showCone = isNightTime && ((params.truckLightConeOpacity ?? 0.35) > 0.005);
             for (let b = 0; b < headlightBeams.length; b++) {
               const bc = headlightBeams[b];
-              bc.visible = isNightTime;
+              bc.visible = showCone;
               bc.scale.set(beamRadScale, beamRadScale, beamLenScale);
               bc.rotation.y = (b === 0 ? -1 : 1) * halfAngRad * 0.18;
             }
@@ -11964,7 +12108,7 @@
           let throttleInput = 0.0;
           let steerInput = 0.0;
           let isDrifting = false;
-          if (isBeingDriven) {
+          if (isBeingDriven && !it.isFlipped) {
             if (driveState.keys.forward || driveState.touchAccel) throttleInput += 1.0;
             if (driveState.keys.backward || driveState.touchDecel) throttleInput -= 1.0;
             if (driveState.keys.left) steerInput += 1.0;
@@ -11983,14 +12127,22 @@
           const gx = clamp(Math.round(((it.x / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
           const gz = clamp(Math.round(((it.z / WORLD_SIZE) + 0.5) * (GRID - 1)), 1, GRID - 2);
           const cIdx = idx(gx, gz);
-          const isRoadSurface = (surfaceMaterial[cIdx] >= 2);
+          const surfMatHere = surfaceMaterial[cIdx];
+          const isRoadSurface = (surfMatHere >= 2);
           const maxFwdSpeed = isRoadSurface ? 28.5 : 23.5;
           const maxRevSpeed = -10.5;
           const accelRate = isRoadSurface ? 23.0 : 19.0;
 
           // 1. Longitudinal Acceleration, Braking & Rolling Drag
           let spd = it.speed || 0.0;
-          if (throttleInput > 0.0) {
+          if (it.isFlipped) {
+            // Sliding to a stop on its roof while flipped upside-down
+            spd *= Math.exp(-3.4 * dt);
+            if (Math.abs(spd) < 0.05) spd = 0.0;
+          } else if (it.isAirborne) {
+            // In mid-air: preserve horizontal momentum with minimal air drag
+            spd *= Math.exp(-0.25 * dt);
+          } else if (throttleInput > 0.0) {
             if (spd < 0.0) {
               spd = Math.min(0.0, spd + 34.0 * dt); // Braking from reverse
             } else {
@@ -12009,43 +12161,47 @@
           }
 
           // Water wading drag if driving through an oasis pond
-          if (waterDepth > 0.15) {
+          if (!it.isAirborne && waterDepth > 0.15) {
             const waterDrag = clamp(waterDepth * 1.4, 0.2, 2.8);
             spd *= Math.exp(-waterDrag * dt);
           }
 
           // Spacebar Handbrake / Drift Scrub
-          if (isDrifting) {
+          if (!it.isAirborne && !it.isFlipped && isDrifting) {
             // If no throttle held, handbrake scrubs speed faster; if throttle held, sustains a high-angle power-drift!
             const driftDrag = (throttleInput > 0.0) ? 0.55 : 3.2;
             spd *= Math.exp(-driftDrag * dt);
           }
           it.speed = spd;
 
-          // 2. Front Wheel Steering & Spacebar Drift Oversteer Physics
-          const targetSteer = steerInput * 0.48;
+          // 2. Front Wheel Steering, Yaw & Spacebar Drift Oversteer Physics
+          const targetSteer = steerInput * 0.50;
           it.steerAngle = (it.steerAngle || 0.0) + (targetSteer - (it.steerAngle || 0.0)) * Math.min(1.0, dt * 11.0);
 
           const absSpd = Math.abs(spd);
           const speedDir = spd >= 0.0 ? 1.0 : -1.0;
           let targetSlip = 0.0;
-          if (isDrifting && absSpd > 2.2) {
-            // Spacebar breaks rear traction and swings the tail out into a power-slide drift!
-            targetSlip = steerInput * 0.66 * speedDir;
-            it.driftSlipAngle = (it.driftSlipAngle || 0.0) + (targetSlip - (it.driftSlipAngle || 0.0)) * Math.min(1.0, dt * 6.5);
-          } else {
-            // High-speed cornering induces subtle lateral tire slip; otherwise tires regain grip
-            if (absSpd > 9.5 && Math.abs(it.steerAngle) > 0.18) {
-              targetSlip = steerInput * 0.17 * clamp((absSpd - 9.0) / 14.0, 0.0, 1.0) * speedDir;
+          if (!it.isAirborne && !it.isFlipped) {
+            if (isDrifting && absSpd > 2.2) {
+              // Spacebar breaks rear traction and swings the tail out into a wide power-slide drift!
+              targetSlip = steerInput * 0.72 * speedDir;
+              it.driftSlipAngle = (it.driftSlipAngle || 0.0) + (targetSlip - (it.driftSlipAngle || 0.0)) * Math.min(1.0, dt * 6.8);
+            } else {
+              // High-speed cornering induces noticeable offroad yaw slip; otherwise tires regain grip
+              if (absSpd > 7.5 && Math.abs(it.steerAngle) > 0.14) {
+                targetSlip = steerInput * 0.26 * clamp((absSpd - 7.0) / 13.0, 0.0, 1.0) * speedDir;
+              }
+              it.driftSlipAngle = (it.driftSlipAngle || 0.0) + (targetSlip - (it.driftSlipAngle || 0.0)) * Math.min(1.0, dt * 7.8);
             }
-            it.driftSlipAngle = (it.driftSlipAngle || 0.0) + (targetSlip - (it.driftSlipAngle || 0.0)) * Math.min(1.0, dt * 7.8);
+            const turnFactor = clamp(absSpd / 7.5, 0.0, 1.25) * (1.0 - clamp(absSpd / 52.0, 0.0, 0.35));
+            const yawRate = (it.steerAngle * 1.92 + (it.driftSlipAngle || 0.0) * (isDrifting ? 1.40 : 0.55)) * turnFactor * speedDir;
+            it.yaw += yawRate * dt;
+          } else if (it.isAirborne && !it.isFlipped) {
+            // Mid-air yaw control when catching air off a dune!
+            it.yaw += steerInput * 1.15 * dt;
           }
 
-          const turnFactor = clamp(absSpd / 7.5, 0.0, 1.25) * (1.0 - clamp(absSpd / 52.0, 0.0, 0.35));
-          const yawRate = (it.steerAngle * 1.85 + (it.driftSlipAngle || 0.0) * (isDrifting ? 1.35 : 0.45)) * turnFactor * speedDir;
-          it.yaw += yawRate * dt;
-
-          // Velocity vector is offset by driftSlipAngle so the truck visibly slides sideways during drifts!
+          // Velocity vector is offset by driftSlipAngle so the truck visibly yaws & slides sideways during corners and drifts!
           const travelYaw = it.yaw - (it.driftSlipAngle || 0.0);
           const halfBound = WORLD_SIZE * 0.465;
           const nextX = clamp(it.x + Math.sin(travelYaw) * spd * dt, -halfBound, halfBound);
@@ -12056,7 +12212,7 @@
           it.x = nextX;
           it.z = nextZ;
 
-          // 3. 4-Wheel Terrain Surface Alignment & Dynamic Suspension Pitch/Roll
+          // 3. 4-Wheel Terrain Surface Sampling, Catching Air (Jump Physics), Body Lean & 5-Second Rollover Auto-Unflip!
           const fwdX = Math.sin(it.yaw);
           const fwdZ = Math.cos(it.yaw);
           const rightX = Math.cos(it.yaw);
@@ -12068,28 +12224,162 @@
           const hRR = sampleHeightsAtWorld(it.x - fwdX * 1.16 + rightX * 0.84, it.z - fwdZ * 1.16 + rightZ * 0.84).groundY;
 
           const avgWheelGroundY = 0.25 * (hFL + hFR + hRL + hRR);
-          it.y = avgWheelGroundY;
-          it.mesh.position.set(it.x, avgWheelGroundY, it.z);
-
           const terrainPitch = Math.atan2(((hFL + hFR) * 0.5) - ((hRL + hRR) * 0.5), 2.32);
           const terrainRoll = Math.atan2(((hFL + hRL) * 0.5) - ((hFR + hRR) * 0.5), 1.68);
 
-          it.mesh.rotation.order = 'YXZ';
-          it.mesh.rotation.y = it.yaw;
-          it.mesh.rotation.x = -terrainPitch;
-          it.mesh.rotation.z = terrainRoll;
+          const prevGroundY = it.prevGroundY ?? avgWheelGroundY;
+          it.prevGroundY = avgWheelGroundY;
+          const groundClimbVel = clamp((avgWheelGroundY - prevGroundY) / Math.max(dt, 0.004), -18.0, 22.0);
+          const slopeClimbVel = Math.sin(terrainPitch) * spd;
 
-          // Dynamic chassis suspension squat under acceleration, dive under braking, and body roll in corners/drifts
-          const targetSuspPitch = (throttleInput > 0.0 ? -0.055 : (throttleInput < 0.0 || isDrifting ? 0.065 : 0.0));
-          const cornerG = clamp((it.steerAngle * absSpd) / 14.0 + (it.driftSlipAngle || 0.0) * 0.7, -1.0, 1.0);
-          const targetSuspRoll = -cornerG * 0.11;
-          it.suspPitch = (it.suspPitch || 0.0) + (targetSuspPitch - (it.suspPitch || 0.0)) * Math.min(1.0, dt * 9.0);
-          it.suspRoll = (it.suspRoll || 0.0) + (targetSuspRoll - (it.suspRoll || 0.0)) * Math.min(1.0, dt * 9.0);
+          if (it.isFlipped) {
+            // Vehicle is flipped upside-down on its roof! Wait 5 seconds, then auto-unflip back onto its wheels
+            it.flipTimer = (it.flipTimer || 0.0) + dt;
+            const targetFlipRoll = (it.flipRollDir || 1) * Math.PI;
+            it.flipRollCurrent = (it.flipRollCurrent ?? (it.flipRollDir || 1) * 1.2) +
+              (targetFlipRoll - (it.flipRollCurrent ?? 0.0)) * Math.min(1.0, dt * 7.5);
+
+            // Elevate root slightly when inverted so the cab roof & rollbar rest on the sand instead of clipping underground
+            const invertLift = 1.62 * Math.abs(Math.sin((it.flipRollCurrent || 0.0) * 0.5));
+            it.y = avgWheelGroundY + invertLift;
+            it.mesh.position.set(it.x, it.y, it.z);
+            it.mesh.rotation.order = 'YXZ';
+            it.mesh.rotation.y = it.yaw;
+            it.mesh.rotation.x = -terrainPitch;
+            it.mesh.rotation.z = it.flipRollCurrent;
+
+            if (isBeingDriven) {
+              const gearBadge = document.getElementById('val-truck-gear-badge');
+              if (gearBadge) {
+                gearBadge.textContent = `🔄 Flipped (${Math.max(0.0, 5.0 - it.flipTimer).toFixed(1)}s)`;
+              }
+            }
+
+            if (it.flipTimer >= 5.0) {
+              // 5 seconds elapsed -> spring up and unflip the truck back onto its 4 wheels!
+              it.isFlipped = false;
+              it.flipTimer = 0.0;
+              it.isAirborne = true;
+              it.velY = 4.6;
+              it.y = avgWheelGroundY + 0.55;
+              it.airPitch = -terrainPitch;
+              it.airPitchVel = 0.0;
+              it.airRoll = (it.flipRollDir || 1) * 0.52;
+              it.airRollVel = -(it.flipRollDir || 1) * 2.4;
+              it.suspPitch = 0.0;
+              it.suspRoll = 0.0;
+            }
+          } else if (it.isAirborne) {
+            // Airborne Jump Physics: parabolic flight + mid-air pitch & roll!
+            it.velY = (it.velY || 0.0) - 18.2 * dt;
+            it.y = (it.y ?? avgWheelGroundY) + it.velY * dt;
+
+            it.airRollVel = (it.airRollVel || 0.0) - steerInput * 1.45 * dt;
+            it.airPitchVel = (it.airPitchVel || 0.0) + (throttleInput * 0.75 - 0.18) * dt;
+            it.airPitch = clamp((it.airPitch || 0.0) + it.airPitchVel * dt, -1.35, 1.35);
+            it.airRoll = (it.airRoll || 0.0) + it.airRollVel * dt;
+
+            if (it.y <= avgWheelGroundY) {
+              // Touchdown on the terrain!
+              const impactVy = Math.max(0.0, -(it.velY || 0.0));
+              it.y = avgWheelGroundY;
+              it.velY = 0.0;
+              it.isAirborne = false;
+              it.prevGroundVelY = 0.0;
+
+              // Compress suspension spring on landing
+              it.suspY = -clamp(impactVy * 0.038, 0.05, 0.30);
+              it.suspVelY = -impactVy * 0.25;
+
+              // Landing sand/dust burst from all 4 tires
+              if (!isRoadSurface && waterDepth < 0.08 && (params.truckSmokeIntensity ?? 0.60) > 0.02) {
+                for (let wBurst = 0; wBurst < 8; wBurst++) {
+                  const angB = (wBurst / 8) * Math.PI * 2;
+                  emitTruckSandDust(
+                    it.x + Math.cos(angB) * 1.2,
+                    avgWheelGroundY + 0.25,
+                    it.z + Math.sin(angB) * 1.2,
+                    Math.cos(angB) * (2.2 + impactVy * 0.25),
+                    0.8 + Math.random() * 1.1,
+                    Math.sin(angB) * (2.2 + impactVy * 0.25),
+                    surfMatHere,
+                    0.75
+                  );
+                }
+              }
+
+              // Check if awkward landing angle or high-slip sideways touchdown flips the vehicle!
+              const landingRollDelta = Math.abs((it.airRoll || 0.0) - terrainRoll);
+              const landingPitchDelta = Math.abs((it.airPitch || 0.0) + terrainPitch);
+              if (
+                landingRollDelta > 0.76 ||
+                landingPitchDelta > 0.95 ||
+                (impactVy > 3.5 && Math.abs(it.driftSlipAngle || 0.0) > 0.40 && landingRollDelta > 0.32)
+              ) {
+                it.isFlipped = true;
+                it.flipTimer = 0.0;
+                it.flipRollDir = ((it.airRoll || terrainRoll) >= 0 ? 1 : -1);
+                it.flipRollCurrent = it.airRoll || (it.flipRollDir * 0.85);
+              }
+            }
+
+            it.mesh.position.set(it.x, it.y, it.z);
+            it.mesh.rotation.order = 'YXZ';
+            it.mesh.rotation.y = it.yaw;
+            it.mesh.rotation.x = it.airPitch;
+            it.mesh.rotation.z = it.airRoll;
+          } else {
+            // Grounded Driving: check if launching off a dune crest / crater rim lip to catch air!
+            const curClimbVel = Math.max(slopeClimbVel, groundClimbVel);
+            const prevClimbVel = it.prevGroundVelY || 0.0;
+            const crestDropRate = prevClimbVel - slopeClimbVel;
+
+            if (absSpd > 5.2 && prevClimbVel > 1.35 && crestDropRate > 1.55) {
+              // Catch Air off the dune crest!
+              it.isAirborne = true;
+              it.velY = Math.max(prevClimbVel * 1.22, 2.3 + absSpd * 0.15);
+              it.y = avgWheelGroundY + it.velY * dt;
+              it.airPitch = -terrainPitch + (it.suspPitch || 0.0);
+              it.airRoll = terrainRoll + (it.suspRoll || 0.0);
+              it.airPitchVel = clamp(it.velY * 0.05 - 0.25, -0.9, 0.65);
+              it.airRollVel = (terrainRoll * 1.5 - steerInput * 0.95 - (it.driftSlipAngle || 0.0) * 1.3) * clamp(absSpd / 13.0, 0.35, 1.5);
+            } else {
+              it.y = avgWheelGroundY;
+              it.velY = curClimbVel;
+              it.prevGroundVelY = curClimbVel;
+            }
+
+            // Suspension vertical spring-damper bounce + pronounced cornering body lean & acceleration squat/dive
+            it.suspVelY = (it.suspVelY || 0.0) + (-(it.suspY || 0.0) * 42.0 - (it.suspVelY || 0.0) * 7.5) * dt;
+            it.suspY = clamp((it.suspY || 0.0) + it.suspVelY * dt, -0.32, 0.28);
+
+            const targetSuspPitch = (throttleInput > 0.0 ? -0.095 : (throttleInput < 0.0 || isDrifting ? 0.11 : 0.0));
+            const cornerG = clamp((it.steerAngle * absSpd) / 11.0 + (it.driftSlipAngle || 0.0) * 0.85, -1.25, 1.25);
+            const targetSuspRoll = -cornerG * 0.21;
+            it.suspPitch = (it.suspPitch || 0.0) + (targetSuspPitch - (it.suspPitch || 0.0)) * Math.min(1.0, dt * 8.5);
+            it.suspRoll = (it.suspRoll || 0.0) + (targetSuspRoll - (it.suspRoll || 0.0)) * Math.min(1.0, dt * 8.5);
+
+            // Check if extreme lateral cornering G on a steep dune slope tips & flips the truck!
+            const totalRollLean = terrainRoll + it.suspRoll * 1.55;
+            if (absSpd > 11.5 && Math.abs(totalRollLean) > 0.68 && (isDrifting || Math.abs(it.steerAngle) > 0.30)) {
+              it.isFlipped = true;
+              it.flipTimer = 0.0;
+              it.flipRollDir = (totalRollLean >= 0 ? 1 : -1);
+              it.flipRollCurrent = totalRollLean;
+            }
+
+            it.mesh.position.set(it.x, it.y, it.z);
+            it.mesh.rotation.order = 'YXZ';
+            it.mesh.rotation.y = it.yaw;
+            it.mesh.rotation.x = -terrainPitch;
+            it.mesh.rotation.z = terrainRoll;
+          }
 
           const chassisGroup = it.mesh.userData.chassisGroup;
           if (chassisGroup) {
-            chassisGroup.rotation.x = it.suspPitch;
-            chassisGroup.rotation.z = it.suspRoll;
+            chassisGroup.position.y = it.isFlipped ? 0.0 : (it.suspY || 0.0);
+            chassisGroup.rotation.x = it.isFlipped ? 0.0 : (it.suspPitch || 0.0);
+            chassisGroup.rotation.z = it.isFlipped ? 0.0 : (it.suspRoll || 0.0);
           }
 
           // Rotate front steering knuckles and spin all 4 offroad tires
@@ -12165,43 +12455,49 @@
             }
           }
 
-          // 5. Tunable Tire Smoke / Sand Kickup & Skid Threshold Audio
-          const skidThresh = params.truckSkidThreshold || 2.6;
+          // 5. Continuous Offroad Sand & Dust Rooster-Tails (Always thrown up when driving offroad — NEVER white steam!)
+          const skidThresh = params.truckSkidThreshold || 6.5;
           const cornerMetric = Math.abs(it.steerAngle) * absSpd;
           const cornerSquealLoad = (absSpd > 2.5 && cornerMetric > skidThresh)
             ? clamp((cornerMetric - skidThresh) / Math.max(1.2, skidThresh * 1.8), 0.0, 1.0)
             : 0.0;
           const minDriftSpd = 0.8 + skidThresh * 0.55;
-          const isSkidding = (isDrifting && absSpd > minDriftSpd) || (cornerSquealLoad > 0.18);
-          const smokeIntensity = params.truckSmokeIntensity ?? 0.25;
+          const isSkidding = !it.isAirborne && !it.isFlipped && ((isDrifting && absSpd > minDriftSpd) || (cornerSquealLoad > 0.18));
+          const smokeIntensity = params.truckSmokeIntensity ?? 0.60;
 
-          if (isSkidding && smokeIntensity > 0.01) {
-            const rearX = it.x - fwdX * 1.25;
-            const rearZ = it.z - fwdZ * 1.25;
-            // Low-altitude tire sand/dust kickup proportional to smokeIntensity
-            const particleBurstCount = Math.random() < (smokeIntensity * 1.15) ? (smokeIntensity > 0.65 ? 2 : 1) : 0;
-            for (let sp = 0; sp < particleBurstCount; sp++) {
-              const sideSign = Math.random() < 0.5 ? -1.0 : 1.0;
-              const idxP = tapDropletHead;
-              tapDropletHead = (tapDropletHead + 1) % TAP_DROPLET_COUNT;
-              const p3 = idxP * 3;
-              tapDropletPos[p3]     = rearX + rightX * 0.78 * sideSign + (Math.random() - 0.5) * 0.30;
-              tapDropletPos[p3 + 1] = avgWheelGroundY + 0.20;
-              tapDropletPos[p3 + 2] = rearZ + rightZ * 0.78 * sideSign + (Math.random() - 0.5) * 0.30;
-              tapDropletVel[p3]     = -fwdX * 1.8 + (Math.random() - 0.5) * 1.5;
-              tapDropletVel[p3 + 1] = (0.45 + smokeIntensity * 0.85) + Math.random() * 0.60;
-              tapDropletVel[p3 + 2] = -fwdZ * 1.8 + (Math.random() - 0.5) * 1.5;
-              tapDropletCol[p3]     = 0.70;
-              tapDropletCol[p3 + 1] = 0.63;
-              tapDropletCol[p3 + 2] = 0.52;
-              tapDropletLife[idxP]  = Math.max(0.15, 0.55 - smokeIntensity * 0.35);
+          if (!it.isAirborne && waterDepth < 0.08 && absSpd > 0.75 && smokeIntensity > 0.01) {
+            // Offroad (Sand = 0, Dirt = 1) ALWAYS throws up sand and dust whenever moving;
+            // Paved/Brick Road (>= 2) only throws tire scrub dust when actively skidding/drifting!
+            const shouldThrowSandDust = !isRoadSurface || isSkidding || it.isFlipped;
+            if (shouldThrowSandDust) {
+              const speedFactor = clamp(absSpd / 20.0, 0.18, 1.35);
+              const skidBoost = (isDrifting || isSkidding) ? 1.65 : 1.0;
+              const emitExpected = smokeIntensity * speedFactor * skidBoost * 3.6;
+              const emitCount = Math.floor(emitExpected) + (Math.random() < (emitExpected % 1.0) ? 1 : 0);
+
+              for (let sp = 0; sp < emitCount; sp++) {
+                // Pick one of the 4 tires (biasing slightly toward the rear drive tires)
+                const isRearTire = Math.random() < 0.72;
+                const sideSign = Math.random() < 0.5 ? -1.0 : 1.0;
+                const wheelLongOffset = isRearTire ? -1.22 : 1.12;
+                const wxTire = it.x + fwdX * wheelLongOffset + rightX * 0.84 * sideSign + (Math.random() - 0.5) * 0.32;
+                const wzTire = it.z + fwdZ * wheelLongOffset + rightZ * 0.84 * sideSign + (Math.random() - 0.5) * 0.32;
+                const kickSpeed = (1.6 + absSpd * 0.22) * (0.75 + Math.random() * 0.55);
+                const latOut = sideSign * (0.65 + (isDrifting ? 1.45 : 0.35)) + (Math.random() - 0.5) * 1.2;
+
+                emitTruckSandDust(
+                  wxTire,
+                  avgWheelGroundY + 0.18 + Math.random() * 0.15,
+                  wzTire,
+                  -fwdX * kickSpeed + rightX * latOut,
+                  (0.65 + speedFactor * 0.95 + smokeIntensity * 0.75) * (0.7 + Math.random() * 0.6),
+                  -fwdZ * kickSpeed + rightZ * latOut,
+                  surfMatHere,
+                  0.45 + smokeIntensity * 0.45 + Math.random() * 0.25
+                );
+              }
             }
-            // If user turns Smoke Intensity above 45%, also emit proportional drift smoke puffs
-            if (smokeIntensity > 0.45 && Math.random() < (smokeIntensity - 0.45) * 0.75) {
-              const sideSign = Math.random() < 0.5 ? -1.0 : 1.0;
-              spawnSteamPuffAtWorld(rearX + rightX * 0.78 * sideSign, avgWheelGroundY + 0.22, rearZ + rightZ * 0.78 * sideSign, 1);
-            }
-          } else if (absSpd > 5.0 && waterDepth > 0.08 && Math.random() < 0.85) {
+          } else if (!it.isAirborne && absSpd > 4.0 && waterDepth >= 0.08 && Math.random() < 0.85) {
             emitTapWaterDroplet(
               it.x - fwdX * 1.1 + (Math.random() - 0.5) * 1.4,
               avgWheelGroundY + 0.45,
@@ -12341,6 +12637,41 @@
       if (activeDrops > 0) {
         tapDropletGeo.attributes.position.needsUpdate = true;
         tapDropletGeo.attributes.color.needsUpdate = true;
+      }
+
+      // Advance 3D Offroad Truck Sand & Dust Rooster-Tail Particles
+      let activeTruckDust = 0;
+      truckDustMat.size = 1.05 + (params.truckSmokeIntensity ?? 0.60) * 0.85;
+      for (let i = 0; i < TRUCK_DUST_COUNT; i++) {
+        let life = truckDustLife[i];
+        const maxL = truckDustMaxLife[i] || 0.65;
+        if (life >= maxL) continue;
+        activeTruckDust++;
+        life += dt;
+        truckDustLife[i] = life;
+        const i3 = i * 3;
+        if (life >= maxL) {
+          truckDustPos[i3 + 1] = -999;
+          continue;
+        }
+        // Soft air drag + gentle settling gravity so sand/dust billows low behind the tires
+        truckDustVel[i3]     *= Math.exp(-2.4 * dt);
+        truckDustVel[i3 + 2] *= Math.exp(-2.4 * dt);
+        truckDustVel[i3 + 1] -= 3.8 * dt;
+        truckDustPos[i3]     += (truckDustVel[i3] + windX * 0.14) * dt;
+        truckDustPos[i3 + 1] += truckDustVel[i3 + 1] * dt;
+        truckDustPos[i3 + 2] += (truckDustVel[i3 + 2] + windZ * 0.14) * dt;
+
+        const floorY = sampleSurfaceHeightAtWorld(truckDustPos[i3], truckDustPos[i3 + 2]);
+        if (truckDustPos[i3 + 1] < floorY + 0.10) {
+          truckDustPos[i3 + 1] = floorY + 0.10;
+          truckDustVel[i3 + 1] = Math.max(0.0, truckDustVel[i3 + 1]);
+        }
+      }
+      truckDustSystem.visible = activeTruckDust > 0;
+      if (activeTruckDust > 0) {
+        truckDustGeo.attributes.position.needsUpdate = true;
+        truckDustGeo.attributes.color.needsUpdate = true;
       }
 
       updateFireflies(dt, isNightTime, nightFactor, windX, windZ);
@@ -14246,12 +14577,13 @@
     const sliderTruckGear4 = document.getElementById('slider-truck-gear4');
     const sliderTruckLightAngle = document.getElementById('slider-truck-light-angle');
     const sliderTruckLightDist = document.getElementById('slider-truck-light-dist');
+    const sliderTruckLightOpacity = document.getElementById('slider-truck-light-opacity');
     const inputTruckLightColor = document.getElementById('input-truck-light-color');
 
     function formatSkidThresholdLabel(val) {
-      if (val <= 1.4) return `${val.toFixed(1)} · Hair-Trigger`;
-      if (val <= 3.2) return `${val.toFixed(1)} · Balanced`;
-      if (val <= 4.8) return `${val.toFixed(1)} · Hard Corners`;
+      if (val <= 1.8) return `${val.toFixed(1)} · Hair-Trigger`;
+      if (val <= 3.8) return `${val.toFixed(1)} · Balanced`;
+      if (val <= 6.8) return `${val.toFixed(1)} · High`;
       return `${val.toFixed(1)} · Extreme Only`;
     }
 
@@ -14329,6 +14661,14 @@
         const el = document.getElementById('val-truck-light-dist');
         if (el) el.textContent = `${Math.round(params.truckLightDistance)} m`;
         syncTerrainAndWaterMeshes();
+      });
+    }
+    if (sliderTruckLightOpacity) {
+      sliderTruckLightOpacity.addEventListener('input', (e) => {
+        const pct = parseInt(e.target.value, 10);
+        params.truckLightConeOpacity = pct / 100.0;
+        const el = document.getElementById('val-truck-light-opacity');
+        if (el) el.textContent = pct === 0 ? 'Off (0%)' : (pct === 100 ? 'Solid (100%)' : `${pct}%`);
       });
     }
     if (inputTruckLightColor) {
