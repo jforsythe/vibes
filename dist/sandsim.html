@@ -9645,20 +9645,20 @@
       mountHub.position.set(0, 1.24, 0);
       telescopeGroup.add(mountHub);
 
-      // Articulated Telescope Optical Tube Assembly (tilted upward toward the night stars!)
+      // Articulated Telescope Optical Tube Assembly (tilted upward toward the night stars: negative rotation.x pitches the +Z objective lens UP!)
       const telescopeTubePivot = new THREE.Group();
       telescopeTubePivot.position.set(0, 1.34, 0);
-      telescopeTubePivot.rotation.x = 0.54; // Aimed ~31° up into the starry night sky
+      telescopeTubePivot.rotation.x = -0.68; // Aimed ~39° UP into the starry night sky
       telescopeGroup.add(telescopeTubePivot);
 
-      const mainTubeGeo = new THREE.CylinderGeometry(0.095, 0.072, 1.18, 10);
+      const mainTubeGeo = new THREE.CylinderGeometry(0.072, 0.095, 1.18, 10);
       mainTubeGeo.rotateX(Math.PI * 0.5);
       const mainTubeMesh = new THREE.Mesh(mainTubeGeo, brassMat);
       mainTubeMesh.position.set(0, 0, 0.14);
       mainTubeMesh.castShadow = true;
       telescopeTubePivot.add(mainTubeMesh);
 
-      const dewShieldGeo = new THREE.CylinderGeometry(0.112, 0.098, 0.28, 10);
+      const dewShieldGeo = new THREE.CylinderGeometry(0.098, 0.112, 0.28, 10);
       dewShieldGeo.rotateX(Math.PI * 0.5);
       const dewShieldMesh = new THREE.Mesh(dewShieldGeo, darkBrassMat);
       dewShieldMesh.position.set(0, 0, 0.76);
@@ -9670,8 +9670,8 @@
 
       // Eyepiece & Diagonal Prism at the back end (closest to the human's eye)
       const eyepieceTube = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.14, 0.18), darkBrassMat);
-      eyepieceTube.position.set(0, 0.04, -0.48);
-      eyepieceTube.rotation.x = -0.35;
+      eyepieceTube.position.set(0, 0.06, -0.48);
+      eyepieceTube.rotation.x = 0.55;
       telescopeTubePivot.add(eyepieceTube);
 
       // Tiny Finder Scope on top of main tube
@@ -9681,7 +9681,7 @@
       finderMesh.position.set(0, 0.13, 0.05);
       telescopeTubePivot.add(finderMesh);
 
-      // 7. 3D Field Binoculars (`binocularsGroup`) — Held up to the eyes during BIRDWATCHING!
+      // 7. 3D Field Binoculars (`binocularsGroup`) — Held level with the slab plain up to the eyes during BIRDWATCHING!
       const binocularsGroup = new THREE.Group();
       binocularsGroup.position.set(0, 0.23, 0.34);
       binocularsGroup.visible = false;
@@ -9689,7 +9689,7 @@
 
       const binoBodyMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.45, metalness: 0.35 });
       for (const side of [-1, 1]) {
-        const barrelGeo = new THREE.CylinderGeometry(0.058, 0.046, 0.28, 8);
+        const barrelGeo = new THREE.CylinderGeometry(0.046, 0.058, 0.28, 8);
         barrelGeo.rotateX(Math.PI * 0.5);
         const barrel = new THREE.Mesh(barrelGeo, binoBodyMat);
         barrel.position.set(side * 0.085, 0, 0);
@@ -15094,12 +15094,12 @@
           rig.legLPivot.rotation.x = -0.14;
           rig.legRPivot.rotation.x = 0.14;
 
-          // Hands steadying the brass telescope focus knob while leaning forward into the eyepiece
+          // Hands steadying the brass telescope focus knob while leaning into the eyepiece; telescope tube is always pointed UP toward the stars!
           rig.armLPivot.rotation.set(-0.92, 0.22, 0.12);
           rig.armRPivot.rotation.set(-0.98 + Math.sin(time * 2.2) * 0.05, -0.22, -0.10);
           const slowScan = Math.sin(time * 0.55) * 0.12;
-          rig.headPivot.rotation.set(0.18, slowScan * 0.5, 0);
-          rig.telescopeTubePivot.rotation.set(0.54 + Math.sin(time * 0.4) * 0.06, slowScan, 0);
+          rig.headPivot.rotation.set(0.14, slowScan * 0.5, 0);
+          rig.telescopeTubePivot.rotation.set(-0.68 - Math.sin(time * 0.4) * 0.06, slowScan, 0);
 
           // Keep the clickable 🔭 speech bubble active for the entire stargazing duration!
           voxelHuman.bubbleEmoji = '🔭';
@@ -15132,12 +15132,12 @@
           voxelHuman.heading += dYaw * Math.min(1.0, dt * 3.0);
         }
 
-        // Both hands raised holding the field binoculars to the eyes
+        // Both hands raised holding the field binoculars level with the horizontal slab plain
         rig.armLPivot.rotation.set(-1.45, 0.36, 0.18);
         rig.armRPivot.rotation.set(-1.45, -0.36, -0.18);
         const trackYaw = Math.sin(time * 0.85) * 0.28;
-        const trackPitch = -0.22 + Math.sin(time * 0.65) * 0.10;
-        rig.headPivot.rotation.set(trackPitch, trackYaw, 0);
+        rig.headPivot.rotation.set(0.0, trackYaw, 0);
+        rig.binocularsGroup.rotation.set(0, 0, 0);
 
         const bMeta = BIRDWATCH_SPECIES_CATALOG[voxelHuman.birdwatchSpecies] || BIRDWATCH_SPECIES_CATALOG.macaw;
         voxelHuman.bubbleEmoji = bMeta.emoji;
