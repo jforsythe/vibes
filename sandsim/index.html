@@ -2225,6 +2225,7 @@
         <button class="tool-btn item-tool-btn" data-tool="item-tap" data-popup-group="items" data-short-label="🚰 Water Tap" title="Place an Artesian Water Tap that sticks in the ground and spurts water at a fluctuating rate to fill a pond until destroyed">🚰 Water Tap</button>
         <button class="tool-btn item-tool-btn" data-tool="item-feeder" data-popup-group="items" data-short-label="🌾 Animal Feeder" title="Place an Animal Feeder trough that attracts nearby deer/oryx, rabbits, camels & fennec foxes until it runs out of food or is destroyed">🌾 Animal Feeder</button>
         <button class="tool-btn item-tool-btn" data-tool="item-lantern" data-popup-group="items" data-short-label="🏮 Lantern" title="Place a Lantern hanging from a wooden stick that illuminates the surrounding area at night, attracts moths, and lures bats">🏮 Lantern</button>
+        <button class="tool-btn item-tool-btn" data-tool="item-ramp" data-popup-group="items" data-short-label="📐 Ramps" title="Place a 3D Stunt Launch Ramp — vehicles driving up a ramp preserve forward momentum and launch into floaty big-air jumps over obstacles! (Select &amp; use Shift+Left/Right to rotate)">📐 Ramps</button>
         <button class="tool-btn item-tool-btn" data-tool="item-truck" data-popup-group="items" data-short-label="🛻 Offroad Truck" title="Place a drivable 4x4 Offroad Baja Truck with twin night headlights, engine roar, cornering tire squeal & Spacebar drifting">🛻 Offroad Truck</button>
       </div>
     </div>
@@ -2555,6 +2556,7 @@
           <button class="tool-btn item-tool-btn" data-tool="item-tap" title="Sticks in the ground and spurts water like an artesian well to keep a pond filled until destroyed">🚰 Water Tap</button>
           <button class="tool-btn item-tool-btn" data-tool="item-feeder" title="Attracts nearby deer/oryx, rabbits, camels & fennec foxes to gather and feed until empty or destroyed">🌾 Animal Feeder</button>
           <button class="tool-btn item-tool-btn" data-tool="item-lantern" title="Hangs from a wooden post, illuminates the surrounding area at night, attracts moths, and lures swooping bats">🏮 Lantern</button>
+          <button class="tool-btn item-tool-btn" data-tool="item-ramp" title="Stunt Launch Ramp — vehicles driving up it keep their forward momentum and launch with floaty air to clear obstacles! (Select &amp; use Shift+Left/Right to rotate)">📐 Ramps</button>
           <button class="tool-btn item-tool-btn" data-tool="item-truck" title="Place a drivable 4x4 Offroad Truck with twin night headlights, engine roar, cornering tire squeal & Spacebar drifting">🛻 Offroad Truck</button>
         </div>
         <div class="fidelity-details" style="margin-top:6px;">
@@ -2886,6 +2888,7 @@
     const grassMask = new Uint8Array(MAX_CELLS);        // 1 = vegetated sand surface at an angle too steep for 3D plant models (renders as green grass & counts as a plant)
     const plantSubmergedTimer = new Float32Array(MAX_CELLS); // Seconds a non-water plant cell has been submerged under water (>3.0s deletes the plant!)
     const surfaceMaterial = new Uint8Array(MAX_CELLS);  // 0 = Sand (default), 1 = Dirt, 2 = Paved Road, 3 = Brick Road
+    const plantYawOffset = new Float32Array(MAX_CELLS); // Per-cell custom yaw rotation offset (adjusted with Shift + Left/Right when selected!)
 
     const params = {
       fidelity: 3,            // 1: Low-Poly Fast, 2: Balanced, 3: High, 4: Ultra, 5: Cinematic Max
@@ -6208,7 +6211,7 @@
           mountNormal.set(nx * tiltConform, 1.0 - (1.0 - ny) * tiltConform, nz * tiltConform).normalize();
 
           alignQuat.setFromUnitVectors(upVec, mountNormal);
-          yawQuat.setFromAxisAngle(upVec, fastRand(x, y, 7) * Math.PI * 2);
+          yawQuat.setFromAxisAngle(upVec, fastRand(x, y, 7) * Math.PI * 2 + plantYawOffset[i]);
           dummy.quaternion.copy(alignQuat).multiply(yawQuat);
 
           // Sink the base to the lowest side of its footprint (plus extra slope embed) so no corner ever hangs in mid-air
@@ -6394,7 +6397,7 @@
           dummy.position.set(wx, waterSurfaceY - 0.018 + rippleBob, wz);
           dummy.rotation.set(
             Math.sin(timeNow * 1.4 + i) * 0.035,
-            fastRand(x, y, 197) * Math.PI * 2,
+            fastRand(x, y, 197) * Math.PI * 2 + plantYawOffset[i],
             Math.cos(timeNow * 1.6 + i) * 0.035
           );
           dummy.scale.setScalar(padScale);
@@ -18761,6 +18764,139 @@
       return root;
     }
 
+    // --- 3D Stunt Launch Ramp ('item-ramp') Mesh & Surface Elevation Evaluator ---
+    const RAMP_HALF_WIDTH = 2.15;   // 4.30m wide stunt deck (easy for the 1.68m-wide Baja truck to hit cleanly!)
+    const RAMP_HALF_LENGTH = 3.60;  // 7.20m long from entry lip (-3.6m) to launch lip (+3.6m)
+    const RAMP_PEAK_HEIGHT = 2.35;  // 2.35m launch elevation at the +Z lip
+
+    const sharedRampDeckMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.65, metalness: 0.45 });
+    const sharedRampRailMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.42, metalness: 0.35 });
+    const sharedRampChevronMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+    const sharedRampStrutMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.55, metalness: 0.68 });
+
+    function evalRampCurveHeight(tNorm) {
+      // Smooth curved kicker profile: gentle entry transition at t=0, accelerating upward to a ~28° launch angle at t=1
+      const t = clamp(tNorm, 0.0, 1.0);
+      return RAMP_PEAK_HEIGHT * (0.45 * t + 0.55 * t * t);
+    }
+
+    function createStuntRampMesh() {
+      const root = new THREE.Group();
+      const segs = 10;
+      const len = RAMP_HALF_LENGTH * 2.0;
+      const wid = RAMP_HALF_WIDTH * 2.0;
+
+      // 1. Curved steel-plate stunt ramp deck + side safety curbing rails built from 10 smooth segments
+      for (let s = 0; s < segs; s++) {
+        const t0 = s / segs;
+        const t1 = (s + 1) / segs;
+        const z0 = -RAMP_HALF_LENGTH + t0 * len;
+        const z1 = -RAMP_HALF_LENGTH + t1 * len;
+        const y0 = evalRampCurveHeight(t0);
+        const y1 = evalRampCurveHeight(t1);
+
+        const dz = z1 - z0;
+        const dy = y1 - y0;
+        const segLen = Math.hypot(dz, dy);
+        const segPitch = -Math.atan2(dy, dz); // Negative X rotation tilts +Z upward in Three.js
+        const midZ = 0.5 * (z0 + z1);
+        const midY = 0.5 * (y0 + y1);
+
+        const segGroup = new THREE.Group();
+        segGroup.position.set(0, midY, midZ);
+        segGroup.rotation.x = segPitch;
+        root.add(segGroup);
+
+        const deckPlate = new THREE.Mesh(new THREE.BoxGeometry(wid, 0.14, segLen + 0.03), sharedRampDeckMat);
+        deckPlate.position.y = -0.06;
+        deckPlate.castShadow = true;
+        deckPlate.receiveShadow = true;
+        segGroup.add(deckPlate);
+
+        // Left & right high-visibility Baja amber/yellow side guide rails
+        for (const side of [-1, 1]) {
+          const rail = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, segLen + 0.02), sharedRampRailMat);
+          rail.position.set(side * (RAMP_HALF_WIDTH - 0.09), 0.08, 0);
+          rail.castShadow = true;
+          segGroup.add(rail);
+        }
+
+        // Directional launch chevron arrows along the center of the deck pointing toward the +Z launch lip
+        if (s % 2 === 1) {
+          for (const side of [-1, 1]) {
+            const chevBar = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.02, 0.16), sharedRampChevronMat);
+            chevBar.position.set(side * 0.28, 0.015, 0);
+            chevBar.rotation.y = side * -0.46;
+            segGroup.add(chevBar);
+          }
+        }
+      }
+
+      // 2. Heavy steel A-frame support struts & cross-beams underneath the high +Z launch end
+      const strutSpecs = [
+        [0.42, 0.0],
+        [0.70, 0.0],
+        [0.96, 0.0],
+        [0.82, 0.36]
+      ];
+      for (const [tPos, tiltX] of strutSpecs) {
+        const zStrut = -RAMP_HALF_LENGTH + tPos * len;
+        const hStrut = evalRampCurveHeight(tPos);
+        for (const side of [-1, 1]) {
+          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.10, hStrut, 8), sharedRampStrutMat);
+          post.position.set(side * (RAMP_HALF_WIDTH - 0.22), hStrut * 0.5, zStrut - Math.sin(tiltX) * hStrut * 0.35);
+          post.rotation.x = tiltX;
+          post.castShadow = true;
+          root.add(post);
+        }
+        const crossBeam = new THREE.Mesh(new THREE.BoxGeometry(wid - 0.28, 0.12, 0.12), sharedRampStrutMat);
+        crossBeam.position.set(0, hStrut * 0.55, zStrut);
+        root.add(crossBeam);
+      }
+
+      // Base ground skid frame beams
+      for (const side of [-1, 1]) {
+        const baseSkid = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.10, len * 0.92), sharedRampStrutMat);
+        baseSkid.position.set(side * (RAMP_HALF_WIDTH - 0.22), 0.05, 0.15);
+        root.add(baseSkid);
+      }
+
+      return root;
+    }
+
+    function sampleRampDeckAtWorld(wx, wz, baseGroundY) {
+      let bestY = baseGroundY;
+      let onRamp = null;
+      let bestLocalZ = 0.0;
+      let bestSlopeTan = 0.0;
+      for (let i = 0; i < placedWorldItems.length; i++) {
+        const it = placedWorldItems[i];
+        if (it.type !== 'item-ramp') continue;
+        const dx = wx - it.x;
+        const dz = wz - it.z;
+        if (dx * dx + dz * dz > 26.0) continue; // Quick bounding-sphere cull
+        const fwdX = Math.sin(it.yaw);
+        const fwdZ = Math.cos(it.yaw);
+        const rightX = Math.cos(it.yaw);
+        const rightZ = -Math.sin(it.yaw);
+
+        const localZ = dx * fwdX + dz * fwdZ;
+        const localX = dx * rightX + dz * rightZ;
+        if (Math.abs(localX) <= RAMP_HALF_WIDTH + 0.18 && localZ >= -RAMP_HALF_LENGTH - 0.25 && localZ <= RAMP_HALF_LENGTH + 0.30) {
+          const tNorm = clamp((localZ + RAMP_HALF_LENGTH) / (RAMP_HALF_LENGTH * 2.0), 0.0, 1.0);
+          const deckY = it.y + evalRampCurveHeight(tNorm);
+          if (deckY >= bestY) {
+            bestY = deckY;
+            onRamp = it;
+            bestLocalZ = localZ;
+            // Derivative dY / dZ = (RAMP_PEAK_HEIGHT / (2 * RAMP_HALF_LENGTH)) * (0.45 + 1.10 * tNorm)
+            bestSlopeTan = (RAMP_PEAK_HEIGHT / (RAMP_HALF_LENGTH * 2.0)) * (0.45 + 1.10 * tNorm);
+          }
+        }
+      }
+      return { y: bestY, ramp: onRamp, localZ: bestLocalZ, slopeTan: bestSlopeTan };
+    }
+
     function getLatestPlacedTruck() {
       for (let i = placedWorldItems.length - 1; i >= 0; i--) {
         if (placedWorldItems[i].type === 'item-truck') {
@@ -18796,7 +18932,9 @@
             ? [0x854d0e, 0xeab308, 0x5c3a21]
             : (item.type === 'item-truck'
               ? [0xdc2626, 0x1e293b, 0xf97316]
-              : [0xff9e3b, 0x5c3a21, 0xfef08a]));
+              : (item.type === 'item-ramp'
+                ? [0xf59e0b, 0x334155, 0xfacc15]
+                : [0xff9e3b, 0x5c3a21, 0xfef08a])));
         spawnExplosionShards(item.x, item.y + 0.9, item.z, item.type === 'item-truck' ? 16 : 10, palette);
         spawnSteamPuffAtWorld(item.x, item.y + 0.8, item.z, item.type === 'item-truck' ? 8 : 5);
       }
@@ -18877,7 +19015,9 @@
       }
 
       const { groundY } = sampleHeightsAtWorld(px, pz);
-      const yaw = Math.random() * Math.PI * 2;
+      const yaw = (type === 'item-ramp')
+        ? Math.atan2(px - camera.position.x, pz - camera.position.z)
+        : (Math.random() * Math.PI * 2);
       let mesh = null;
       if (type === 'item-tap') {
         mesh = createWaterTapMesh();
@@ -18885,6 +19025,8 @@
         mesh = createAnimalFeederMesh();
       } else if (type === 'item-lantern') {
         mesh = createHangingLanternMesh();
+      } else if (type === 'item-ramp') {
+        mesh = createStuntRampMesh();
       } else if (type === 'item-truck') {
         mesh = createOffroadTruckMesh();
       }
@@ -19474,8 +19616,9 @@
             spd *= Math.exp(-3.4 * dt);
             if (Math.abs(spd) < 0.05) spd = 0.0;
           } else if (it.isAirborne) {
-            // In mid-air: preserve horizontal momentum with minimal air drag
-            spd *= Math.exp(-0.25 * dt);
+            // In mid-air: ramp launches preserve full forward momentum (zero air drag while rampFloatTimer > 0) so the vehicle sails cleanly over obstacles!
+            const airDrag = (it.rampFloatTimer || 0.0) > 0.0 ? 0.02 : 0.25;
+            spd *= Math.exp(-airDrag * dt);
           } else if (throttleInput > 0.0) {
             if (spd < 0.0) {
               spd = Math.min(0.0, spd + 34.0 * dt); // Braking from reverse
@@ -19556,16 +19699,28 @@
           it.x = nextX;
           it.z = nextZ;
 
-          // 3. 4-Wheel Terrain Surface Sampling, Catching Air (Jump Physics), Body Lean & 5-Second Rollover Auto-Unflip!
+          // 3. 4-Wheel Terrain & Stunt Ramp Surface Sampling, Catching Air (Jump Physics), Body Lean & 5-Second Rollover Auto-Unflip!
           const fwdX = Math.sin(it.yaw);
           const fwdZ = Math.cos(it.yaw);
           const rightX = Math.cos(it.yaw);
           const rightZ = -Math.sin(it.yaw);
 
-          const hFL = sampleHeightsAtWorld(it.x + fwdX * 1.16 - rightX * 0.84, it.z + fwdZ * 1.16 - rightZ * 0.84).groundY;
-          const hFR = sampleHeightsAtWorld(it.x + fwdX * 1.16 + rightX * 0.84, it.z + fwdZ * 1.16 + rightZ * 0.84).groundY;
-          const hRL = sampleHeightsAtWorld(it.x - fwdX * 1.16 - rightX * 0.84, it.z - fwdZ * 1.16 - rightZ * 0.84).groundY;
-          const hRR = sampleHeightsAtWorld(it.x - fwdX * 1.16 + rightX * 0.84, it.z - fwdZ * 1.16 + rightZ * 0.84).groundY;
+          const flX = it.x + fwdX * 1.16 - rightX * 0.84, flZ = it.z + fwdZ * 1.16 - rightZ * 0.84;
+          const frX = it.x + fwdX * 1.16 + rightX * 0.84, frZ = it.z + fwdZ * 1.16 + rightZ * 0.84;
+          const rlX = it.x - fwdX * 1.16 - rightX * 0.84, rlZ = it.z - fwdZ * 1.16 - rightZ * 0.84;
+          const rrX = it.x - fwdX * 1.16 + rightX * 0.84, rrZ = it.z - fwdZ * 1.16 + rightZ * 0.84;
+
+          const rFL = sampleRampDeckAtWorld(flX, flZ, sampleHeightsAtWorld(flX, flZ).groundY);
+          const rFR = sampleRampDeckAtWorld(frX, frZ, sampleHeightsAtWorld(frX, frZ).groundY);
+          const rRL = sampleRampDeckAtWorld(rlX, rlZ, sampleHeightsAtWorld(rlX, rlZ).groundY);
+          const rRR = sampleRampDeckAtWorld(rrX, rrZ, sampleHeightsAtWorld(rrX, rrZ).groundY);
+          const rCenter = sampleRampDeckAtWorld(it.x, it.z, sampleHeightsAtWorld(it.x, it.z).groundY);
+
+          const hFL = rFL.y;
+          const hFR = rFR.y;
+          const hRL = rRL.y;
+          const hRR = rRR.y;
+          const activeRamp = rFL.ramp || rFR.ramp || rCenter.ramp || rRL.ramp || rRR.ramp;
 
           const avgWheelGroundY = 0.25 * (hFL + hFR + hRL + hRR);
           const terrainPitch = Math.atan2(((hFL + hFR) * 0.5) - ((hRL + hRR) * 0.5), 2.32);
@@ -19614,10 +19769,15 @@
               it.suspRoll = 0.0;
             }
           } else if (it.isAirborne) {
-            // Airborne Jump Physics: snappy parabolic flight with heavy downward gravity on descent + counterweight self-righting!
-            const gravityAccel = ((it.velY || 0.0) > 0.0)
-              ? (22.5 - airBoost * 3.0)
-              : 31.5;
+            // Airborne Jump Physics: when launched off a Stunt Ramp (rampFloatTimer > 0), the vehicle gets extra floaty hang-time
+            // and sustained forward momentum so it clears wide obstacles easily!
+            if ((it.rampFloatTimer || 0.0) > 0.0) {
+              it.rampFloatTimer = Math.max(0.0, it.rampFloatTimer - dt);
+            }
+            const floatBlend = clamp((it.rampFloatTimer || 0.0) / 1.2, 0.0, 1.0);
+            const normalGrav = ((it.velY || 0.0) > 0.0) ? (22.5 - airBoost * 3.0) : 31.5;
+            const rampFloatGrav = ((it.velY || 0.0) > 0.0) ? 10.2 : 12.8;
+            const gravityAccel = normalGrav * (1.0 - floatBlend) + rampFloatGrav * floatBlend;
             it.velY = (it.velY || 0.0) - gravityAccel * dt;
             it.y = (it.y ?? avgWheelGroundY) + it.velY * dt;
 
@@ -19639,6 +19799,8 @@
               it.isAirborne = false;
               it.prevGroundVelY = 0.0;
               it.upwardClimbCharge = 0.0;
+              it.rampFloatTimer = 0.0;
+              it.wasOnRamp = null;
 
               // Compress suspension spring on landing (softer suspension compresses deeper)
               const compScale = 0.052 - suspStiff * 0.024;
@@ -19690,13 +19852,57 @@
             it.mesh.rotation.x = it.airPitch;
             it.mesh.rotation.z = it.airRoll;
           } else {
-            // Grounded Driving: Upward Slope Air-Boost detection + Dune Crest Big-Air Launch!
+            // Grounded Driving: Stunt Ramp Launch + Upward Slope Air-Boost detection + Dune Crest Big-Air Launch!
             const curClimbVel = Math.max(slopeClimbVel, groundClimbVel);
             const prevClimbVel = it.prevGroundVelY || 0.0;
             const crestDropRate = prevClimbVel - slopeClimbVel;
 
-            // Detect when the truck is actively traveling UP a slope and build an upward air-boost charge + forward climb surge!
-            const isClimbingUpward = (spd > 2.5 && (terrainPitch > 0.045 || curClimbVel > 0.65));
+            // Track when the truck is driving up a 3D Stunt Ramp toward its +Z launch lip
+            let triggeredRampLaunch = false;
+            if (activeRamp) {
+              const rampFwdX = Math.sin(activeRamp.yaw);
+              const rampFwdZ = Math.cos(activeRamp.yaw);
+              const travelAlign = (fwdX * rampFwdX + fwdZ * rampFwdZ) * (spd >= 0 ? 1 : -1);
+              const maxLocalZ = Math.max(rFL.ramp ? rFL.localZ : -99, rFR.ramp ? rFR.localZ : -99, rCenter.ramp ? rCenter.localZ : -99);
+              it.wasOnRamp = activeRamp;
+              it.lastRampLocalZ = maxLocalZ;
+              it.lastRampAlign = travelAlign;
+              it.lastRampPitch = Math.max(terrainPitch, 0.36);
+
+              // While climbing up the ramp deck toward the high end, help preserve/boost forward speed so it never bogs down on the incline
+              if (travelAlign > 0.35 && throttleInput > 0.0 && spd > 1.5) {
+                it.speed = Math.min(maxFwdSpeed * 1.25, spd + 10.5 * dt);
+                spd = it.speed;
+              }
+              // As the front wheels reach or cross the top launch lip of the ramp (+Z >= RAMP_HALF_LENGTH - 0.55m), launch out!
+              if (travelAlign > 0.35 && absSpd > 2.2 && maxLocalZ >= RAMP_HALF_LENGTH - 0.55) {
+                triggeredRampLaunch = true;
+              }
+            } else if (it.wasOnRamp && absSpd > 2.2 && (it.lastRampAlign || 0) > 0.35 && (it.lastRampLocalZ || -99) >= RAMP_HALF_LENGTH - 1.45) {
+              // Just drove off the top lip of the ramp between frames!
+              triggeredRampLaunch = true;
+            }
+
+            if (triggeredRampLaunch) {
+              const launchRamp = activeRamp || it.wasOnRamp;
+              const launchTopY = (launchRamp ? launchRamp.y : avgWheelGroundY) + RAMP_PEAK_HEIGHT;
+              // Preserve & boost forward momentum as the vehicle leaves the ramp, and activate floaty low-gravity hang-time!
+              it.speed = Math.sign(spd || 1) * Math.min(maxFwdSpeed * 1.28, Math.max(absSpd * 1.10, 9.5));
+              spd = it.speed;
+              const effSpd = Math.abs(spd);
+              it.isAirborne = true;
+              it.rampFloatTimer = 2.85; // 2.85 seconds of floaty low-gravity hang-time to soar over obstacles!
+              it.velY = Math.max(6.2 + effSpd * 0.38, prevClimbVel * 1.15);
+              it.y = Math.max(avgWheelGroundY, launchTopY) + 0.18;
+              it.airPitch = -Math.max(it.lastRampPitch || 0.42, 0.38);
+              it.airRoll = terrainRoll * 0.25;
+              it.airPitchVel = 0.14; // Smoothly level out nose during the floaty arc
+              it.airRollVel = 0.0;
+              it.wasOnRamp = null;
+            } else {
+              if (!activeRamp) it.wasOnRamp = null;
+              // Detect when the truck is actively traveling UP a slope and build an upward air-boost charge + forward climb surge!
+              const isClimbingUpward = (spd > 2.5 && (terrainPitch > 0.045 || curClimbVel > 0.65));
             if (isClimbingUpward && airBoost > 0.02) {
               const climbIntensity = clamp(Math.max(terrainPitch * 3.2, curClimbVel / 5.5), 0.1, 1.5);
               it.upwardClimbCharge = clamp((it.upwardClimbCharge || 0.0) + climbIntensity * dt * 4.2, 0.0, 1.6);
@@ -19744,6 +19950,7 @@
               it.y = avgWheelGroundY;
               it.velY = curClimbVel;
               it.prevGroundVelY = curClimbVel;
+            }
             }
 
             // Suspension vertical spring-damper bounce + cornering body lean & acceleration squat/dive controlled by Suspension Stiffness!
@@ -21656,6 +21863,7 @@
             if (savedIt.type === 'item-tap') mesh = createWaterTapMesh();
             else if (savedIt.type === 'item-feeder') mesh = createAnimalFeederMesh();
             else if (savedIt.type === 'item-lantern') mesh = createHangingLanternMesh();
+            else if (savedIt.type === 'item-ramp') mesh = createStuntRampMesh();
             else if (savedIt.type === 'item-truck') mesh = createOffroadTruckMesh();
             if (!mesh) continue;
             const { groundY } = sampleHeightsAtWorld(savedIt.x, savedIt.z);
@@ -21891,12 +22099,34 @@
         if (e.code === 'Space')                           { driveState.keys.drift = true; e.preventDefault(); }
         return;
       }
+      // If an object/item is currently selected (followedTarget) or hovered while holding Spacebar,
+      // Shift + Left / Shift + Right (or Shift + A / Shift + D) adjusts the rotation of the selected object without panning off it!
+      if (!params.fpvMode && !params.driveMode && (e.shiftKey || fpvState.keys.sprint)) {
+        const activeRotTarget = (typeof objectSelectState !== 'undefined')
+          ? (objectSelectState.followedTarget || objectSelectState.hoveredTarget)
+          : null;
+        if (activeRotTarget && (e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'KeyA' || e.code === 'KeyD')) {
+          e.preventDefault();
+          fpvState.keys.left = false;
+          fpvState.keys.right = false;
+          const rotDir = (e.code === 'ArrowLeft' || e.code === 'KeyA') ? 1 : -1;
+          rotateSelectedObjectByStep(activeRotTarget, rotDir * (Math.PI / 12)); // 15° rotation step per press
+          return;
+        }
+      }
       // Track WASD / Arrow Keys & Shift in both Omniscient Observer Mode (for panning around the slab) and FPV Walk Mode
       if (e.code === 'KeyW' || e.code === 'ArrowUp') fpvState.keys.forward = true;
       if (e.code === 'KeyS' || e.code === 'ArrowDown') fpvState.keys.backward = true;
       if (e.code === 'KeyA' || e.code === 'ArrowLeft') fpvState.keys.left = true;
       if (e.code === 'KeyD' || e.code === 'ArrowRight') fpvState.keys.right = true;
-      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') fpvState.keys.sprint = true;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        fpvState.keys.sprint = true;
+        // If an object is selected when Shift is pressed, clear left/right pan keys so Shift+Left/Right rotates rather than pans
+        if (!params.fpvMode && !params.driveMode && typeof objectSelectState !== 'undefined' && (objectSelectState.followedTarget || objectSelectState.hoveredTarget)) {
+          fpvState.keys.left = false;
+          fpvState.keys.right = false;
+        }
+      }
       if (!params.fpvMode) {
         // In Omniscient Pan Mode (✋): holding Spacebar brings up the Select Pointer to highlight & click any animal, plant, or person!
         if (e.code === 'Space' && isPanModeAvailableForSelect()) {
@@ -22247,7 +22477,7 @@
         launchFireworkAtWorld(wx, wz);
         return;
       }
-      if (params.tool === 'item-tap' || params.tool === 'item-feeder' || params.tool === 'item-lantern' || params.tool === 'item-truck') {
+      if (params.tool === 'item-tap' || params.tool === 'item-feeder' || params.tool === 'item-lantern' || params.tool === 'item-ramp' || params.tool === 'item-truck') {
         placeWorldItemAtWorld(params.tool, wx, wz);
         return;
       }
@@ -22722,6 +22952,45 @@
       croc:     { icon: '🐊', name: 'Oasis Crocodile (Apex)', radius: 1.85, height: 1.10 }
     };
 
+    const SELECT_ITEM_LABELS = {
+      'item-ramp':    { icon: '📐', name: 'Stunt Launch Ramp',    radius: 3.10, height: 2.35, colorHex: 0xf97316 },
+      'item-tap':     { icon: '🚰', name: 'Artesian Water Tap',   radius: 1.15, height: 2.05, colorHex: 0x06b6d4 },
+      'item-feeder':  { icon: '🌾', name: 'Animal Feeder Trough', radius: 1.55, height: 2.40, colorHex: 0xeab308 },
+      'item-lantern': { icon: '🏮', name: 'Hanging Night Lantern',radius: 1.35, height: 2.95, colorHex: 0xf59e0b },
+      'item-truck':   { icon: '🛻', name: '4x4 Offroad Baja Truck', radius: 2.25, height: 1.85, colorHex: 0xdc2626 }
+    };
+
+    function rotateSelectedObjectByStep(target, deltaYaw) {
+      if (!target) return;
+      if (target.kind === 'item' && target.item) {
+        target.item.yaw = ((target.item.yaw || 0) + deltaYaw) % (Math.PI * 2);
+        if (target.item.mesh) {
+          target.item.mesh.rotation.y = target.item.yaw;
+        }
+        if (target.item.type === 'item-lantern' || target.item.type === 'item-truck') {
+          syncTerrainAndWaterMeshes();
+        }
+      } else if (target.kind === 'person' && typeof voxelHuman !== 'undefined' && voxelHuman.active) {
+        voxelHuman.heading = ((voxelHuman.heading || 0) + deltaYaw) % (Math.PI * 2);
+        voxelHuman.targetHeading = voxelHuman.heading;
+        if (voxelHuman.rig && voxelHuman.rig.root) {
+          voxelHuman.rig.root.rotation.y = voxelHuman.heading;
+        }
+      } else if (target.kind === 'animal' && target.agent) {
+        target.agent.heading = ((target.agent.heading || 0) + deltaYaw) % (Math.PI * 2);
+        if (target.agent.perchBaseHeading !== undefined) {
+          target.agent.perchBaseHeading = target.agent.heading;
+        }
+        if (target.agent.rig && target.agent.rig.root) {
+          target.agent.rig.root.rotation.y = target.agent.heading;
+        }
+      } else if (target.kind === 'plant' && typeof target.cellIdx === 'number') {
+        plantYawOffset[target.cellIdx] = (plantYawOffset[target.cellIdx] + deltaYaw) % (Math.PI * 2);
+        rebuildFloraInstances();
+      }
+      syncSelectFollowBadgeUI();
+    }
+
     function isPanModeAvailableForSelect() {
       return !params.fpvMode && !params.driveMode && (!params.tool || params.tool === 'none') && !isOpticsGameplayPaused;
     }
@@ -22877,6 +23146,59 @@
         });
       }
 
+      // Check Placed World Items (Ramps, Water Taps, Animal Feeders, Hanging Lanterns, Offroad Truck)
+      for (let i = 0; i < placedWorldItems.length; i++) {
+        const it = placedWorldItems[i];
+        const meta = SELECT_ITEM_LABELS[it.type] || { icon: '📦', name: 'Placed Item', radius: 1.5, height: 2.0, colorHex: 0xf59e0b };
+        const centerY = it.y + meta.height * 0.45;
+        evalScreenCandidate(it.x, centerY, it.z, it.type === 'item-ramp' ? 54 : 44, () => {
+          const deg = Math.round((((it.yaw || 0) * 180 / Math.PI) % 360 + 360) % 360);
+          return {
+            kind: 'item',
+            item: it,
+            label: `${meta.icon} ${meta.name}`,
+            subLabel: `Heading ${deg}° · Shift + ◀/▶ to Rotate`,
+            wx: it.x,
+            wy: it.y,
+            wz: it.z,
+            radius: meta.radius,
+            height: meta.height,
+            colorHex: meta.colorHex
+          };
+        });
+      }
+
+      // Also raycast directly against 3D Placed Item Meshes (so clicking any part of a large Ramp or Truck selects it!)
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      if (placedItemsGroup && placedItemsGroup.children.length > 0) {
+        const itemMeshHits = raycaster.intersectObjects(placedItemsGroup.children, true);
+        if (itemMeshHits.length > 0) {
+          let hitObj = itemMeshHits[0].object;
+          while (hitObj && hitObj.parent && hitObj.parent !== placedItemsGroup) {
+            hitObj = hitObj.parent;
+          }
+          const matchedItem = placedWorldItems.find((it) => it.mesh === hitObj);
+          if (matchedItem) {
+            const meta = SELECT_ITEM_LABELS[matchedItem.type] || { icon: '📦', name: 'Placed Item', radius: 1.5, height: 2.0, colorHex: 0xf59e0b };
+            const deg = Math.round((((matchedItem.yaw || 0) * 180 / Math.PI) % 360 + 360) % 360);
+            return {
+              kind: 'item',
+              item: matchedItem,
+              label: `${meta.icon} ${meta.name}`,
+              subLabel: `Heading ${deg}° · Shift + ◀/▶ to Rotate`,
+              wx: matchedItem.x,
+              wy: matchedItem.y,
+              wz: matchedItem.z,
+              radius: meta.radius,
+              height: meta.height,
+              colorHex: meta.colorHex
+            };
+          }
+        }
+      }
+
       // Check all Living Wildlife Agents (Ground, Aquatic & Flying Birds/Bats/Owls)
       for (let i = 0; i < faunaAgents.length; i++) {
         const a = faunaAgents[i];
@@ -22993,8 +23315,8 @@
         }
         if (selectFollowBadgeSubEl) {
           selectFollowBadgeSubEl.textContent = objectSelectState.spaceHeld
-            ? `Click another target to switch · Pan to stop`
-            : `Zoom: ${(params.selectZoomDistance || 11).toFixed(1)}m · Pan (WASD / Drag) to unfollow`;
+            ? `Shift + ◀/▶ Rotate · Click another target to switch`
+            : `Shift + ◀/▶ Rotate · Zoom: ${(params.selectZoomDistance || 11).toFixed(1)}m · Pan to unfollow`;
         }
         if (btnStopObjectFollowEl) {
           btnStopObjectFollowEl.style.display = 'inline-block';
@@ -23106,6 +23428,15 @@
             f.wx = a.x;
             f.wy = a.y;
             f.wz = a.z;
+          }
+        } else if (f.kind === 'item') {
+          const it = f.item;
+          if (!it || !placedWorldItems.includes(it)) {
+            stillValid = false;
+          } else {
+            f.wx = it.x;
+            f.wy = it.y;
+            f.wz = it.z;
           }
         } else if (f.kind === 'plant') {
           const updatedPlant = describePlantAtCell(f.cellIdx);
@@ -23923,7 +24254,7 @@
 
       const isElementTool = ['water', 'lava'].includes(params.tool);
       const isMaterialTool = ['pour', 'mat-dirt', 'mat-paved', 'mat-brick'].includes(params.tool);
-      const isItemTool = ['item-tap', 'item-feeder', 'item-lantern', 'item-truck'].includes(params.tool);
+      const isItemTool = ['item-tap', 'item-feeder', 'item-lantern', 'item-ramp', 'item-truck'].includes(params.tool);
 
       if (btnPopupElements) {
         btnPopupElements.classList.toggle('has-active-child', isElementTool);
@@ -23971,6 +24302,7 @@
         'item-tap': 0x06b6d4,
         'item-feeder': 0xeab308,
         'item-lantern': 0xf59e0b,
+        'item-ramp': 0xf97316,
         'item-truck': 0xdc2626,
         erase: 0xef4444
       };
