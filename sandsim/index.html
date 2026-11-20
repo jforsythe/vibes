@@ -5567,9 +5567,33 @@
             }
           }
 
-          sandNext[i] -= pickup;
+          // Windblown sand skitters across hard paved/brick road surfaces without piling up bumps on the flat road bed
           if (depX >= 0 && depX < GRID && depY >= 0 && depY < GRID) {
-            sandNext[idx(depX, depY)] += pickup;
+            let depIdx = idx(depX, depY);
+            if (surfaceMaterial[depIdx] === 2 || surfaceMaterial[depIdx] === 3) {
+              let clearFound = false;
+              for (let sk = 1; sk <= 5; sk++) {
+                const sx = Math.round(depX + dx * sk);
+                const sy = Math.round(depY + dy * sk);
+                if (sx < 0 || sx >= GRID || sy < 0 || sy >= GRID) break;
+                const sIdx = idx(sx, sy);
+                if (surfaceMaterial[sIdx] !== 2 && surfaceMaterial[sIdx] !== 3) {
+                  depX = sx;
+                  depY = sy;
+                  depIdx = sIdx;
+                  clearFound = true;
+                  break;
+                }
+              }
+              if (!clearFound) {
+                // Keep road bed flat and clean
+                continue;
+              }
+            }
+            sandNext[i] -= pickup;
+            sandNext[depIdx] += pickup;
+          } else {
+            sandNext[i] -= pickup;
           }
         }
       }
@@ -5627,7 +5651,9 @@
 
           const isJungleCell = waterProximity[i] >= 0.38;
           const surfMat = surfaceMaterial[i];
-          const matBonus = (surfMat === 2 || surfMat === 3) ? 0.55 : (surfMat === 1 ? 0.20 : 0.0);
+          // Paved Road (2) and Brick Road (3) are compacted flat masonry/asphalt slabs and do not slump
+          if (surfMat === 2 || surfMat === 3) continue;
+          const matBonus = surfMat === 1 ? 0.20 : 0.0;
           const rootBonus = getRootErosionResistance(veg[i]) * (isJungleCell ? 0.26 : 0.04);
           const moistureBonus = soilMoisture[i] * (isJungleCell ? 0.22 : 0.10);
           const localMaxDelta = (baseReposeTan + moistureBonus + rootBonus + matBonus) * CELL_SIZE;
@@ -5636,6 +5662,8 @@
 
           for (let d = 0; d < 8; d++) {
             const ni = i + N8_OFFSETS[d];
+            // Prevent loose sand from avalanching onto flat paved or brick road surfaces
+            if (surfaceMaterial[ni] === 2 || surfaceMaterial[ni] === 3) continue;
             const hNeighbor = bedrock[ni] + sand[ni];
             const diff = hCenter - hNeighbor;
             const limit = localMaxDelta * AVALANCHE_DIST[d];
@@ -22464,6 +22492,13 @@
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let isPointerDown = false;
+    const roadBrushState = {
+      active: false,
+      targetY: 0,
+      lastWx: 0,
+      lastWz: 0,
+      lastMs: 0
+    };
 
     function applyBrushAtWorld(wx, wz) {
       if (!params.tool || params.tool === 'none') {
@@ -22544,6 +22579,63 @@
         }
       }
 
+      // When placing Paved Road or Brick Road material, compute a smooth, flat target elevation plane across the brush disk
+      // that allows gentle, gradual elevation transitions along a continuous road stroke while flattening cross-slopes and bumps!
+      const isRoadOrBrickTool = (params.tool === 'mat-paved' || params.tool === 'mat-brick');
+      if (isRoadOrBrickTool) {
+        let sumGroundY = 0;
+        let sumWeight = 0;
+        let existRoadSumY = 0;
+        let existRoadWeight = 0;
+        for (let dy = -rCells; dy <= rCells; dy++) {
+          for (let dx = -rCells; dx <= rCells; dx++) {
+            const x = cx + dx;
+            const y = cy + dy;
+            if (x < 1 || x >= GRID - 1 || y < 1 || y >= GRID - 1) continue;
+            const dist = Math.hypot(dx, dy) / rCells;
+            if (dist > 0.88) continue;
+            const ci = idx(x, y);
+            if (obstacleType[ci] === 2) continue;
+            const gY = bedrock[ci] + sand[ci];
+            const w = 1.0 - dist * 0.65;
+            sumGroundY += gY * w;
+            sumWeight += w;
+            if (surfaceMaterial[ci] === 2 || surfaceMaterial[ci] === 3) {
+              existRoadSumY += gY * w;
+              existRoadWeight += w;
+            }
+          }
+        }
+        const centerI = idx(clamp(cx, 1, GRID - 2), clamp(cy, 1, GRID - 2));
+        const localAvgY = sumWeight > 0.001 ? (sumGroundY / sumWeight) : (bedrock[centerI] + sand[centerI]);
+        const nowMs = performance.now();
+        const stepDistWorld = roadBrushState.active
+          ? Math.hypot(wx - roadBrushState.lastWx, wz - roadBrushState.lastWz)
+          : 999.0;
+
+        if (!roadBrushState.active || (nowMs - roadBrushState.lastMs > 340) || stepDistWorld > params.brushRadius * 2.2) {
+          if (existRoadWeight > 0.25) {
+            const existAvg = existRoadSumY / existRoadWeight;
+            roadBrushState.targetY = existAvg * 0.88 + localAvgY * 0.12;
+          } else {
+            roadBrushState.targetY = localAvgY;
+          }
+          roadBrushState.active = true;
+        } else {
+          const targetRef = (existRoadWeight > 0.5)
+            ? ((existRoadSumY / existRoadWeight) * 0.55 + localAvgY * 0.45)
+            : localAvgY;
+          // Allow slight, smooth elevation changes along a dragged path (capped at a gentle ~6% longitudinal grade)
+          const maxDeltaY = Math.max(0.014, stepDistWorld * 0.062);
+          const desiredDelta = (targetRef - roadBrushState.targetY) * 0.16;
+          roadBrushState.targetY += clamp(desiredDelta, -maxDeltaY, maxDeltaY);
+        }
+        roadBrushState.targetY = clamp(roadBrushState.targetY, MIN_TERRAIN_HEIGHT + 0.36, MAX_TERRAIN_HEIGHT);
+        roadBrushState.lastWx = wx;
+        roadBrushState.lastWz = wz;
+        roadBrushState.lastMs = nowMs;
+      }
+
       for (let dy = -rCells; dy <= rCells; dy++) {
         for (let dx = -rCells; dx <= rCells; dx++) {
           const x = cx + dx;
@@ -22602,24 +22694,44 @@
             surfaceMaterial[i] = 1; // Rich Loamy Dirt
             soilMoisture[i] = Math.max(soilMoisture[i], 0.32 * falloff);
           } else if (params.tool === 'mat-paved' || params.tool === 'mat-brick') {
-            if (dist < 0.78) {
-              const maxSand = Math.max(0, MAX_TERRAIN_HEIGHT - bedrock[i]);
-              sand[i] = Math.min(maxSand, Math.max(sand[i], 0.32));
-              // Smoothly grade road bed toward neighboring elevation for a clean drivable/walkable road
-              const avgGround = 0.25 * (
-                (bedrock[i + 1] + sand[i + 1]) +
-                (bedrock[i - 1] + sand[i - 1]) +
-                (bedrock[i + GRID] + sand[i + GRID]) +
-                (bedrock[i - GRID] + sand[i - GRID])
+            if (obstacleType[i] === 2) continue;
+            const curGround = bedrock[i] + sand[i];
+            const flatY = roadBrushState.targetY;
+            if (dist < 0.80) {
+              // Grade the road/brick bed flat across its full width (core is ~90% flat target plane, edges taper smoothly)
+              const edgeT = dist <= 0.62 ? 0.0 : ((dist - 0.62) / 0.18);
+              const flatStrength = 0.90 - edgeT * 0.16;
+              const targetGround = clamp(
+                curGround * (1.0 - flatStrength) + flatY * flatStrength,
+                MIN_TERRAIN_HEIGHT + 0.36,
+                MAX_TERRAIN_HEIGHT
               );
-              const curGround = bedrock[i] + sand[i];
-              const targetGround = curGround * (1.0 - falloff * 0.35) + avgGround * (falloff * 0.35);
-              sand[i] = clamp(targetGround - bedrock[i], 0.28, maxSand);
+              // Grade down underlying bedrock if it protrudes above the roadbed so rocky bumps are leveled flat!
+              if (bedrock[i] > targetGround - 0.34) {
+                bedrock[i] = Math.max(MIN_TERRAIN_HEIGHT, targetGround - 0.34);
+              }
+              const maxSand = Math.max(0, MAX_TERRAIN_HEIGHT - bedrock[i]);
+              sand[i] = clamp(targetGround - bedrock[i], 0.32, maxSand);
               surfaceMaterial[i] = (params.tool === 'mat-paved') ? 2 : 3;
               veg[i] = 0.0;
               grassMask[i] = 0;
               plantSubmergedTimer[i] = 0.0;
               if (obstacleType[i] === 1) obstacleType[i] = 0;
+              if (water[i] < 0.30 && lavaFrac[i] < 0.25) water[i] = 0.0;
+            } else {
+              // Smooth shoulder transition just outside the road edge (0.80 <= dist <= 1.0) so road edges sit flush without sharp steps
+              const shoulderT = (1.0 - dist) / 0.20;
+              const shoulderBlend = shoulderT * shoulderT * 0.48;
+              const targetGround = clamp(
+                curGround * (1.0 - shoulderBlend) + flatY * shoulderBlend,
+                MIN_TERRAIN_HEIGHT + 0.34,
+                MAX_TERRAIN_HEIGHT
+              );
+              if (bedrock[i] > targetGround - 0.32) {
+                bedrock[i] = Math.max(MIN_TERRAIN_HEIGHT, targetGround - 0.32);
+              }
+              const maxSand = Math.max(0, MAX_TERRAIN_HEIGHT - bedrock[i]);
+              sand[i] = clamp(targetGround - bedrock[i], Math.min(sand[i], 0.25), maxSand);
             }
           } else if (params.tool === 'seed') {
             // Only seed new empty cells if total plants on the map are below activePlantCap; existing plants can still grow taller
@@ -22678,6 +22790,63 @@
             water[i] = 0;
             lavaFrac[i] = 0;
             bedrock[i] = clamp(bedrock[i] * (1 - falloff * 0.35) + 1.5 * (falloff * 0.35), MIN_TERRAIN_HEIGHT, MAX_TERRAIN_HEIGHT);
+          }
+        }
+      }
+
+      // Multi-pass planar & Laplacian smoothing for Paved Road / Brick Road so the roadbed is completely smooth and flat
+      // across its width while preserving gentle longitudinal elevation changes along the road!
+      if (isRoadOrBrickTool) {
+        const flatY = roadBrushState.targetY;
+        const padR = rCells + 1;
+        for (let pass = 0; pass < 3; pass++) {
+          for (let dy = -padR; dy <= padR; dy++) {
+            for (let dx = -padR; dx <= padR; dx++) {
+              const x = cx + dx;
+              const y = cy + dy;
+              if (x < 1 || x >= GRID - 1 || y < 1 || y >= GRID - 1) continue;
+              const dist = Math.hypot(dx, dy) / rCells;
+              if (dist > 1.05) continue;
+              const i = idx(x, y);
+              if (obstacleType[i] === 2) continue;
+
+              const isRoadCell = (surfaceMaterial[i] === 2 || surfaceMaterial[i] === 3);
+              const curGround = bedrock[i] + sand[i];
+
+              if (isRoadCell) {
+                let sumH = flatY * 2.2;
+                let sumW = 2.2;
+                for (let d = 0; d < 8; d++) {
+                  const ni = i + N8_OFFSETS[d];
+                  if (obstacleType[ni] === 2) continue;
+                  const nRoad = (surfaceMaterial[ni] === 2 || surfaceMaterial[ni] === 3);
+                  const w = (d < 4 ? 1.0 : 0.7) * (nRoad ? 3.2 : 0.55);
+                  sumH += (bedrock[ni] + sand[ni]) * w;
+                  sumW += w;
+                }
+                const avgH = sumH / sumW;
+                const smoothedGround = clamp(curGround * 0.25 + avgH * 0.75, MIN_TERRAIN_HEIGHT + 0.36, MAX_TERRAIN_HEIGHT);
+                if (bedrock[i] > smoothedGround - 0.34) {
+                  bedrock[i] = Math.max(MIN_TERRAIN_HEIGHT, smoothedGround - 0.34);
+                }
+                const maxSand = Math.max(0, MAX_TERRAIN_HEIGHT - bedrock[i]);
+                sand[i] = clamp(smoothedGround - bedrock[i], 0.32, maxSand);
+              } else {
+                // Smooth outer shoulder apron
+                const avgOrtho = 0.25 * (
+                  (bedrock[i + 1] + sand[i + 1]) +
+                  (bedrock[i - 1] + sand[i - 1]) +
+                  (bedrock[i + GRID] + sand[i + GRID]) +
+                  (bedrock[i - GRID] + sand[i - GRID])
+                );
+                const smoothedShoulder = clamp(curGround * 0.62 + avgOrtho * 0.38, MIN_TERRAIN_HEIGHT + 0.32, MAX_TERRAIN_HEIGHT);
+                if (bedrock[i] > smoothedShoulder - 0.32) {
+                  bedrock[i] = Math.max(MIN_TERRAIN_HEIGHT, smoothedShoulder - 0.32);
+                }
+                const maxSand = Math.max(0, MAX_TERRAIN_HEIGHT - bedrock[i]);
+                sand[i] = clamp(smoothedShoulder - bedrock[i], Math.min(sand[i], 0.25), maxSand);
+              }
+            }
           }
         }
       }
@@ -23556,6 +23725,7 @@
       }
       if (activeTouchPointers.size === 0) {
         isPointerDown = false;
+        roadBrushState.active = false;
       }
       objectSelectState.isPanDragging = false;
     }
