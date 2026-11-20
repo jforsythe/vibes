@@ -2208,8 +2208,8 @@
     <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>: Move ·
     <kbd>Shift</kbd>: Sprint ·
     <kbd>Space</kbd>: Jump/Swim ·
-    <kbd>1</kbd>–<kbd>4</kbd> or <kbd>Q</kbd>/<kbd>E</kbd>/Wheel: Cycle Gear ·
-    <kbd>L-Click</kbd>: Use Tool / Shoot Bow ·
+    <kbd>1</kbd>–<kbd>5</kbd> or <kbd>Q</kbd>/<kbd>E</kbd>/Wheel: Cycle Gear ·
+    <kbd>L-Click</kbd>: Use Tool / Shoot Bow / Pitch Camp ·
     <kbd>ESC</kbd> / <kbd>V</kbd>: Exit
   </div>
   <div id="fpv-equip-bar">
@@ -2224,6 +2224,9 @@
     </button>
     <button class="fpv-slot-btn" data-equip="torch" title="Hold a blazing torch that illuminates the terrain & wildlife (Key: 4)">
       <span class="fpv-slot-key">4</span><span>🔥 Torch</span>
+    </button>
+    <button class="fpv-slot-btn" data-equip="camp" title="Camp Mode: Pitch a 3D Tent, Camp Chair &amp; Crackling Campfire in front of you and rest by the fire! (Left-Click to Pitch / Move Camp) (Key: 5)">
+      <span class="fpv-slot-key">5</span><span>⛺ Camp</span>
     </button>
   </div>
 
@@ -21062,7 +21065,7 @@
       savedOrbitTarget: new THREE.Vector3()
     };
 
-    const FPV_EQUIP_ORDER = ['sculpt', 'none', 'bow', 'torch'];
+    const FPV_EQUIP_ORDER = ['sculpt', 'none', 'bow', 'torch', 'camp'];
 
     const btnFpvMode = document.getElementById('btn-fpv-mode');
     const fpvCrosshair = document.getElementById('fpv-crosshair');
@@ -21271,6 +21274,223 @@
       fpvTorchGroup.userData.sparks = sparks;
     }
 
+    // 4. Camp Gear Viewmodel (Rolled Canvas Tent Bedroll, Leather Straps & Wooden Tent Stakes) + World 3D Player Campsite!
+    const fpvCampGroup = new THREE.Group();
+    fpvCampGroup.position.set(0.30, -0.26, -0.45);
+    fpvCampGroup.visible = false;
+    fpvViewModelRoot.add(fpvCampGroup);
+    {
+      const bedrollMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.80 });
+      const strapMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.72 });
+      const stakeMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.78 });
+      const rollGeo = new THREE.CylinderGeometry(0.068, 0.068, 0.34, 12);
+      rollGeo.rotateZ(Math.PI / 2);
+      const rollMesh = new THREE.Mesh(rollGeo, bedrollMat);
+      rollMesh.rotation.y = 0.28;
+      fpvCampGroup.add(rollMesh);
+      for (const sx of [-0.10, 0.10]) {
+        const strapGeo = new THREE.CylinderGeometry(0.072, 0.072, 0.028, 12);
+        strapGeo.rotateZ(Math.PI / 2);
+        const strap = new THREE.Mesh(strapGeo, strapMat);
+        strap.position.set(sx * Math.cos(0.28), 0, -sx * Math.sin(0.28));
+        strap.rotation.y = 0.28;
+        fpvCampGroup.add(strap);
+      }
+      const stake = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.004, 0.32, 6), stakeMat);
+      stake.position.set(-0.02, 0.06, -0.05);
+      stake.rotation.z = 1.15;
+      stake.rotation.y = 0.28;
+      fpvCampGroup.add(stake);
+    }
+
+    // Player's Pitchable 3D Wilderness Campsite in the World (A-Frame Tent + Camp Chair + Crackling Stone-Ring Campfire + Warm PointLight)
+    const fpvPlayerCampGroup = new THREE.Group();
+    fpvPlayerCampGroup.visible = false;
+    scene.add(fpvPlayerCampGroup);
+
+    const fpvCampfireLight = new THREE.PointLight(0xff7b1a, 0.0, 44.0, 1.35);
+    fpvCampfireLight.position.set(0.35, 0.65, 1.32);
+    fpvPlayerCampGroup.add(fpvCampfireLight);
+
+    const fpvPlayerCampState = {
+      active: false,
+      x: 0,
+      y: 0,
+      z: 0,
+      yaw: 0,
+      sparkTimer: 0,
+      flameOuter: null,
+      flameInner: null
+    };
+
+    {
+      const tentCanvasMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.82 });
+      const tentTrimMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.85 });
+      const tentFloorMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.90 });
+      const campWoodMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1d, roughness: 0.80 });
+      const campClothMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.85 });
+
+      // (A) A-Frame Explorer Canvas Tent at (-1.45, 0, 0.35)
+      const tentGroup = new THREE.Group();
+      tentGroup.position.set(-1.45, 0, 0.35);
+      tentGroup.rotation.y = 0.35;
+      fpvPlayerCampGroup.add(tentGroup);
+
+      const tentFloor = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.06, 1.96), tentFloorMat);
+      tentFloor.position.y = 0.03;
+      tentFloor.receiveShadow = true;
+      tentGroup.add(tentFloor);
+
+      for (const side of [-1, 1]) {
+        const slopePanel = new THREE.Mesh(new THREE.BoxGeometry(1.08, 0.07, 1.92), tentCanvasMat);
+        slopePanel.position.set(side * 0.37, 0.63, 0);
+        slopePanel.rotation.z = side * -0.92;
+        slopePanel.castShadow = true;
+        slopePanel.receiveShadow = true;
+        tentGroup.add(slopePanel);
+      }
+      const ridgePole = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 2.08), campWoodMat);
+      ridgePole.position.set(0, 1.20, 0);
+      tentGroup.add(ridgePole);
+      for (const endZ of [-0.98, 0.98]) {
+        const upPole = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.24, 0.07), campWoodMat);
+        upPole.position.set(0, 0.62, endZ);
+        tentGroup.add(upPole);
+      }
+      const backWall = new THREE.Mesh(new THREE.ConeGeometry(0.86, 1.18, 4), tentTrimMat);
+      backWall.rotation.y = Math.PI * 0.25;
+      backWall.scale.set(0.92, 1.0, 0.12);
+      backWall.position.set(0, 0.59, -0.90);
+      tentGroup.add(backWall);
+
+      const sleepBag = new THREE.Mesh(
+        new THREE.BoxGeometry(0.70, 0.14, 1.38),
+        new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.75 })
+      );
+      sleepBag.position.set(0, 0.10, -0.05);
+      tentGroup.add(sleepBag);
+      const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.16, 0.34), campClothMat);
+      pillow.position.set(0, 0.16, -0.60);
+      tentGroup.add(pillow);
+
+      // (B) Folding Camp Chair at (0, 0, -0.15) facing the campfire
+      const chairGroup = new THREE.Group();
+      chairGroup.position.set(0, 0, -0.15);
+      fpvPlayerCampGroup.add(chairGroup);
+      for (const side of [-1, 1]) {
+        const legF = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.52, 0.06), campWoodMat);
+        legF.position.set(side * 0.24, 0.24, 0);
+        legF.rotation.x = 0.38;
+        chairGroup.add(legF);
+        const legB = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.52, 0.06), campWoodMat);
+        legB.position.set(side * 0.24, 0.24, 0);
+        legB.rotation.x = -0.38;
+        chairGroup.add(legB);
+        const postB = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.48, 0.06), campWoodMat);
+        postB.position.set(side * 0.24, 0.68, -0.20);
+        postB.rotation.x = -0.12;
+        chairGroup.add(postB);
+      }
+      const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.07, 0.48), campClothMat);
+      chairSeat.position.set(0, 0.46, 0);
+      chairGroup.add(chairSeat);
+      const chairBack = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.28, 0.06), campClothMat);
+      chairBack.position.set(0, 0.78, -0.22);
+      chairBack.rotation.x = -0.12;
+      chairGroup.add(chairBack);
+
+      // (C) Stone-Ring Crackling Campfire at (0.35, 0, 1.32)
+      const campfireGroup = new THREE.Group();
+      campfireGroup.position.set(0.35, 0, 1.32);
+      fpvPlayerCampGroup.add(campfireGroup);
+      const stoneRingMat = new THREE.MeshStandardMaterial({ color: 0x78716c, roughness: 0.92 });
+      for (let st = 0; st < 8; st++) {
+        const sAng = (st / 8) * Math.PI * 2;
+        const stone = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.16), stoneRingMat);
+        stone.position.set(Math.cos(sAng) * 0.42, 0.07, Math.sin(sAng) * 0.42);
+        stone.rotation.y = -sAng;
+        stone.castShadow = true;
+        campfireGroup.add(stone);
+      }
+      for (let lg = 0; lg < 3; lg++) {
+        const lAng = (lg / 3) * Math.PI + 0.25;
+        const logMesh = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.11, 0.66), campWoodMat);
+        logMesh.position.set(0, 0.11 + (lg % 2) * 0.04, 0);
+        logMesh.rotation.y = lAng;
+        logMesh.rotation.x = 0.18;
+        campfireGroup.add(logMesh);
+      }
+      const flameOuter = new THREE.Mesh(
+        new THREE.ConeGeometry(0.25, 0.58, 6),
+        new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.92 })
+      );
+      flameOuter.position.y = 0.36;
+      campfireGroup.add(flameOuter);
+
+      const flameInner = new THREE.Mesh(
+        new THREE.ConeGeometry(0.14, 0.38, 5),
+        new THREE.MeshBasicMaterial({ color: 0xfef08a })
+      );
+      flameInner.position.y = 0.30;
+      campfireGroup.add(flameInner);
+
+      fpvPlayerCampState.flameOuter = flameOuter;
+      fpvPlayerCampState.flameInner = flameInner;
+    }
+
+    function pitchFpvPlayerCampsite(seatPlayer = true) {
+      const fwdX = -Math.sin(fpvState.yaw);
+      const fwdZ = -Math.cos(fpvState.yaw);
+      const halfBound = WORLD_SIZE * 0.46;
+      const cx = clamp(camera.position.x + fwdX * 1.35, -halfBound, halfBound);
+      const cz = clamp(camera.position.z + fwdZ * 1.35, -halfBound, halfBound);
+      const { groundY, waterDepth, localLava } = sampleHeightsAtWorld(cx, cz);
+
+      if (waterDepth > 0.15 || localLava > 0.1) {
+        if (typeof showCartridgeToast === 'function') {
+          showCartridgeToast('⛺ Move to dry ground to pitch your Camp!', true);
+        }
+        return false;
+      }
+
+      const campYaw = Math.atan2(fwdX, fwdZ);
+      fpvPlayerCampState.active = true;
+      fpvPlayerCampState.x = cx;
+      fpvPlayerCampState.y = groundY;
+      fpvPlayerCampState.z = cz;
+      fpvPlayerCampState.yaw = campYaw;
+
+      fpvPlayerCampGroup.position.set(cx, groundY, cz);
+      fpvPlayerCampGroup.rotation.y = campYaw;
+      fpvPlayerCampGroup.visible = true;
+
+      spawnSteamPuffAtWorld(cx, groundY + 0.35, cz, 5);
+      spawnFireFlameAtWorld(cx + Math.sin(campYaw) * 1.32, groundY + 0.25, cz + Math.cos(campYaw) * 1.32, 0.65, 5);
+
+      if (seatPlayer && params.fpvMode) {
+        fpvState.isCampingSeated = true;
+        camera.position.x = cx;
+        camera.position.z = cz;
+        camera.position.y = groundY + 1.22;
+      }
+      if (typeof showCartridgeToast === 'function') {
+        showCartridgeToast('⛺ Pitched Wilderness Camp — Resting by the campfire (WASD to walk around, Left-Click to re-pitch)');
+      }
+      return true;
+    }
+
+    function destroyFpvPlayerCampsite(withExplosion = true) {
+      if (!fpvPlayerCampState.active) return;
+      if (withExplosion) {
+        spawnExplosionShards(fpvPlayerCampState.x, fpvPlayerCampState.y + 0.75, fpvPlayerCampState.z, 14, [0xd97706, 0x92400e, 0x5c3a1d, 0xf97316, 0x78716c]);
+        spawnSteamPuffAtWorld(fpvPlayerCampState.x, fpvPlayerCampState.y + 0.5, fpvPlayerCampState.z, 6);
+      }
+      fpvPlayerCampState.active = false;
+      fpvPlayerCampGroup.visible = false;
+      fpvCampfireLight.intensity = 0.0;
+      fpvState.isCampingSeated = false;
+    }
+
     // Active 3D Flying & Stuck Arrows in the World
     const projectilesGroup = new THREE.Group();
     scene.add(projectilesGroup);
@@ -21426,6 +21646,13 @@
       fpvSculptGroup.visible = (mode === 'sculpt');
       fpvBowGroup.visible = (mode === 'bow');
       fpvTorchGroup.visible = (mode === 'torch');
+      fpvCampGroup.visible = (mode === 'camp');
+
+      if (mode === 'camp' && params.fpvMode) {
+        pitchFpvPlayerCampsite(true);
+      } else {
+        fpvState.isCampingSeated = false;
+      }
 
       if (mode !== 'sculpt' && params.fpvMode) {
         brushRing.visible = false;
@@ -22501,6 +22728,18 @@
         return;
       }
       // If an object/item is currently selected (followedTarget) or hovered while holding Spacebar,
+      // pressing Delete or Backspace destroys the selected object!
+      if (!params.fpvMode && !params.driveMode && (e.code === 'Delete' || e.code === 'Backspace')) {
+        const activeDelTarget = (typeof objectSelectState !== 'undefined')
+          ? (objectSelectState.followedTarget || objectSelectState.hoveredTarget)
+          : null;
+        if (activeDelTarget && typeof destroySelectedObject === 'function') {
+          e.preventDefault();
+          destroySelectedObject(activeDelTarget);
+          return;
+        }
+      }
+      // If an object/item is currently selected (followedTarget) or hovered while holding Spacebar,
       // Shift + Left / Shift + Right (or Shift + A / Shift + D) adjusts the rotation of the selected object without panning off it!
       if (!params.fpvMode && !params.driveMode && (e.shiftKey || fpvState.keys.sprint)) {
         const activeRotTarget = (typeof objectSelectState !== 'undefined')
@@ -22529,11 +22768,13 @@
         }
       }
       if (!params.fpvMode) {
-        // In Omniscient Pan Mode (✋): holding Spacebar brings up the Select Pointer to highlight & click any animal, plant, or person!
+        // In Pan Mode (✋) OR Sculpt Mode: holding Spacebar at any time brings up the Select Pointer to highlight & click any object!
         if (e.code === 'Space' && isPanModeAvailableForSelect()) {
           e.preventDefault();
           if (!objectSelectState.spaceHeld) {
             objectSelectState.spaceHeld = true;
+            isPointerDown = false;
+            brushRing.visible = false;
             // Temporarily unbind Left-Click Pan while Spacebar is held so Left-Click selects the highlighted object!
             controls.mouseButtons.LEFT = null;
             objectSelectState.hoveredTarget = findSelectableObjectAtPointer(
@@ -22549,6 +22790,7 @@
       if (e.code === 'Digit2') { setFpvEquipment('none'); return; }
       if (e.code === 'Digit3') { setFpvEquipment('bow'); return; }
       if (e.code === 'Digit4') { setFpvEquipment('torch'); return; }
+      if (e.code === 'Digit5') { setFpvEquipment('camp'); return; }
       if (e.code === 'KeyQ')   { cycleFpvEquipment(-1); return; }
       if (e.code === 'KeyE')   { cycleFpvEquipment(1); return; }
       if (e.code === 'Space') {
@@ -22673,6 +22915,13 @@
 
         const { groundY, waterDepth, localIce, localLava, waterSurfaceY } = sampleHeightsAtWorld(camera.position.x, camera.position.z);
         const isHardIceHere = ((localIce >= 0.12) || (params.weatherMode === 'snow')) && (waterDepth > 0.04) && (localLava < 0.25);
+
+        // If seated at the FPV campsite and the player walks or jumps, stand back up
+        if (fpvState.isCampingSeated && (moveLen > 0.02 || fpvState.keys.jump)) {
+          fpvState.isCampingSeated = false;
+        }
+        const targetEyeH = fpvState.isCampingSeated ? 1.22 : 1.75;
+        fpvState.eyeHeight += (targetEyeH - fpvState.eyeHeight) * Math.min(1.0, dt * 10.0);
 
         // When water freezes hard and the player is NOT trapped underneath it, the frozen surface is solid walkable ground!
         const supportSurfaceY = (isHardIceHere && !fpvState.trappedUnderIce) ? waterSurfaceY : groundY;
@@ -22806,12 +23055,42 @@
           torchLight.intensity = 4.2 * flicker * nightBoost * uwFactor;
           torchLight.distance = 48.0 + (skyUniforms.uNightFactor.value || 0.0) * 28.0;
 
+        } else if (params.fpvEquip === 'camp') {
+          fpvCampGroup.visible = !fpvState.isCampingSeated;
+          fpvCampGroup.position.set(0.30 + bobX, -0.26 + bobY, -0.45);
+          torchLight.intensity = 0.0;
         } else {
           // 'none' (No Tool / Empty Hands)
           torchLight.intensity = 0.0;
         }
       } else {
         torchLight.intensity = 0.0;
+      }
+
+      // Animate Pitched 3D FPV Player Campsite (Crackling Campfire Flames, Warm PointLight & Rising Sparks)
+      if (fpvPlayerCampState.active) {
+        const cH = sampleHeightsAtWorld(fpvPlayerCampState.x, fpvPlayerCampState.z);
+        if (cH.waterDepth > 0.18 || cH.localLava > 0.18) {
+          destroyFpvPlayerCampsite(true);
+        } else {
+          fpvPlayerCampState.y = cH.groundY;
+          fpvPlayerCampGroup.position.y = cH.groundY;
+          const tNow = uniforms.uTime.value || 0;
+          const flk = 0.88 + 0.14 * Math.sin(tNow * 16.0) + 0.09 * Math.cos(tNow * 27.0);
+          if (fpvPlayerCampState.flameOuter && fpvPlayerCampState.flameInner) {
+            fpvPlayerCampState.flameOuter.scale.set(1.0 + Math.sin(tNow * 19.0) * 0.12, flk, 1.0 + Math.cos(tNow * 17.0) * 0.12);
+            fpvPlayerCampState.flameInner.scale.setScalar(0.90 + Math.sin(tNow * 25.0) * 0.14);
+          }
+          const nightBoost = 1.0 + (skyUniforms.uNightFactor.value || 0.0) * 1.5;
+          fpvCampfireLight.intensity = 4.5 * flk * nightBoost;
+          fpvPlayerCampState.sparkTimer += dt;
+          if (fpvPlayerCampState.sparkTimer >= 0.45) {
+            fpvPlayerCampState.sparkTimer = 0.0;
+            const fireWx = fpvPlayerCampState.x + Math.sin(fpvPlayerCampState.yaw) * 1.32 + Math.cos(fpvPlayerCampState.yaw) * 0.35;
+            const fireWz = fpvPlayerCampState.z + Math.cos(fpvPlayerCampState.yaw) * 1.32 - Math.sin(fpvPlayerCampState.yaw) * 0.35;
+            spawnFireFlameAtWorld(fireWx, cH.groundY + 0.32, fireWz, 0.45, 2);
+          }
+        }
       }
 
       updateFpvArrows(dt);
@@ -23263,7 +23542,12 @@
     let fpvLookLastY = 0;
 
     function updatePointerRay(e) {
-      if (params.driveMode || (params.fpvMode && params.fpvEquip !== 'sculpt') || (!params.tool || params.tool === 'none')) {
+      if (
+        params.driveMode ||
+        (params.fpvMode && params.fpvEquip !== 'sculpt') ||
+        (!params.tool || params.tool === 'none') ||
+        (typeof objectSelectState !== 'undefined' && objectSelectState.spaceHeld)
+      ) {
         brushRing.visible = false;
         return null;
       }
@@ -23323,7 +23607,22 @@
           } else if (params.fpvEquip === 'bow') {
             fpvState.bowDrawing = true;
             fpvState.bowCharge = 0.08;
+          } else if (params.fpvEquip === 'camp') {
+            pitchFpvPlayerCampsite(true);
           }
+        }
+        return;
+      }
+
+      // In Omniscient Pan Mode OR Sculpt Mode: holding Spacebar activates the Select Object pointer at any time!
+      objectSelectState.pointerClientX = e.clientX;
+      objectSelectState.pointerClientY = e.clientY;
+      if (objectSelectState.spaceHeld && e.button === 0) {
+        isPointerDown = false;
+        brushRing.visible = false;
+        const picked = findSelectableObjectAtPointer(e.clientX, e.clientY);
+        if (picked) {
+          selectAndFollowTarget(picked);
         }
         return;
       }
@@ -23331,16 +23630,6 @@
       // In Omniscient Observer Mode: if tool is 'none' (✋ Pan) or touch is set to 'orbit', let OrbitControls handle panning / camera movement
       if (!params.tool || params.tool === 'none' || (e.pointerType === 'touch' && touchOneFingerMode === 'orbit')) {
         brushRing.visible = false;
-        objectSelectState.pointerClientX = e.clientX;
-        objectSelectState.pointerClientY = e.clientY;
-        if (objectSelectState.spaceHeld && e.button === 0) {
-          // Clicking while holding Spacebar in Pan Mode selects the highlighted animal, plant, or person and zooms in to follow!
-          const picked = findSelectableObjectAtPointer(e.clientX, e.clientY);
-          if (picked) {
-            selectAndFollowTarget(picked);
-          }
-          return;
-        }
         if (e.button === 0 && !objectSelectState.spaceHeld) {
           objectSelectState.isPanDragging = true;
           objectSelectState.panDownX = e.clientX;
@@ -23548,6 +23837,9 @@
             yaw: Number(target.item.yaw.toFixed(4))
           });
         }
+      } else if (target.kind === 'camp' && fpvPlayerCampState.active) {
+        fpvPlayerCampState.yaw = ((fpvPlayerCampState.yaw || 0) + deltaYaw) % (Math.PI * 2);
+        fpvPlayerCampGroup.rotation.y = fpvPlayerCampState.yaw;
       } else if (target.kind === 'person' && typeof voxelHuman !== 'undefined' && voxelHuman.active) {
         voxelHuman.heading = ((voxelHuman.heading || 0) + deltaYaw) % (Math.PI * 2);
         voxelHuman.targetHeading = voxelHuman.heading;
@@ -23577,8 +23869,80 @@
       syncSelectFollowBadgeUI();
     }
 
+    function destroySelectedObject(target, isRemote = false) {
+      if (!target) return;
+      const label = target.label || 'Selected Object';
+      if (target.kind === 'item' && target.item) {
+        const idxIt = placedWorldItems.indexOf(target.item);
+        if (idxIt !== -1) {
+          const itemType = target.item.type;
+          const itemWx = target.item.x;
+          const itemWz = target.item.z;
+          destroyPlacedItemAtIndex(idxIt, true);
+          if (!isRemote && typeof broadcastMultiplayerEvent === 'function' && itemType !== 'item-truck') {
+            broadcastMultiplayerEvent({
+              t: 'destroy_object',
+              kind: 'item',
+              wx: Number(itemWx.toFixed(2)),
+              wz: Number(itemWz.toFixed(2))
+            });
+          }
+        }
+      } else if (target.kind === 'camp' && fpvPlayerCampState.active) {
+        destroyFpvPlayerCampsite(true);
+      } else if (target.kind === 'person' && typeof voxelHuman !== 'undefined' && voxelHuman.active) {
+        destroyVoxelHuman('erase');
+      } else if (target.kind === 'animal' && target.agent) {
+        const a = target.agent;
+        const idxA = faunaAgents.indexOf(a);
+        if (idxA !== -1) {
+          spawnExplosionShards(a.x, a.y + 0.65, a.z, 10, [0xe7e5e4, 0xd6d3c9, a.colorHex || 0xd97706]);
+          spawnSteamPuffAtWorld(a.x, a.y + 0.55, a.z, 5);
+          if (a.rig && typeof disposeApexRig === 'function') {
+            disposeApexRig(a);
+          }
+          faunaAgents.splice(idxA, 1);
+        }
+      } else if (target.kind === 'plant' && typeof target.cellIdx === 'number') {
+        const ci = target.cellIdx;
+        const isJunglePlant = waterProximity[ci] >= 0.38;
+        const plantPalette = isJunglePlant
+          ? [0x16a34a, 0x4ade80, 0x713f12]
+          : [0x4d7c0f, 0x84cc16, 0xfacc15];
+        spawnExplosionShards(target.wx, target.wy + 0.85, target.wz, 10, plantPalette);
+        spawnSteamPuffAtWorld(target.wx, target.wy + 0.65, target.wz, 4);
+        veg[ci] = 0.0;
+        vegHealth[ci] = 0.0;
+        grassMask[ci] = 0;
+        plantBurnTimer[ci] = 0.0;
+        plantSubmergedTimer[ci] = 0.0;
+        if (target.isLilyPad) pondAge[ci] = 0.0;
+        syncTerrainAndWaterMeshes();
+        rebuildFloraInstances();
+        if (!isRemote && typeof broadcastMultiplayerEvent === 'function') {
+          broadcastMultiplayerEvent({
+            t: 'destroy_object',
+            kind: 'plant',
+            cellIdx: ci
+          });
+        }
+      }
+      if (objectSelectState.followedTarget === target) {
+        objectSelectState.followedTarget = null;
+        objectSelectState.zoomTransitionActive = false;
+      }
+      if (objectSelectState.hoveredTarget === target) {
+        objectSelectState.hoveredTarget = null;
+      }
+      selectionHighlightGroup.visible = false;
+      syncSelectFollowBadgeUI();
+      if (!isRemote && typeof showCartridgeToast === 'function') {
+        showCartridgeToast(`💥 Destroyed ${label}`);
+      }
+    }
+
     function isPanModeAvailableForSelect() {
-      return !params.fpvMode && !params.driveMode && (!params.tool || params.tool === 'none') && !isOpticsGameplayPaused;
+      return !params.fpvMode && !params.driveMode && !isOpticsGameplayPaused;
     }
 
     function describePlantAtCell(cellIdx) {
@@ -23728,6 +24092,24 @@
             radius: 1.35,
             height: 2.45,
             colorHex: 0xfde047
+          };
+        });
+      }
+
+      // Check Pitched FPV Player Campsite
+      if (typeof fpvPlayerCampState !== 'undefined' && fpvPlayerCampState.active) {
+        evalScreenCandidate(fpvPlayerCampState.x, fpvPlayerCampState.y + 0.85, fpvPlayerCampState.z, 50, () => {
+          const deg = Math.round((((fpvPlayerCampState.yaw || 0) * 180 / Math.PI) % 360 + 360) % 360);
+          return {
+            kind: 'camp',
+            label: '⛺ Wilderness Campsite',
+            subLabel: `Heading ${deg}° · Shift + ◀/▶ Rotate · Del Destroy`,
+            wx: fpvPlayerCampState.x,
+            wy: fpvPlayerCampState.y,
+            wz: fpvPlayerCampState.z,
+            radius: 2.35,
+            height: 1.85,
+            colorHex: 0xd97706
           };
         });
       }
@@ -23901,8 +24283,8 @@
         }
         if (selectFollowBadgeSubEl) {
           selectFollowBadgeSubEl.textContent = objectSelectState.spaceHeld
-            ? `Shift + ◀/▶ Rotate · Click another target to switch`
-            : `Shift + ◀/▶ Rotate · Zoom: ${(params.selectZoomDistance || 11).toFixed(1)}m · Pan to unfollow`;
+            ? `Shift + ◀/▶ Rotate · Del Destroy · Click another to switch`
+            : `Shift + ◀/▶ Rotate · Del Destroy · Zoom: ${(params.selectZoomDistance || 11).toFixed(1)}m`;
         }
         if (btnStopObjectFollowEl) {
           btnStopObjectFollowEl.style.display = 'inline-block';
@@ -23913,8 +24295,8 @@
         const h = objectSelectState.hoveredTarget;
         if (selectFollowBadgeTextEl) {
           selectFollowBadgeTextEl.textContent = h
-            ? `🎯 Click to Lock & Zoom: ${h.label}`
-            : `🎯 Select Pointer Active — Hover & Click any Animal, Plant, or Person`;
+            ? `🎯 Click to Lock & Zoom: ${h.label} (Del to Destroy)`
+            : `🎯 Select Pointer Active — Hover & Click any Item, Animal, Plant, or Person`;
         }
         if (selectFollowBadgeSubEl) {
           selectFollowBadgeSubEl.textContent = `Zoom Level: ${(params.selectZoomDistance || 11).toFixed(1)}m`;
@@ -24014,6 +24396,14 @@
             f.wx = a.x;
             f.wy = a.y;
             f.wz = a.z;
+          }
+        } else if (f.kind === 'camp') {
+          if (typeof fpvPlayerCampState === 'undefined' || !fpvPlayerCampState.active) {
+            stillValid = false;
+          } else {
+            f.wx = fpvPlayerCampState.x;
+            f.wy = fpvPlayerCampState.y;
+            f.wz = fpvPlayerCampState.z;
           }
         } else if (f.kind === 'item') {
           const it = f.item;
@@ -26557,7 +26947,7 @@
       if (!pkt || typeof pkt !== 'object' || pkt.pid === mpState.myId) return;
 
       // If we are the Room Host, relay guest packets to all other connected guests!
-      if (mpState.isHost && sourceConn && ['brush', 'rotate_item', 'telemetry', 'profile', 'weather'].includes(pkt.t)) {
+      if (mpState.isHost && sourceConn && ['brush', 'rotate_item', 'destroy_object', 'telemetry', 'profile', 'weather'].includes(pkt.t)) {
         for (const [cid, conn] of mpState.guestConns.entries()) {
           if (conn !== sourceConn && conn && conn.open) {
             try { conn.send(pkt); } catch (_) {}
@@ -26645,6 +27035,35 @@
         } else if (pkt.kind === 'plant' && typeof pkt.cellIdx === 'number' && typeof pkt.yaw === 'number') {
           plantYawOffset[pkt.cellIdx] = pkt.yaw;
           rebuildFloraInstances();
+        }
+      } else if (pkt.t === 'destroy_object') {
+        if (pkt.kind === 'item') {
+          let bestIdx = -1;
+          let bestD = 3.5;
+          for (let i = 0; i < placedWorldItems.length; i++) {
+            const it = placedWorldItems[i];
+            if (it.type === 'item-truck') continue;
+            const d = Math.hypot(it.x - pkt.wx, it.z - pkt.wz);
+            if (d < bestD) {
+              bestD = d;
+              bestIdx = i;
+            }
+          }
+          if (bestIdx !== -1) {
+            destroyPlacedItemAtIndex(bestIdx, true);
+          }
+        } else if (pkt.kind === 'plant' && typeof pkt.cellIdx === 'number') {
+          const ci = pkt.cellIdx;
+          if (ci >= 0 && ci < MAX_CELLS) {
+            veg[ci] = 0.0;
+            vegHealth[ci] = 0.0;
+            grassMask[ci] = 0;
+            plantBurnTimer[ci] = 0.0;
+            plantSubmergedTimer[ci] = 0.0;
+            pondAge[ci] = 0.0;
+            syncTerrainAndWaterMeshes();
+            rebuildFloraInstances();
+          }
         }
       } else if (pkt.t === 'weather' && pkt.mode) {
         if (typeof applyWeatherPreset === 'function') {
