@@ -19389,9 +19389,9 @@
           continue;
         }
 
-        // Keep static items anchored to the current terrain ground height as sand drifts or erodes
-        // (Do NOT overwrite 'item-truck' here, because the truck manages its own 3D ramp elevation and airborne soaring altitude!)
-        if (it.type !== 'item-truck') {
+        // Keep item anchored to the current terrain ground height as sand drifts or erodes
+        // (Only skip this temporarily while the truck is mid-air from a ramp launch!)
+        if (!it.isRampJumpActive) {
           it.y = groundY;
           it.mesh.position.y = groundY;
         }
@@ -19803,43 +19803,52 @@
               it.suspRoll = 0.0;
             }
           } else if (it.isAirborne) {
-            // Airborne Jump Physics: when launched off a Stunt Ramp (rampFloatTimer > 0), the vehicle gets a controlled, floaty arc
-            // (~1/5 of the previous extreme launch energy) and resets back to its normal driving settings as soon as it lands!
-            if ((it.rampFloatTimer || 0.0) > 0.0) {
-              it.rampFloatTimer = Math.max(0.0, it.rampFloatTimer - dt);
+            // Only apply temporary ramp-soar physics while it.isRampJumpActive is true; otherwise use exact original truck airborne physics!
+            if (it.isRampJumpActive) {
+              if ((it.rampFloatTimer || 0.0) > 0.0) {
+                it.rampFloatTimer = Math.max(0.0, it.rampFloatTimer - dt);
+              }
+              if ((it.rampLaunchGraceTimer || 0.0) > 0.0) {
+                it.rampLaunchGraceTimer = Math.max(0.0, it.rampLaunchGraceTimer - dt);
+              }
+              const floatBlend = clamp((it.rampFloatTimer || 0.0) / 0.65, 0.0, 1.0);
+              const normalGrav = ((it.velY || 0.0) > 0.0) ? (22.5 - airBoost * 3.0) : 31.5;
+              const rampFloatGrav = ((it.velY || 0.0) > 0.0) ? 13.5 : 16.5;
+              const gravityAccel = normalGrav * (1.0 - floatBlend) + rampFloatGrav * floatBlend;
+              it.velY = (it.velY || 0.0) - gravityAccel * dt;
+              it.y = (it.y ?? avgWheelGroundY) + it.velY * dt;
+
+              const flightArcPitch = clamp(-Math.atan2(it.velY || 0.0, Math.max(10.0, absSpd)) * 0.55, -0.38, 0.22);
+              const airSteerRollTorque = -steerInput * (1.55 - counterweight * 1.10);
+              const rightingRollTorque = -(it.airRoll || 0.0) * counterweight * 8.5 - (it.airRollVel || 0.0) * (1.2 + counterweight * 4.8);
+              const rightingPitchTorque = (flightArcPitch - (it.airPitch || 0.0)) * 7.0 - (it.airPitchVel || 0.0) * (1.5 + counterweight * 4.0);
+
+              it.airRollVel = (it.airRollVel || 0.0) + (airSteerRollTorque + rightingRollTorque) * dt;
+              it.airPitchVel = (it.airPitchVel || 0.0) + ((throttleInput * 0.55 - 0.10) * (1.1 - counterweight * 0.55) + rightingPitchTorque) * dt;
+              it.airPitch = clamp((it.airPitch || 0.0) + it.airPitchVel * dt, -1.35, 1.35);
+              it.airRoll = (it.airRoll || 0.0) + it.airRollVel * dt;
+            } else {
+              // Exact original pre-ramp airborne physics
+              const gravityAccel = ((it.velY || 0.0) > 0.0) ? (22.5 - airBoost * 3.0) : 31.5;
+              it.velY = (it.velY || 0.0) - gravityAccel * dt;
+              it.y = (it.y ?? avgWheelGroundY) + it.velY * dt;
+
+              const airSteerRollTorque = -steerInput * (1.55 - counterweight * 1.10);
+              const rightingRollTorque = -(it.airRoll || 0.0) * counterweight * 8.5 - (it.airRollVel || 0.0) * (1.2 + counterweight * 4.8);
+              const rightingPitchTorque = (-(it.airPitch || 0.0) - terrainPitch * 0.5) * counterweight * 6.0 - (it.airPitchVel || 0.0) * (1.2 + counterweight * 4.0);
+
+              it.airRollVel = (it.airRollVel || 0.0) + (airSteerRollTorque + rightingRollTorque) * dt;
+              it.airPitchVel = (it.airPitchVel || 0.0) + ((throttleInput * 0.65 - 0.14) * (1.1 - counterweight * 0.55) + rightingPitchTorque) * dt;
+              it.airPitch = clamp((it.airPitch || 0.0) + it.airPitchVel * dt, -1.35, 1.35);
+              it.airRoll = (it.airRoll || 0.0) + it.airRollVel * dt;
             }
-            if ((it.rampLaunchGraceTimer || 0.0) > 0.0) {
-              it.rampLaunchGraceTimer = Math.max(0.0, it.rampLaunchGraceTimer - dt);
-            }
-            const isRampSoaring = Boolean(it.isRampJumpActive && (it.rampFloatTimer || 0.0) > 0.0);
-            const floatBlend = isRampSoaring ? clamp((it.rampFloatTimer || 0.0) / 0.65, 0.0, 1.0) : 0.0;
-            const normalGrav = ((it.velY || 0.0) > 0.0) ? (22.5 - airBoost * 3.0) : 31.5;
-            const rampFloatGrav = ((it.velY || 0.0) > 0.0) ? 13.5 : 16.5;
-            const gravityAccel = normalGrav * (1.0 - floatBlend) + rampFloatGrav * floatBlend;
-            it.velY = (it.velY || 0.0) - gravityAccel * dt;
-            it.y = (it.y ?? avgWheelGroundY) + it.velY * dt;
 
-            // Counterweight produces a low-CG self-righting pendulum torque in mid-air that resists barrel-rolling;
-            // during a ramp jump, pitch follows a gentle flight arc and levels out cleanly for landing
-            const flightArcPitch = isRampSoaring
-              ? clamp(-Math.atan2(it.velY || 0.0, Math.max(10.0, absSpd)) * 0.55, -0.38, 0.22)
-              : (-terrainPitch * 0.5);
-            const airSteerRollTorque = -steerInput * (1.55 - counterweight * 1.10);
-            const rightingRollTorque = -(it.airRoll || 0.0) * counterweight * 8.5 - (it.airRollVel || 0.0) * (1.2 + counterweight * 4.8);
-            const rightingPitchTorque = (flightArcPitch - (it.airPitch || 0.0)) * (isRampSoaring ? 7.0 : (counterweight * 6.0)) -
-              (it.airPitchVel || 0.0) * (1.5 + counterweight * 4.0);
-
-            it.airRollVel = (it.airRollVel || 0.0) + (airSteerRollTorque + rightingRollTorque) * dt;
-            it.airPitchVel = (it.airPitchVel || 0.0) + ((throttleInput * 0.55 - 0.10) * (1.1 - counterweight * 0.55) + rightingPitchTorque) * dt;
-            it.airPitch = clamp((it.airPitch || 0.0) + it.airPitchVel * dt, -1.35, 1.35);
-            it.airRoll = (it.airRoll || 0.0) + it.airRollVel * dt;
-
-            // Only check ground touchdown once the initial launch grace window clears or once descending
-            const canTouchDown = ((it.rampLaunchGraceTimer || 0.0) <= 0.0) || ((it.velY || 0.0) <= 0.0);
+            const canTouchDown = !it.isRampJumpActive || ((it.rampLaunchGraceTimer || 0.0) <= 0.0) || ((it.velY || 0.0) <= 0.0);
             if (canTouchDown && it.y <= avgWheelGroundY) {
-              // Touchdown on the terrain! Reset the vehicle back to its normal pre-ramp driving settings & state
+              // Touchdown on the terrain! Reset the vehicle back to its exact original pre-ramp settings & state
               const impactVy = Math.max(0.0, -(it.velY || 0.0));
               it.y = avgWheelGroundY;
+              it.prevGroundY = avgWheelGroundY;
               it.velY = 0.0;
               it.isAirborne = false;
               it.prevGroundVelY = 0.0;
