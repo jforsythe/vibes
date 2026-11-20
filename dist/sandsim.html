@@ -19703,9 +19703,9 @@
           continue;
         }
 
-        // Keep static items anchored to the current terrain ground height as sand drifts or erodes
-        // (The 4x4 Offroad Truck manages its own 3D elevation via its 4-wheel raycast suspension & rigid-body solver!)
-        if (it.type !== 'item-truck') {
+        // Keep item anchored to the current terrain ground height as sand drifts or erodes
+        // (Only skip this temporarily while the truck is mid-air from a ramp launch!)
+        if (!it.isRampJumpActive) {
           it.y = groundY;
           it.mesh.position.y = groundY;
         }
@@ -19955,7 +19955,7 @@
           const topSpeedScale = baseTopSpeed / 24.0;
           const maxFwdSpeed = isRoadSurface ? (baseTopSpeed * 1.21) : baseTopSpeed;
           const maxRevSpeed = -10.5 * Math.max(0.85, Math.sqrt(topSpeedScale));
-          const accelRate = (isRoadSurface ? 24.5 : 20.5) * (0.35 + 0.65 * topSpeedScale);
+          const accelRate = (isRoadSurface ? 23.5 : 19.5) * (0.35 + 0.65 * topSpeedScale);
 
           // Tuning sliders
           const suspStiff = clamp(params.truckSuspension ?? 0.31, 0.10, 1.0);
@@ -19964,576 +19964,218 @@
           const jumpLift = clamp(params.truckJumpLift ?? 0.69, 0.0, 1.0);
           const airBoost = clamp(params.truckAirBoost ?? 0.38, 0.0, 1.0);
 
-          // Smooth speed-sensitive steering knuckle response (slightly reduced max steering angle at top speed for stability)
-          const curHorizSpd = Math.hypot(it.vx || 0.0, it.vz || 0.0);
-          const highSpeedSteerTaper = 1.0 - 0.24 * clamp((curHorizSpd - 14.0) / Math.max(8.0, maxFwdSpeed), 0.0, 1.0);
-          const targetSteer = steerInput * 0.52 * highSpeedSteerTaper;
-          it.steerAngle = (it.steerAngle || 0.0) + (targetSteer - (it.steerAngle || 0.0)) * Math.min(1.0, dt * (9.5 + tireTracking * 5.5));
-
-          // Ensure 3D state vectors exist (supports legacy/cartridge-loaded truck items seamlessly)
-          if (typeof it.vx !== 'number' || Number.isNaN(it.vx)) {
+          // Ensure 2D horizontal velocity vector (vx, vz) exists
+          if (typeof it.vx !== 'number' || Number.isNaN(it.vx) || typeof it.vz !== 'number' || Number.isNaN(it.vz)) {
             const initSpd = it.speed || 0.0;
             it.vx = Math.sin(it.yaw) * initSpd;
             it.vz = Math.cos(it.yaw) * initSpd;
-            it.vy = it.velY || 0.0;
           }
-          if (typeof it.bodyPitch !== 'number' || Number.isNaN(it.bodyPitch)) it.bodyPitch = 0.0;
-          if (typeof it.bodyRoll !== 'number' || Number.isNaN(it.bodyRoll)) it.bodyRoll = 0.0;
           if (typeof it.omegaYaw !== 'number' || Number.isNaN(it.omegaYaw)) it.omegaYaw = 0.0;
-          if (typeof it.omegaPitch !== 'number' || Number.isNaN(it.omegaPitch)) it.omegaPitch = 0.0;
-          if (typeof it.omegaRoll !== 'number' || Number.isNaN(it.omegaRoll)) it.omegaRoll = 0.0;
           if (!Array.isArray(it.wheelOffsetY)) it.wheelOffsetY = [0.0, 0.0, 0.0, 0.0];
 
-          // =========================================================================================
-          // SUB-STEPPED 4-WHEEL RAYCAST SUSPENSION + 3D VELOCITY / FRICTION-CIRCLE BAJA PHYSICS SOLVER
-          // Modeled after cannon-es RaycastVehicle & Marco Monster's Car Physics for Games:
-          // - 4 independent raycast coilover struts (FL, FR, RL, RR) with asymmetric compression/rebound
-          //   shock damping and progressive hydraulic bump-stops (zero pogo-bouncing on touchdown!)
-          // - True 3D linear velocity vector (vx, vy, vz) + 2D horizontal tire Friction Circle
-          //   (separate longitudinal drive/brake & lateral cornering forces per axle)
-          // - Natural offroad 4-wheel sand drift, high-grip asphalt bite on Paved/Brick roads,
-          //   and counter-steered E-Brake (Spacebar) power-slides with real momentum transfer
-          // =========================================================================================
-          const SUBSTEPS = 3;
-          const subDt = clamp(dt, 0.002, 0.05) / SUBSTEPS;
-          const halfBound = WORLD_SIZE * 0.465;
+          // Smooth speed-sensitive front steering knuckle response
+          const curHorizSpd = Math.hypot(it.vx, it.vz);
+          const highSpeedSteerTaper = 1.0 - 0.22 * clamp((curHorizSpd - 14.0) / Math.max(8.0, maxFwdSpeed), 0.0, 1.0);
+          const targetSteer = steerInput * 0.50 * highSpeedSteerTaper;
+          it.steerAngle = (it.steerAngle || 0.0) + (targetSteer - (it.steerAngle || 0.0)) * Math.min(1.0, dt * (9.5 + tireTracking * 5.5));
 
-          // Wheel corner coordinates in chassis space: FL(0), FR(1), RL(2), RR(3)
-          const WHEEL_LX = [-0.84, 0.84, -0.84, 0.84];
-          const WHEEL_LZ = [1.16, 1.16, -1.16, -1.16];
-          const maxDroop = 0.24 - suspStiff * 0.06; // ~0.22m droop travel at default Baja suspension
-          const maxComp = 0.36;                     // 0.36m upward compression travel into fender wells
-          const baseGrav = 24.5;
-          // At equilibrium on flat ground (pen = maxDroop on all 4 wheels), 4 * kCorner * maxDroop = baseGrav
-          const kCorner = (baseGrav / (4.0 * maxDroop)) * (0.88 + 0.38 * suspStiff);
-          // Near-critical compression damping & slightly overdamped rebound (absorbs landings in 1 plush stroke!)
-          const cComp = 2.0 * Math.sqrt(kCorner * 0.25) * (0.94 + 0.28 * suspStiff);
-          const cRebound = cComp * 1.16;
+          // 1. 2D Horizontal Friction-Circle Offroad Driving Physics (vx, vz)
+          // Surface friction coefficient mu (Paved/Brick Road = 1.42, Oasis Dirt = 1.06, Desert Sand = 0.88)
+          const baseSurfMu = isRoadSurface ? 1.42 : (surfMatHere === 1 ? 1.06 : 0.88);
+          const wetMuScale = waterDepth > 0.08 ? clamp(1.0 - waterDepth * 0.40, 0.60, 1.0) : 1.0;
+          const tireMu = baseSurfMu * wetMuScale * (0.58 + 0.52 * tireTracking);
 
-          // Surface friction coefficient mu (Paved/Brick Road = 1.42, Oasis Dirt = 1.05, Desert Sand = 0.86)
-          const baseSurfMu = isRoadSurface ? 1.42 : (surfMatHere === 1 ? 1.05 : 0.86);
-          const wetMuScale = waterDepth > 0.06 ? clamp(1.0 - waterDepth * 0.42, 0.58, 1.0) : 1.0;
-          const tireMu = baseSurfMu * wetMuScale * (0.56 + 0.54 * tireTracking);
+          const prevFwdX = Math.sin(it.yaw);
+          const prevFwdZ = Math.cos(it.yaw);
+          const prevRightX = Math.cos(it.yaw);
+          const prevRightZ = -Math.sin(it.yaw);
 
-          let avgWheelGroundY = groundY;
-          let terrainPitch = 0.0;
-          let terrainRoll = 0.0;
-          let activeRamp = null;
-          let rFL = null, rFR = null, rRL = null, rRR = null, rCenter = null;
-          let groundedWheels = 0;
-          let longAccelG = 0.0;
-          let latAccelG = 0.0;
+          let vFwd = it.vx * prevFwdX + it.vz * prevFwdZ;
+          let vLat = it.vx * prevRightX + it.vz * prevRightZ;
+          const prevVFwd = vFwd;
+          const prevVLat = vLat;
 
-          for (let step = 0; step < SUBSTEPS; step++) {
-            const fwdX = Math.sin(it.yaw);
-            const fwdZ = Math.cos(it.yaw);
-            const rightX = Math.cos(it.yaw);
-            const rightZ = -Math.sin(it.yaw);
-
-            // 1. Sample 4 wheel raycasts + center against terrain and 3D Stunt Ramps
-            const flX = it.x + fwdX * 1.16 - rightX * 0.84, flZ = it.z + fwdZ * 1.16 - rightZ * 0.84;
-            const frX = it.x + fwdX * 1.16 + rightX * 0.84, frZ = it.z + fwdZ * 1.16 + rightZ * 0.84;
-            const rlX = it.x - fwdX * 1.16 - rightX * 0.84, rlZ = it.z - fwdZ * 1.16 - rightZ * 0.84;
-            const rrX = it.x - fwdX * 1.16 + rightX * 0.84, rrZ = it.z - fwdZ * 1.16 + rightZ * 0.84;
-
-            rFL = sampleRampDeckAtWorld(flX, flZ, sampleHeightsAtWorld(flX, flZ).groundY);
-            rFR = sampleRampDeckAtWorld(frX, frZ, sampleHeightsAtWorld(frX, frZ).groundY);
-            rRL = sampleRampDeckAtWorld(rlX, rlZ, sampleHeightsAtWorld(rlX, rlZ).groundY);
-            rRR = sampleRampDeckAtWorld(rrX, rrZ, sampleHeightsAtWorld(rrX, rrZ).groundY);
-            rCenter = sampleRampDeckAtWorld(it.x, it.z, sampleHeightsAtWorld(it.x, it.z).groundY);
-
-            const wheelGroundH = [rFL.y, rFR.y, rRL.y, rRR.y];
-            activeRamp = rFL.ramp || rFR.ramp || rCenter.ramp || rRL.ramp || rRR.ramp;
-            avgWheelGroundY = 0.25 * (rFL.y + rFR.y + rRL.y + rRR.y);
-            terrainPitch = Math.atan2(((rFL.y + rFR.y) * 0.5) - ((rRL.y + rRR.y) * 0.5), 2.32);
-            terrainRoll = Math.atan2(((rFR.y + rRR.y) * 0.5) - ((rFL.y + rRL.y) * 0.5), 1.68);
-
-            if (it.isFlipped) {
-              // Upside-down roof slide: bleed horizontal velocity and wait for 5-second auto-unflip
-              const roofDecay = Math.exp(-3.6 * subDt);
-              it.vx *= roofDecay;
-              it.vz *= roofDecay;
-              it.vy = 0.0;
-              it.omegaYaw = 0.0;
-              it.omegaPitch = 0.0;
-              it.omegaRoll = 0.0;
-              it.x = clamp(it.x + it.vx * subDt, -halfBound, halfBound);
-              it.z = clamp(it.z + it.vz * subDt, -halfBound, halfBound);
-              groundedWheels = 0;
-              continue;
+          if (it.isFlipped) {
+            // Sliding to a stop on its roof while flipped upside-down
+            const roofDecay = Math.exp(-3.5 * dt);
+            vFwd *= roofDecay;
+            vLat *= roofDecay;
+            if (Math.hypot(vFwd, vLat) < 0.05) {
+              vFwd = 0.0;
+              vLat = 0.0;
             }
-
-            // Decompose current horizontal velocity into vehicle-local forward (vFwd) and lateral (vLat) components
-            let vFwd = it.vx * fwdX + it.vz * fwdZ;
-            let vLat = it.vx * rightX + it.vz * rightZ;
-            const slopeVertVel = vFwd * Math.sin(terrainPitch) + vLat * Math.sin(terrainRoll);
-
-            // 2. Evaluate 4-Corner Raycast Suspension Forces (Spring + Asymmetric Shock Damper + Bump-Stop)
-            const sinPitch = Math.sin(it.bodyPitch);
-            const cosPitch = Math.cos(it.bodyPitch);
-            const sinRoll = Math.sin(it.bodyRoll);
-            const cosRoll = Math.cos(it.bodyRoll);
-
-            const wheelForce = [0.0, 0.0, 0.0, 0.0];
-            groundedWheels = 0;
-            const inRampGrace = Boolean(it.isRampJumpActive && (it.rampLaunchGraceTimer || 0.0) > 0.04 && it.vy > 0.0);
-
-            for (let w = 0; w < 4; w++) {
-              const lx = WHEEL_LX[w];
-              const lz = WHEEL_LZ[w];
-              const cornerY = it.y + lz * sinPitch + lx * sinRoll;
-              const cornerVy = it.vy + lz * cosPitch * it.omegaPitch + lx * cosRoll * it.omegaRoll;
-              const hGround = wheelGroundH[w];
-              const pen = hGround - (cornerY - maxDroop);
-
-              if (!inRampGrace && pen > 0.0) {
-                groundedWheels++;
-                const clampedPen = clamp(pen, 0.0, maxDroop + maxComp);
-                let fSpring = kCorner * clampedPen;
-                // Progressive hydraulic bump-stop near full compression prevents chassis bottoming out
-                const overComp = pen - (maxDroop + 0.14);
-                if (overComp > 0.0) {
-                  fSpring += kCorner * overComp * (1.8 + overComp * 6.5);
-                }
-                const relVy = cornerVy - slopeVertVel;
-                const fDamp = -relVy * (relVy < 0.0 ? cComp : cRebound);
-                // Tires only push upward on the ground (never pull the truck downward like glue!)
-                wheelForce[w] = Math.max(0.0, fSpring + fDamp);
-
-                const targetOffset = clamp(hGround - cornerY, -maxDroop, maxComp);
-                it.wheelOffsetY[w] += (targetOffset - it.wheelOffsetY[w]) * Math.min(1.0, subDt * 42.0);
+            it.omegaYaw = 0.0;
+            it.vx = vFwd * prevFwdX + vLat * prevRightX;
+            it.vz = vFwd * prevFwdZ + vLat * prevRightZ;
+          } else if (it.isAirborne) {
+            // Airborne: preserve 2D horizontal momentum in world space (near-zero drag during ramp float)
+            const airDrag = (it.rampFloatTimer || 0.0) > 0.0 ? 0.02 : 0.22;
+            const airDecay = Math.exp(-airDrag * dt);
+            it.vx *= airDecay;
+            it.vz *= airDecay;
+            it.omegaYaw = steerInput * 1.15;
+            it.yaw += it.omegaYaw * dt;
+          } else {
+            // Grounded 4x4 AWD Longitudinal Drive, Disc Braking & Rolling Resistance
+            if (throttleInput > 0.0) {
+              if (vFwd < -0.15) {
+                vFwd = Math.min(0.0, vFwd + 35.0 * tireMu * dt); // Braking from reverse
               } else {
-                wheelForce[w] = 0.0;
-                // Wheel unloads and droops smoothly to full extension in the wheel well
-                it.wheelOffsetY[w] += (-maxDroop * 0.85 - it.wheelOffsetY[w]) * Math.min(1.0, subDt * 18.0);
+                const spdRatio = clamp(vFwd / Math.max(1.0, maxFwdSpeed), 0.0, 1.0);
+                const torqueCurve = 1.0 - 0.38 * Math.pow(spdRatio, 1.25);
+                vFwd = Math.min(maxFwdSpeed, vFwd + accelRate * torqueCurve * throttleInput * dt);
               }
-            }
-
-            const totalSuspForce = wheelForce[0] + wheelForce[1] + wheelForce[2] + wheelForce[3];
-            const wasAirborneBeforeStep = Boolean(it.isAirborne);
-
-            // 3. Vertical Acceleration & Touchdown / Airborne State Transitions
-            if (it.isRampJumpActive) {
-              if ((it.rampFloatTimer || 0.0) > 0.0) {
-                it.rampFloatTimer = Math.max(0.0, it.rampFloatTimer - subDt);
-              }
-              if ((it.rampLaunchGraceTimer || 0.0) > 0.0) {
-                it.rampLaunchGraceTimer = Math.max(0.0, it.rampLaunchGraceTimer - subDt);
-              }
-            }
-
-            let effGrav = baseGrav;
-            if (groundedWheels === 0) {
-              if (it.isRampJumpActive) {
-                const floatBlend = clamp((it.rampFloatTimer || 0.0) / 0.65, 0.0, 1.0);
-                const normalGrav = (it.vy > 0.0) ? (22.5 - airBoost * 3.0) : 29.5;
-                const rampFloatGrav = (it.vy > 0.0) ? 13.5 : 16.5;
-                effGrav = normalGrav * (1.0 - floatBlend) + rampFloatGrav * floatBlend;
+            } else if (throttleInput < 0.0) {
+              if (vFwd > 0.30) {
+                vFwd = Math.max(0.0, vFwd - 35.0 * tireMu * dt); // Hard 4-wheel disc brakes
               } else {
-                effGrav = (it.vy > 0.0) ? (22.5 - airBoost * 3.0) : 28.5;
+                vFwd = Math.max(maxRevSpeed, vFwd + 14.5 * throttleInput * dt);
               }
-            }
-
-            it.vy += (totalSuspForce - effGrav) * subDt;
-            it.y += it.vy * subDt;
-
-            // Floor safety clamp (hydraulic bump-stop floor so the chassis frame never clips below the terrain/ramp)
-            const minChassisY = avgWheelGroundY - maxComp * 0.72;
-            if (!inRampGrace && it.y < minChassisY) {
-              it.y = minChassisY;
-              if (it.vy < slopeVertVel) {
-                it.vy = slopeVertVel;
-              }
-              groundedWheels = Math.max(groundedWheels, 2);
-            }
-
-            // Detect touchdown event from an airborne jump!
-            if (wasAirborneBeforeStep && groundedWheels >= 2 && !inRampGrace && it.vy <= slopeVertVel + 1.5) {
-              const impactVy = Math.max(0.0, -(it.vy - slopeVertVel));
-              it.isAirborne = false;
-              it.upwardClimbCharge = 0.0;
-
-              if (it.isRampJumpActive) {
-                if (typeof it.preRampSpeed === 'number') {
-                  const preAbs = Math.abs(it.preRampSpeed);
-                  const curAbs = Math.hypot(it.vx, it.vz);
-                  const targetLandSpd = clamp(preAbs > 0.5 ? preAbs : curAbs, 0.0, maxFwdSpeed);
-                  if (curAbs > 0.1 && curAbs > targetLandSpd) {
-                    const scale = targetLandSpd / curAbs;
-                    it.vx *= scale;
-                    it.vz *= scale;
-                    vFwd *= scale;
-                    vLat *= scale;
-                  }
-                }
-                it.isRampJumpActive = false;
-                it.preRampSpeed = undefined;
-                it.rampFloatTimer = 0.0;
-                it.rampLaunchGraceTimer = 0.0;
-                it.wasOnRamp = null;
-              }
-
-              // Compress chassis visual coilover spring on touchdown (critically damped, settles in one stroke)
-              const compScale = 0.048 - suspStiff * 0.022;
-              it.suspY = -clamp(impactVy * compScale, 0.03, 0.30);
-              it.suspVelY = -impactVy * (0.26 - suspStiff * 0.12);
-
-              // Touchdown sand/dust burst from all 4 tires
-              if (!isRoadSurface && waterDepth < 0.08 && (params.truckSmokeIntensity ?? 0.60) > 0.02 && impactVy > 1.8) {
-                for (let wBurst = 0; wBurst < 8; wBurst++) {
-                  const angB = (wBurst / 8) * Math.PI * 2;
-                  emitTruckSandDust(
-                    it.x + Math.cos(angB) * 1.2,
-                    avgWheelGroundY + 0.25,
-                    it.z + Math.sin(angB) * 1.2,
-                    Math.cos(angB) * (2.0 + impactVy * 0.24),
-                    0.75 + Math.random() * 1.0,
-                    Math.sin(angB) * (2.0 + impactVy * 0.24),
-                    surfMatHere,
-                    0.72
-                  );
-                }
-              }
-
-              // Check if an extreme awkward landing angle or high-slip sideways impact flips the truck
-              if (counterweight < 0.98 && impactVy > 2.5) {
-                const landingRollDelta = Math.abs(it.bodyRoll - terrainRoll);
-                const landingPitchDelta = Math.abs(it.bodyPitch - terrainPitch);
-                const rollFlipThreshold = 0.64 + counterweight * 0.95;
-                const pitchFlipThreshold = 0.86 + counterweight * 0.85;
-                const sideImpactRollThresh = 0.32 + counterweight * 0.72;
-                const sideImpactVyThresh = 3.8 + counterweight * 4.8;
-                if (
-                  landingRollDelta > rollFlipThreshold ||
-                  landingPitchDelta > pitchFlipThreshold ||
-                  (impactVy > sideImpactVyThresh && Math.abs(it.driftSlipAngle || 0.0) > 0.50 && landingRollDelta > sideImpactRollThresh)
-                ) {
-                  it.isFlipped = true;
-                  it.flipTimer = 0.0;
-                  it.flipRollDir = ((it.bodyRoll || terrainRoll) >= 0 ? 1 : -1);
-                  it.flipRollCurrent = it.bodyRoll || (it.flipRollDir * 0.85);
-                  continue;
-                }
-              }
-            }
-
-            it.isAirborne = (groundedWheels === 0);
-
-            // 4. Chassis Pitch & Roll Dynamics (Driven by the 4 Corner Suspension Forces + Mid-Air Counterweight Righting)
-            if (groundedWheels > 0) {
-              // Pitch torque from front vs rear axle normal forces + terrain slope alignment damper
-              const frontForce = (wheelForce[0] + wheelForce[1]) * 0.5;
-              const rearForce = (wheelForce[2] + wheelForce[3]) * 0.5;
-              const pitchForceDiff = (frontForce - rearForce) * 1.85;
-              const pitchAlignSpring = (terrainPitch - it.bodyPitch) * (36.0 + suspStiff * 28.0);
-              const pitchDamp = -it.omegaPitch * (11.5 + suspStiff * 6.5);
-              it.omegaPitch += (pitchForceDiff + pitchAlignSpring + pitchDamp) * subDt;
-
-              // Roll torque from left vs right wheel normal forces + anti-roll sway bar
-              const rightForce = (wheelForce[1] + wheelForce[3]) * 0.5;
-              const leftForce = (wheelForce[0] + wheelForce[2]) * 0.5;
-              const rollForceDiff = (leftForce - rightForce) * 1.95;
-              const rollAlignSpring = (terrainRoll - it.bodyRoll) * (40.0 + suspStiff * 32.0);
-              const rollDamp = -it.omegaRoll * (12.5 + suspStiff * 7.0);
-              it.omegaRoll += (rollForceDiff + rollAlignSpring + rollDamp) * subDt;
-
-              it.bodyPitch = clamp(it.bodyPitch + it.omegaPitch * subDt, -1.25, 1.25);
-              it.bodyRoll = clamp(it.bodyRoll + it.omegaRoll * subDt, -1.25, 1.25);
             } else {
-              // Airborne pitch & roll attitude control + Counterweight self-righting stabilization
-              const absHoriz = Math.hypot(it.vx, it.vz);
-              const airSteerRollTorque = -steerInput * (1.55 - counterweight * 1.10);
-              const rightingRollTorque = -it.bodyRoll * counterweight * 8.5 - it.omegaRoll * (1.4 + counterweight * 4.8);
-              const targetAirPitch = it.isRampJumpActive
-                ? clamp(Math.atan2(it.vy, Math.max(10.0, absHoriz)) * 0.52, -0.24, 0.38)
-                : (terrainPitch * 0.45);
-              const rightingPitchTorque = (targetAirPitch - it.bodyPitch) * (5.5 + counterweight * 3.5) - it.omegaPitch * (1.5 + counterweight * 4.0);
-              const throttlePitchTorque = -(throttleInput * 0.55 - 0.10) * (1.05 - counterweight * 0.55);
-
-              it.omegaRoll += (airSteerRollTorque + rightingRollTorque) * subDt;
-              it.omegaPitch += (throttlePitchTorque + rightingPitchTorque) * subDt;
-              it.bodyPitch = clamp(it.bodyPitch + it.omegaPitch * subDt, -1.35, 1.35);
-              it.bodyRoll = clamp(it.bodyRoll + it.omegaRoll * subDt, -1.35, 1.35);
+              const coastDrag = isRoadSurface ? 1.85 : 2.25;
+              vFwd *= Math.exp(-coastDrag * dt);
+              if (Math.abs(vFwd) < 0.04) vFwd = 0.0;
             }
 
-            // 5. 2D Horizontal Tire Friction-Circle Physics (Longitudinal Drive/Brake + Lateral Cornering + E-Brake Power-Slide)
-            const tractionRatio = groundedWheels / 4.0;
-            const prevVFwd = vFwd;
-            const prevVLat = vLat;
-
-            if (groundedWheels > 0) {
-              // 5A. Longitudinal forces along vehicle heading (AWD Engine Torque, Disc Brakes, Terrain Slope Gravity, Rolling Resistance)
-              let driveAccel = 0.0;
-              if (throttleInput > 0.0) {
-                if (vFwd < -0.25) {
-                  // Foot-braking from reverse
-                  driveAccel = 36.0 * tireMu;
-                } else {
-                  const spdRatio = clamp(vFwd / Math.max(1.0, maxFwdSpeed), 0.0, 1.15);
-                  const torqueCurve = Math.max(0.0, 1.0 - 0.68 * Math.pow(spdRatio, 1.35));
-                  driveAccel = accelRate * torqueCurve * throttleInput;
-                }
-              } else if (throttleInput < 0.0) {
-                if (vFwd > 0.35) {
-                  // Hard 4-wheel disc brakes
-                  driveAccel = -36.0 * tireMu;
-                } else {
-                  const revRatio = clamp(Math.abs(vFwd) / Math.abs(maxRevSpeed), 0.0, 1.1);
-                  const revCurve = Math.max(0.0, 1.0 - 0.70 * revRatio);
-                  driveAccel = 15.5 * revCurve * throttleInput;
-                }
-              }
-
-              // Terrain uphill/downhill gravity pull along vehicle forward axis
-              // (When throttle is held uphill, engine torque + airBoost overcomes slope gravity cleanly)
-              const uphillTorqueAssist = (throttleInput > 0.0 && terrainPitch > 0.02) ? (0.35 + airBoost * 0.55) : 1.0;
-              const slopeLongAccel = -baseGrav * Math.sin(terrainPitch) * 0.28 * uphillTorqueAssist;
-              const slopeLatAccel = -baseGrav * Math.sin(terrainRoll) * 0.22;
-
-              vFwd += (driveAccel * tractionRatio + slopeLongAccel * tractionRatio) * subDt;
-              vLat += (slopeLatAccel * tractionRatio) * subDt;
-
-              // Rolling resistance & aerodynamic drag (lower rolling drag on Paved/Brick Road!)
-              const rollDrag = (Math.abs(throttleInput) < 0.02)
-                ? (isRoadSurface ? 1.85 : 2.35)
-                : (isRoadSurface ? 0.28 : 0.42);
-              vFwd *= Math.exp(-rollDrag * subDt);
-
-              // Water wading drag in oasis ponds
-              if (waterDepth > 0.12) {
-                const waterDrag = clamp(waterDepth * 1.45, 0.2, 2.9);
-                vFwd *= Math.exp(-waterDrag * subDt);
-                vLat *= Math.exp(-waterDrag * 1.2 * subDt);
-              }
-
-              // E-Brake (Spacebar) longitudinal scrub
-              if (isDrifting) {
-                const ebrakeLongDrag = (throttleInput > 0.0) ? 0.48 : 3.25;
-                vFwd *= Math.exp(-ebrakeLongDrag * tractionRatio * subDt);
-              }
-
-              // Clamp forward speed within surface top-speed envelope
-              vFwd = clamp(vFwd, maxRevSpeed, maxFwdSpeed * (1.0 + airBoost * 0.14));
-
-              // 5B. Front & Rear Axle Lateral Cornering Forces & Yaw Torque (Bicycle / 4-Wheel Friction-Circle Model)
-              // Front axle is steered by it.steerAngle; when moving, front tires pull the nose toward the steered heading
-              // and transfer lateral centripetal force into the chassis velocity vector (vx, vz)!
-              const absFwd = Math.abs(vFwd);
-              const fwdSign = vFwd >= -0.05 ? 1.0 : -1.0;
-              const speedTurnFactor = clamp(absFwd / 6.2, 0.0, 1.22) * (1.0 - clamp(absFwd / 54.0, 0.0, 0.30));
-
-              // Front axle steering authority + Rear axle cornering stiffness
-              const frontGrip = tireMu * (1.58 + tireTracking * 0.62);
-              // When E-Brake (Spacebar) is pulled, rear lateral grip drops sharply so the tail swings out into a true momentum drift!
-              const rearLatStiffness = isDrifting
-                ? (1.65 + tireTracking * 1.35) * tireMu
-                : (6.80 + tireTracking * 9.80) * tireMu * (isRoadSurface ? 1.25 : 1.0);
-
-              // Target yaw angular velocity from steered front wheels + E-Brake oversteer moment
-              const oversteerBoost = (isDrifting && absFwd > 2.0)
-                ? (steerInput * (1.28 - tireTracking * 0.35) * fwdSign)
-                : 0.0;
-              const targetOmegaYaw = (it.steerAngle * frontGrip + oversteerBoost) * speedTurnFactor * fwdSign;
-              const yawResponse = (isDrifting ? 9.5 : (11.0 + tireTracking * 7.5)) * tractionRatio;
-              it.omegaYaw += (targetOmegaYaw - it.omegaYaw) * Math.min(1.0, subDt * yawResponse);
-
-              // Rotate chassis heading by yaw angular velocity
-              const deltaYaw = it.omegaYaw * subDt;
-              it.yaw += deltaYaw;
-
-              // Because the chassis rotated by deltaYaw while the velocity vector (vx, vz) has inertia in world space,
-              // rotating the local frame induces an apparent lateral velocity (-vFwd * sin(deltaYaw)) that the tires must resist!
-              // High rearLatStiffness (asphalt road / high tireTracking) hooks the velocity vector cleanly around the turn;
-              // Lower rearLatStiffness (loose desert sand / E-Brake drift) lets the rear end step out into an authentic four-wheel drift!
-              const newFwdX = Math.sin(it.yaw);
-              const newFwdZ = Math.cos(it.yaw);
-              const newRightX = Math.cos(it.yaw);
-              const newRightZ = -Math.sin(it.yaw);
-
-              // Re-compose world velocity with updated longitudinal vFwd and previous lateral vLat, then project into rotated frame
-              const worldVxTemp = vFwd * fwdX + vLat * rightX;
-              const worldVzTemp = vFwd * fwdZ + vLat * rightZ;
-              vFwd = worldVxTemp * newFwdX + worldVzTemp * newFwdZ;
-              vLat = worldVxTemp * newRightX + worldVzTemp * newRightZ;
-
-              // Apply lateral tire friction force (bounded by Friction Circle mu * g) to damp sideways sliding velocity vLat
-              const maxLatAccel = tireMu * baseGrav * (isDrifting ? 0.42 : 0.98) * tractionRatio;
-              const desiredLatAccel = -vLat * rearLatStiffness * tractionRatio;
-              const appliedLatAccel = clamp(desiredLatAccel, -maxLatAccel, maxLatAccel);
-              vLat += appliedLatAccel * subDt;
-
-              // When powering through a drift with throttle held, front steered tires pull the velocity vector forward out of the slide
-              if (throttleInput > 0.0 && Math.abs(it.steerAngle) > 0.02) {
-                const frontPullLat = Math.sin(it.steerAngle) * accelRate * 0.42 * throttleInput * tractionRatio;
-                vLat += frontPullLat * subDt;
-              }
-
-              // Automatic Hill-Hold Parking Brake when stopped with no throttle input
-              if (Math.abs(throttleInput) < 0.02 && !isDrifting && Math.hypot(vFwd, vLat) < 0.48) {
-                vFwd *= Math.exp(-14.0 * subDt);
-                vLat *= Math.exp(-16.0 * subDt);
-                if (Math.hypot(vFwd, vLat) < 0.04) {
-                  vFwd = 0.0;
-                  vLat = 0.0;
-                  it.omegaYaw = 0.0;
-                }
-              }
-
-              // Convert local (vFwd, vLat) back to world 3D horizontal velocity (it.vx, it.vz)
-              it.vx = vFwd * newFwdX + vLat * newRightX;
-              it.vz = vFwd * newFwdZ + vLat * newRightZ;
-            } else {
-              // Airborne: preserve 2D horizontal momentum in world space (near-zero drag during ramp float)
-              const airDrag = (it.rampFloatTimer || 0.0) > 0.0 ? 0.015 : 0.18;
-              const airDecay = Math.exp(-airDrag * subDt);
-              it.vx *= airDecay;
-              it.vz *= airDecay;
-              // Mid-air yaw trim control
-              it.omegaYaw += (steerInput * 1.15 - it.omegaYaw) * Math.min(1.0, subDt * 6.0);
-              it.yaw += it.omegaYaw * subDt;
+            // Water wading drag if driving through an oasis pond
+            if (waterDepth > 0.15) {
+              const waterDrag = clamp(waterDepth * 1.4, 0.2, 2.8);
+              vFwd *= Math.exp(-waterDrag * dt);
+              vLat *= Math.exp(-waterDrag * 1.2 * dt);
             }
 
-            longAccelG = clamp((vFwd - prevVFwd) / (subDt * baseGrav), -1.5, 1.5);
-            latAccelG = clamp((vLat - prevVLat) / (subDt * baseGrav) + (vFwd * it.omegaYaw) / baseGrav, -1.6, 1.6);
+            // Spacebar E-Brake longitudinal scrub
+            if (isDrifting) {
+              const driftDrag = (throttleInput > 0.0) ? 0.50 : 3.2;
+              vFwd *= Math.exp(-driftDrag * dt);
+            }
 
-            // 6. Integrate horizontal world position (it.x, it.z) with world boundary rebound
-            const nextX = clamp(it.x + it.vx * subDt, -halfBound, halfBound);
-            const nextZ = clamp(it.z + it.vz * subDt, -halfBound, halfBound);
-            if (Math.abs(nextX) >= halfBound - 0.05) it.vx *= -0.35;
-            if (Math.abs(nextZ) >= halfBound - 0.05) it.vz *= -0.35;
-            it.x = nextX;
-            it.z = nextZ;
+            // Front & Rear Axle Lateral Cornering Grip + E-Brake Power-Slide Oversteer
+            const absFwd = Math.abs(vFwd);
+            const fwdSign = vFwd >= -0.05 ? 1.0 : -1.0;
+            const turnFactor = clamp(absFwd / 6.8, 0.0, 1.22) * (1.0 - clamp(absFwd / 52.0, 0.0, 0.32));
+            const steerAuthority = (1.58 + tireTracking * 0.58) * clamp(tireMu, 0.72, 1.32);
+            const oversteerBoost = (isDrifting && absFwd > 2.0)
+              ? (steerInput * (1.18 - tireTracking * 0.34) * fwdSign)
+              : 0.0;
+            const targetOmegaYaw = (it.steerAngle * steerAuthority + oversteerBoost) * turnFactor * fwdSign;
+            const yawResp = isDrifting ? 8.5 : (10.5 + tireTracking * 7.5);
+            it.omegaYaw += (targetOmegaYaw - it.omegaYaw) * Math.min(1.0, dt * yawResp);
+            it.yaw += it.omegaYaw * dt;
 
-            // 7. Stunt Ramp Lip Launch & Steep Dune Crest Air-Boost Assist (Checked on Final Sub-Step)
-            if (step === SUBSTEPS - 1 && !it.isFlipped && !it.isRampJumpActive) {
-              const finalFwdX = Math.sin(it.yaw);
-              const finalFwdZ = Math.cos(it.yaw);
-              const signedFwdSpd = it.vx * finalFwdX + it.vz * finalFwdZ;
-              const absSpdNow = Math.hypot(it.vx, it.vz);
+            // Project horizontal velocity into the newly rotated chassis frame
+            const newFwdX = Math.sin(it.yaw);
+            const newFwdZ = Math.cos(it.yaw);
+            const newRightX = Math.cos(it.yaw);
+            const newRightZ = -Math.sin(it.yaw);
 
-              let triggeredRampLaunch = false;
-              if (activeRamp) {
-                const rampFwdX = Math.sin(activeRamp.yaw);
-                const rampFwdZ = Math.cos(activeRamp.yaw);
-                const travelAlign = (finalFwdX * rampFwdX + finalFwdZ * rampFwdZ) * (signedFwdSpd >= 0 ? 1 : -1);
-                const maxLocalZ = Math.max(
-                  rFL.ramp ? rFL.localZ : -99,
-                  rFR.ramp ? rFR.localZ : -99,
-                  rCenter.ramp ? rCenter.localZ : -99,
-                  rRL.ramp ? rRL.localZ : -99,
-                  rRR.ramp ? rRR.localZ : -99
-                );
-                if (!it.wasOnRamp) {
-                  it.preRampSpeed = signedFwdSpd;
-                }
-                it.wasOnRamp = activeRamp;
-                it.lastRampLocalZ = maxLocalZ;
-                it.lastRampAlign = travelAlign;
-                it.lastRampPitch = Math.max(terrainPitch, 0.34);
+            const worldVxTemp = vFwd * prevFwdX + vLat * prevRightX;
+            const worldVzTemp = vFwd * prevFwdZ + vLat * prevRightZ;
+            vFwd = worldVxTemp * newFwdX + worldVzTemp * newFwdZ;
+            vLat = worldVxTemp * newRightX + worldVzTemp * newRightZ;
 
-                // Maintain strong climb momentum up the 28-degree curved steel ramp deck
-                if (travelAlign > 0.20 && (throttleInput > 0.0 || absSpdNow > 1.5)) {
-                  const dirSign = signedFwdSpd >= 0 ? 1 : -1;
-                  const targetClimbSpd = Math.min(maxFwdSpeed, Math.max(absSpdNow, 7.0) + 6.5 * dt);
-                  if (absSpdNow < targetClimbSpd) {
-                    it.vx = finalFwdX * dirSign * targetClimbSpd;
-                    it.vz = finalFwdZ * dirSign * targetClimbSpd;
-                  }
-                }
-                if (travelAlign > 0.20 && absSpdNow > 1.8 && maxLocalZ >= RAMP_HALF_LENGTH - 0.65) {
-                  triggeredRampLaunch = true;
-                }
-              } else if (it.wasOnRamp && absSpdNow > 1.8 && (it.lastRampAlign || 0) > 0.20 && (it.lastRampLocalZ || -99) >= RAMP_HALF_LENGTH - 1.65) {
-                triggeredRampLaunch = true;
-              }
+            // Rear axle lateral cornering friction:
+            // High on Paved/Brick Road or high Tire Tracking (hooks cleanly around turns);
+            // Lower on loose desert sand or during Spacebar E-Brake (tail swings out in a natural momentum slide!)
+            const rearCornerStiff = isDrifting
+              ? (1.75 + tireTracking * 1.40) * tireMu
+              : (6.80 + tireTracking * 10.5) * tireMu * (isRoadSurface ? 1.30 : 1.0);
+            const maxLatGripAccel = 24.5 * tireMu * (isDrifting ? 0.44 : 1.0);
+            const latGripAccel = clamp(-vLat * rearCornerStiff, -maxLatGripAccel, maxLatGripAccel);
+            vLat += latGripAccel * dt;
 
-              if (triggeredRampLaunch) {
-                const launchRamp = activeRamp || it.wasOnRamp;
-                const launchTopY = (launchRamp ? launchRamp.y : avgWheelGroundY) + RAMP_PEAK_HEIGHT;
-                const dirSign = signedFwdSpd >= 0 ? 1 : -1;
-                const effSpd = clamp(Math.max(absSpdNow, 7.5), 0.0, maxFwdSpeed);
-                it.vx = finalFwdX * dirSign * effSpd;
-                it.vz = finalFwdZ * dirSign * effSpd;
-                it.isAirborne = true;
-                it.isRampJumpActive = true;
-                it.rampFloatTimer = 1.35;
-                it.rampLaunchGraceTimer = 0.24;
-                it.vy = clamp(3.2 + effSpd * 0.16, 3.8, 7.6);
-                it.y = Math.max(avgWheelGroundY, launchTopY) + 0.12;
-                it.bodyPitch = clamp(it.lastRampPitch || 0.34, 0.24, 0.38);
-                it.bodyRoll = terrainRoll * 0.20;
-                it.omegaPitch = -0.05;
-                it.omegaRoll = 0.0;
-                it.wasOnRamp = null;
-              } else if (groundedWheels > 0) {
-                if (!activeRamp) it.wasOnRamp = null;
-                // Natural Dune Crest Air-Boost Charge when blasting up steep sand dunes
-                const prevGroundY = it.prevGroundY ?? avgWheelGroundY;
-                const groundClimbVel = clamp((avgWheelGroundY - prevGroundY) / Math.max(dt, 0.004), -18.0, 22.0);
-                it.prevGroundY = avgWheelGroundY;
-                const slopeClimbVel = Math.sin(terrainPitch) * signedFwdSpd;
-                const curClimbVel = Math.max(slopeClimbVel, groundClimbVel);
-                const prevClimbVel = it.prevGroundVelY || 0.0;
-                const crestDropRate = prevClimbVel - slopeClimbVel;
-                it.prevGroundVelY = curClimbVel;
+            // When powering through a corner/drift with throttle held, steered front tires pull the velocity vector forward
+            if (throttleInput > 0.0 && Math.abs(it.steerAngle) > 0.02) {
+              vLat += Math.sin(it.steerAngle) * accelRate * 0.38 * throttleInput * dt;
+            }
 
-                const isClimbingUpward = (signedFwdSpd > 2.5 && (terrainPitch > 0.045 || curClimbVel > 0.65));
-                if (isClimbingUpward && airBoost > 0.02) {
-                  const climbIntensity = clamp(Math.max(terrainPitch * 3.2, curClimbVel / 5.5), 0.1, 1.5);
-                  it.upwardClimbCharge = clamp((it.upwardClimbCharge || 0.0) + climbIntensity * dt * 4.2, 0.0, 1.6);
-                  if (throttleInput > 0.0) {
-                    const boostAdd = 5.5 * airBoost * climbIntensity * dt;
-                    const maxBoostSpd = maxFwdSpeed * (1.0 + airBoost * 0.14);
-                    if (absSpdNow < maxBoostSpd) {
-                      it.vx += finalFwdX * boostAdd;
-                      it.vz += finalFwdZ * boostAdd;
-                    }
-                  }
-                } else {
-                  it.upwardClimbCharge = Math.max(0.0, (it.upwardClimbCharge || 0.0) - dt * 2.4);
-                }
-
-                const boostEase = airBoost * 0.65 * clamp(it.upwardClimbCharge || 0.0, 0.0, 1.2);
-                const minJumpSpd = Math.max(3.5, 8.4 - jumpLift * 4.5 - boostEase * 2.2);
-                const minClimbVel = Math.max(0.50, 1.85 - jumpLift * 1.05 - boostEase * 0.55);
-                const minCrestDrop = Math.max(0.50, 1.95 - jumpLift * 1.10 - boostEase * 0.65);
-
-                if (jumpLift > 0.03 && absSpdNow > minJumpSpd && (prevClimbVel > minClimbVel || (it.upwardClimbCharge || 0.0) > 0.45) && crestDropRate > minCrestDrop) {
-                  const liftScale = 0.50 + jumpLift * 0.95 + airBoost * 0.55 * clamp(it.upwardClimbCharge || 0.35, 0.25, 1.2);
-                  const upwardKick = (it.upwardClimbCharge || 0.0) * airBoost * 2.2;
-                  const maxLaunchVelY = 6.4 + jumpLift * 2.6 + airBoost * 2.4;
-                  it.isAirborne = true;
-                  it.vy = Math.min(
-                    maxLaunchVelY,
-                    Math.max(
-                      prevClimbVel * (0.90 + jumpLift * 0.45 + airBoost * 0.35) + upwardKick,
-                      (1.9 + absSpdNow * 0.13) * liftScale + upwardKick * 0.45
-                    )
-                  );
-                  it.y += it.vy * subDt;
-                  it.upwardClimbCharge = 0.0;
-                }
+            if (Math.abs(throttleInput) < 0.02 && !isDrifting && Math.hypot(vFwd, vLat) < 0.35) {
+              vFwd *= Math.exp(-14.0 * dt);
+              vLat *= Math.exp(-16.0 * dt);
+              if (Math.hypot(vFwd, vLat) < 0.04) {
+                vFwd = 0.0;
+                vLat = 0.0;
+                it.omegaYaw = 0.0;
               }
             }
+
+            it.vx = vFwd * newFwdX + vLat * newRightX;
+            it.vz = vFwd * newFwdZ + vLat * newRightZ;
           }
 
-          // Sync exported telemetry & audio state properties from the 3D physics solver
+          // Integrate 2D world position (it.x, it.z)
+          const halfBound = WORLD_SIZE * 0.465;
+          const nextX = clamp(it.x + it.vx * dt, -halfBound, halfBound);
+          const nextZ = clamp(it.z + it.vz * dt, -halfBound, halfBound);
+          if (Math.abs(nextX) >= halfBound - 0.05) it.vx *= 0.4;
+          if (Math.abs(nextZ) >= halfBound - 0.05) it.vz *= 0.4;
+          it.x = nextX;
+          it.z = nextZ;
+
+          // Update signed forward speed & physical slip angle from (vx, vz)
           const fwdX = Math.sin(it.yaw);
           const fwdZ = Math.cos(it.yaw);
           const rightX = Math.cos(it.yaw);
           const rightZ = -Math.sin(it.yaw);
-          const finalVFwd = it.vx * fwdX + it.vz * fwdZ;
-          const finalVLat = it.vx * rightX + it.vz * rightZ;
-          const spd = finalVFwd;
-          const absSpd = Math.hypot(it.vx, it.vz);
+          vFwd = it.vx * fwdX + it.vz * fwdZ;
+          vLat = it.vx * rightX + it.vz * rightZ;
+          let spd = vFwd;
+          let absSpd = Math.hypot(it.vx, it.vz);
           it.speed = spd;
-          it.velY = it.vy;
-          // Physical slip angle between the truck's nose heading and its actual 2D velocity vector (vx, vz)
-          const rawSlip = (absSpd > 0.65) ? clamp(Math.atan2(finalVLat, Math.abs(finalVFwd) + 0.75), -1.15, 1.15) : 0.0;
-          it.driftSlipAngle = (it.driftSlipAngle || 0.0) + (rawSlip - (it.driftSlipAngle || 0.0)) * Math.min(1.0, dt * 18.0);
 
-          // Update Flipped state OR Grounded/Airborne Chassis Mesh Pose & Dynamic Weight-Transfer Body Lean
+          const rawSlip = (absSpd > 0.65) ? clamp(Math.atan2(vLat, Math.abs(vFwd) + 0.75), -1.05, 1.05) : 0.0;
+          it.driftSlipAngle = (it.driftSlipAngle || 0.0) + (rawSlip - (it.driftSlipAngle || 0.0)) * Math.min(1.0, dt * 16.0);
+          const longAccelG = clamp((vFwd - prevVFwd) / (Math.max(dt, 0.004) * 24.5), -1.4, 1.4);
+          const latAccelG = clamp((vLat - prevVLat) / (Math.max(dt, 0.004) * 24.5) + (vFwd * (it.omegaYaw || 0.0)) / 24.5, -1.5, 1.5);
+
+          // 2. 4-Wheel Terrain & Stunt Ramp Surface Sampling, Flat Ground Stance, Per-Wheel Articulation & Jump Physics!
+          const flX = it.x + fwdX * 1.16 - rightX * 0.84, flZ = it.z + fwdZ * 1.16 - rightZ * 0.84;
+          const frX = it.x + fwdX * 1.16 + rightX * 0.84, frZ = it.z + fwdZ * 1.16 + rightZ * 0.84;
+          const rlX = it.x - fwdX * 1.16 - rightX * 0.84, rlZ = it.z - fwdZ * 1.16 - rightZ * 0.84;
+          const rrX = it.x - fwdX * 1.16 + rightX * 0.84, rrZ = it.z - fwdZ * 1.16 + rightZ * 0.84;
+
+          const rFL = sampleRampDeckAtWorld(flX, flZ, sampleHeightsAtWorld(flX, flZ).groundY);
+          const rFR = sampleRampDeckAtWorld(frX, frZ, sampleHeightsAtWorld(frX, frZ).groundY);
+          const rRL = sampleRampDeckAtWorld(rlX, rlZ, sampleHeightsAtWorld(rlX, rlZ).groundY);
+          const rRR = sampleRampDeckAtWorld(rrX, rrZ, sampleHeightsAtWorld(rrX, rrZ).groundY);
+          const rCenter = sampleRampDeckAtWorld(it.x, it.z, sampleHeightsAtWorld(it.x, it.z).groundY);
+
+          const hFL = rFL.y;
+          const hFR = rFR.y;
+          const hRL = rRL.y;
+          const hRR = rRR.y;
+          const activeRamp = rFL.ramp || rFR.ramp || rCenter.ramp || rRL.ramp || rRR.ramp;
+
+          const avgWheelGroundY = 0.25 * (hFL + hFR + hRL + hRR);
+          const frontMidY = 0.5 * (hFL + hFR);
+          const rearMidY = 0.5 * (hRL + hRR);
+          const rightMidY = 0.5 * (hFR + hRR);
+          const leftMidY = 0.5 * (hFL + hRL);
+          const terrainPitch = Math.atan2(frontMidY - rearMidY, 2.32);
+          const terrainRoll = Math.atan2(rightMidY - leftMidY, 1.68);
+
+          // Compute per-wheel diagonal terrain twist offset so all 4 tires sit flush on uneven terrain without floating!
+          const pitchDiffHalf = 0.5 * (frontMidY - rearMidY);
+          const rollDiffHalf = 0.5 * (rightMidY - leftMidY);
+          const targetWheelOff = it.isAirborne
+            ? [-0.14, -0.14, -0.14, -0.14]
+            : [
+                clamp(hFL - (avgWheelGroundY + pitchDiffHalf - rollDiffHalf), -0.15, 0.15),
+                clamp(hFR - (avgWheelGroundY + pitchDiffHalf + rollDiffHalf), -0.15, 0.15),
+                clamp(hRL - (avgWheelGroundY - pitchDiffHalf - rollDiffHalf), -0.15, 0.15),
+                clamp(hRR - (avgWheelGroundY - pitchDiffHalf + rollDiffHalf), -0.15, 0.15)
+              ];
+          for (let w = 0; w < 4; w++) {
+            it.wheelOffsetY[w] += (targetWheelOff[w] - it.wheelOffsetY[w]) * Math.min(1.0, dt * 24.0);
+          }
+
+          const prevGroundY = it.prevGroundY ?? avgWheelGroundY;
+          it.prevGroundY = avgWheelGroundY;
+          const groundClimbVel = clamp((avgWheelGroundY - prevGroundY) / Math.max(dt, 0.004), -18.0, 22.0);
+          const slopeClimbVel = Math.sin(terrainPitch) * spd;
+
           if (it.isFlipped) {
+            // Vehicle is flipped upside-down on its roof! Wait 5 seconds, then auto-unflip back onto its wheels
             it.flipTimer = (it.flipTimer || 0.0) + dt;
             const targetFlipRoll = (it.flipRollDir || 1) * Math.PI;
             it.flipRollCurrent = (it.flipRollCurrent ?? (it.flipRollDir || 1) * 1.2) +
@@ -20558,42 +20200,283 @@
               it.isFlipped = false;
               it.flipTimer = 0.0;
               it.isAirborne = true;
-              it.vy = 4.6;
               it.velY = 4.6;
               it.y = avgWheelGroundY + 0.55;
-              it.bodyPitch = terrainPitch;
-              it.omegaPitch = 0.0;
-              it.bodyRoll = (it.flipRollDir || 1) * 0.35;
-              it.omegaRoll = -(it.flipRollDir || 1) * 1.4;
+              it.airPitch = -terrainPitch;
+              it.airPitchVel = 0.0;
+              it.airRoll = (it.flipRollDir || 1) * 0.35;
+              it.airRollVel = -(it.flipRollDir || 1) * 1.4;
               it.suspPitch = 0.0;
               it.suspRoll = 0.0;
             }
-          } else {
-            // Critically damped secondary chassis coilover bounce + Dynamic Weight Transfer (Accel Squat, Brake Dive, Cornering Roll)
-            const springK = 26.0 + suspStiff * 48.0;
-            const dampC = 2.0 * Math.sqrt(springK) * 0.96; // Critically damped so chassis never oscillates after landing
-            it.suspVelY = (it.suspVelY || 0.0) + (-(it.suspY || 0.0) * springK - (it.suspVelY || 0.0) * dampC) * dt;
-            it.suspY = clamp((it.suspY || 0.0) + it.suspVelY * dt, -0.32, 0.24);
+          } else if (it.isAirborne) {
+            if (it.isRampJumpActive) {
+              if ((it.rampFloatTimer || 0.0) > 0.0) {
+                it.rampFloatTimer = Math.max(0.0, it.rampFloatTimer - dt);
+              }
+              if ((it.rampLaunchGraceTimer || 0.0) > 0.0) {
+                it.rampLaunchGraceTimer = Math.max(0.0, it.rampLaunchGraceTimer - dt);
+              }
+              const floatBlend = clamp((it.rampFloatTimer || 0.0) / 0.65, 0.0, 1.0);
+              const normalGrav = ((it.velY || 0.0) > 0.0) ? (22.5 - airBoost * 3.0) : 31.5;
+              const rampFloatGrav = ((it.velY || 0.0) > 0.0) ? 13.5 : 16.5;
+              const gravityAccel = normalGrav * (1.0 - floatBlend) + rampFloatGrav * floatBlend;
+              it.velY = (it.velY || 0.0) - gravityAccel * dt;
+              it.y = (it.y ?? avgWheelGroundY) + it.velY * dt;
 
-            const bodyFlex = 1.45 - suspStiff * 0.85;
+              const flightArcPitch = clamp(-Math.atan2(it.velY || 0.0, Math.max(10.0, absSpd)) * 0.55, -0.38, 0.22);
+              const airSteerRollTorque = -steerInput * (1.55 - counterweight * 1.10);
+              const rightingRollTorque = -(it.airRoll || 0.0) * counterweight * 8.5 - (it.airRollVel || 0.0) * (1.2 + counterweight * 4.8);
+              const rightingPitchTorque = (flightArcPitch - (it.airPitch || 0.0)) * 7.0 - (it.airPitchVel || 0.0) * (1.5 + counterweight * 4.0);
+
+              it.airRollVel = (it.airRollVel || 0.0) + (airSteerRollTorque + rightingRollTorque) * dt;
+              it.airPitchVel = (it.airPitchVel || 0.0) + ((throttleInput * 0.55 - 0.10) * (1.1 - counterweight * 0.55) + rightingPitchTorque) * dt;
+              it.airPitch = clamp((it.airPitch || 0.0) + it.airPitchVel * dt, -1.35, 1.35);
+              it.airRoll = (it.airRoll || 0.0) + it.airRollVel * dt;
+            } else {
+              const gravityAccel = ((it.velY || 0.0) > 0.0) ? (22.5 - airBoost * 3.0) : 31.5;
+              it.velY = (it.velY || 0.0) - gravityAccel * dt;
+              it.y = (it.y ?? avgWheelGroundY) + it.velY * dt;
+
+              const airSteerRollTorque = -steerInput * (1.55 - counterweight * 1.10);
+              const rightingRollTorque = -(it.airRoll || 0.0) * counterweight * 8.5 - (it.airRollVel || 0.0) * (1.2 + counterweight * 4.8);
+              const rightingPitchTorque = (-(it.airPitch || 0.0) - terrainPitch * 0.5) * counterweight * 6.0 - (it.airPitchVel || 0.0) * (1.2 + counterweight * 4.0);
+
+              it.airRollVel = (it.airRollVel || 0.0) + (airSteerRollTorque + rightingRollTorque) * dt;
+              it.airPitchVel = (it.airPitchVel || 0.0) + ((throttleInput * 0.65 - 0.14) * (1.1 - counterweight * 0.55) + rightingPitchTorque) * dt;
+              it.airPitch = clamp((it.airPitch || 0.0) + it.airPitchVel * dt, -1.35, 1.35);
+              it.airRoll = (it.airRoll || 0.0) + it.airRollVel * dt;
+            }
+
+            const canTouchDown = !it.isRampJumpActive || ((it.rampLaunchGraceTimer || 0.0) <= 0.0) || ((it.velY || 0.0) <= 0.0);
+            if (canTouchDown && it.y <= avgWheelGroundY) {
+              // Touchdown on the terrain! Anchor dead-flat onto the 4-wheel plane with zero rebound bounce
+              const impactVy = Math.max(0.0, -(it.velY || 0.0));
+              it.y = avgWheelGroundY;
+              it.prevGroundY = avgWheelGroundY;
+              it.velY = 0.0;
+              it.isAirborne = false;
+              it.prevGroundVelY = 0.0;
+              it.upwardClimbCharge = 0.0;
+              if (it.isRampJumpActive) {
+                if (typeof it.preRampSpeed === 'number') {
+                  const preAbs = Math.abs(it.preRampSpeed);
+                  const curAbs = Math.hypot(it.vx, it.vz);
+                  const targetLandSpd = clamp(preAbs > 0.5 ? preAbs : curAbs, 0.0, maxFwdSpeed);
+                  if (curAbs > 0.1 && curAbs > targetLandSpd) {
+                    const scale = targetLandSpd / curAbs;
+                    it.vx *= scale;
+                    it.vz *= scale;
+                  }
+                }
+                it.speed = it.vx * fwdX + it.vz * fwdZ;
+                spd = it.speed;
+                absSpd = Math.hypot(it.vx, it.vz);
+                it.airPitch = -terrainPitch;
+                it.airRoll = terrainRoll;
+                it.airPitchVel = 0.0;
+                it.airRollVel = 0.0;
+              }
+              it.isRampJumpActive = false;
+              it.preRampSpeed = undefined;
+              it.rampFloatTimer = 0.0;
+              it.rampLaunchGraceTimer = 0.0;
+              it.wasOnRamp = null;
+
+              // Subtle overdamped chassis compression on landing (absorbs in one clean stroke, never bounces!)
+              const compScale = 0.032 - suspStiff * 0.015;
+              it.suspY = -clamp(impactVy * compScale, 0.02, 0.22);
+              it.suspVelY = -impactVy * (0.14 - suspStiff * 0.06);
+
+              // Landing sand/dust burst from all 4 tires
+              if (!isRoadSurface && waterDepth < 0.08 && (params.truckSmokeIntensity ?? 0.60) > 0.02) {
+                for (let wBurst = 0; wBurst < 8; wBurst++) {
+                  const angB = (wBurst / 8) * Math.PI * 2;
+                  emitTruckSandDust(
+                    it.x + Math.cos(angB) * 1.2,
+                    avgWheelGroundY + 0.25,
+                    it.z + Math.sin(angB) * 1.2,
+                    Math.cos(angB) * (2.2 + impactVy * 0.25),
+                    0.8 + Math.random() * 1.1,
+                    Math.sin(angB) * (2.2 + impactVy * 0.25),
+                    surfMatHere,
+                    0.75
+                  );
+                }
+              }
+
+              // Check if awkward landing angle or high-slip sideways touchdown flips the vehicle
+              if (counterweight < 0.98) {
+                const landingRollDelta = Math.abs((it.airRoll || 0.0) - terrainRoll);
+                const landingPitchDelta = Math.abs((it.airPitch || 0.0) + terrainPitch);
+                const rollFlipThreshold = 0.62 + counterweight * 0.95;
+                const pitchFlipThreshold = 0.85 + counterweight * 0.85;
+                const sideImpactRollThresh = 0.30 + counterweight * 0.72;
+                const sideImpactVyThresh = 3.6 + counterweight * 4.8;
+                if (
+                  landingRollDelta > rollFlipThreshold ||
+                  landingPitchDelta > pitchFlipThreshold ||
+                  (impactVy > sideImpactVyThresh && Math.abs(it.driftSlipAngle || 0.0) > 0.48 && landingRollDelta > sideImpactRollThresh)
+                ) {
+                  it.isFlipped = true;
+                  it.flipTimer = 0.0;
+                  it.flipRollDir = ((it.airRoll || terrainRoll) >= 0 ? 1 : -1);
+                  it.flipRollCurrent = it.airRoll || (it.flipRollDir * 0.85);
+                }
+              }
+            }
+
+            it.mesh.position.set(it.x, it.y, it.z);
+            it.mesh.rotation.order = 'YXZ';
+            it.mesh.rotation.y = it.yaw;
+            it.mesh.rotation.x = it.airPitch;
+            it.mesh.rotation.z = it.airRoll;
+          } else {
+            // Grounded Driving: Sit 100% flat on the 4-wheel terrain/ramp plane + Stunt Ramp Launch + Dune Crest Big-Air Launch!
+            const curClimbVel = Math.max(slopeClimbVel, groundClimbVel);
+            const prevClimbVel = it.prevGroundVelY || 0.0;
+            const crestDropRate = prevClimbVel - slopeClimbVel;
+
+            let triggeredRampLaunch = false;
+            if (activeRamp) {
+              const rampFwdX = Math.sin(activeRamp.yaw);
+              const rampFwdZ = Math.cos(activeRamp.yaw);
+              const travelAlign = (fwdX * rampFwdX + fwdZ * rampFwdZ) * (spd >= 0 ? 1 : -1);
+              const maxLocalZ = Math.max(
+                rFL.ramp ? rFL.localZ : -99,
+                rFR.ramp ? rFR.localZ : -99,
+                rCenter.ramp ? rCenter.localZ : -99,
+                rRL.ramp ? rRL.localZ : -99,
+                rRR.ramp ? rRR.localZ : -99
+              );
+              if (!it.wasOnRamp) {
+                it.preRampSpeed = spd;
+              }
+              it.wasOnRamp = activeRamp;
+              it.lastRampLocalZ = maxLocalZ;
+              it.lastRampAlign = travelAlign;
+              it.lastRampPitch = Math.max(terrainPitch, 0.34);
+
+              if (travelAlign > 0.20 && (throttleInput > 0.0 || absSpd > 1.5)) {
+                const dirSign = spd >= 0 ? 1 : -1;
+                const climbSpd = Math.min(maxFwdSpeed, Math.max(absSpd, 6.5) + 6.0 * dt);
+                it.vx = fwdX * dirSign * climbSpd;
+                it.vz = fwdZ * dirSign * climbSpd;
+                it.speed = dirSign * climbSpd;
+                spd = it.speed;
+                absSpd = climbSpd;
+              }
+              if (travelAlign > 0.20 && Math.abs(spd) > 1.8 && maxLocalZ >= RAMP_HALF_LENGTH - 0.65) {
+                triggeredRampLaunch = true;
+              }
+            } else if (it.wasOnRamp && Math.abs(spd) > 1.8 && (it.lastRampAlign || 0) > 0.20 && (it.lastRampLocalZ || -99) >= RAMP_HALF_LENGTH - 1.65) {
+              triggeredRampLaunch = true;
+            }
+
+            if (triggeredRampLaunch) {
+              const launchRamp = activeRamp || it.wasOnRamp;
+              const launchTopY = (launchRamp ? launchRamp.y : avgWheelGroundY) + RAMP_PEAK_HEIGHT;
+              const dirSign = spd >= 0 ? 1 : -1;
+              const effSpd = clamp(Math.max(Math.abs(spd), 7.5), 0.0, maxFwdSpeed);
+              it.vx = fwdX * dirSign * effSpd;
+              it.vz = fwdZ * dirSign * effSpd;
+              it.speed = dirSign * effSpd;
+              spd = it.speed;
+              absSpd = effSpd;
+              it.isAirborne = true;
+              it.isRampJumpActive = true;
+              it.rampFloatTimer = 1.35;
+              it.rampLaunchGraceTimer = 0.24;
+              it.velY = clamp(3.2 + effSpd * 0.16, 3.8, 7.6);
+              it.y = Math.max(avgWheelGroundY, launchTopY) + 0.12;
+              it.airPitch = -clamp(it.lastRampPitch || 0.34, 0.24, 0.38);
+              it.airRoll = terrainRoll * 0.20;
+              it.airPitchVel = 0.05;
+              it.airRollVel = 0.0;
+              it.wasOnRamp = null;
+            } else {
+              if (!activeRamp) it.wasOnRamp = null;
+              const isClimbingUpward = (spd > 2.5 && (terrainPitch > 0.045 || curClimbVel > 0.65));
+              if (isClimbingUpward && airBoost > 0.02) {
+                const climbIntensity = clamp(Math.max(terrainPitch * 3.2, curClimbVel / 5.5), 0.1, 1.5);
+                it.upwardClimbCharge = clamp((it.upwardClimbCharge || 0.0) + climbIntensity * dt * 4.2, 0.0, 1.6);
+                if (throttleInput > 0.0) {
+                  const boostedSpd = Math.min(maxFwdSpeed * (1.0 + airBoost * 0.14), spd + (6.5 * airBoost * climbIntensity) * dt);
+                  const boostDelta = Math.max(0.0, boostedSpd - spd);
+                  it.vx += fwdX * boostDelta;
+                  it.vz += fwdZ * boostDelta;
+                  it.speed = boostedSpd;
+                  spd = boostedSpd;
+                  absSpd = Math.hypot(it.vx, it.vz);
+                }
+              } else {
+                it.upwardClimbCharge = Math.max(0.0, (it.upwardClimbCharge || 0.0) - dt * 2.4);
+              }
+
+              const boostEase = airBoost * 0.65 * clamp(it.upwardClimbCharge || 0.0, 0.0, 1.2);
+              const minJumpSpd = Math.max(3.2, 8.2 - jumpLift * 4.6 - boostEase * 2.2);
+              const minClimbVel = Math.max(0.45, 1.85 - jumpLift * 1.05 - boostEase * 0.55);
+              const minCrestDrop = Math.max(0.45, 1.95 - jumpLift * 1.10 - boostEase * 0.65);
+
+              if (jumpLift > 0.03 && absSpd > minJumpSpd && (prevClimbVel > minClimbVel || (it.upwardClimbCharge || 0.0) > 0.42) && crestDropRate > minCrestDrop) {
+                const liftScale = 0.55 + jumpLift * 1.05 + airBoost * 0.60 * clamp(it.upwardClimbCharge || 0.35, 0.25, 1.2);
+                const upwardKick = (it.upwardClimbCharge || 0.0) * airBoost * 2.5;
+                const maxLaunchVelY = 6.8 + jumpLift * 2.8 + airBoost * 2.6;
+                it.isAirborne = true;
+                it.velY = Math.min(
+                  maxLaunchVelY,
+                  Math.max(
+                    prevClimbVel * (0.95 + jumpLift * 0.48 + airBoost * 0.38) + upwardKick,
+                    (2.1 + absSpd * 0.14) * liftScale + upwardKick * 0.5
+                  )
+                );
+                if (throttleInput > 0.0 && airBoost > 0.05 && spd > 0.0) {
+                  const surgeAdd = airBoost * (1.4 + (it.upwardClimbCharge || 0.0) * 1.8);
+                  it.vx += fwdX * surgeAdd;
+                  it.vz += fwdZ * surgeAdd;
+                  it.speed = it.vx * fwdX + it.vz * fwdZ;
+                  spd = it.speed;
+                  absSpd = Math.hypot(it.vx, it.vz);
+                }
+                it.y = avgWheelGroundY + it.velY * dt;
+                it.airPitch = -terrainPitch + (it.suspPitch || 0.0) - clamp(airBoost * 0.10, 0.0, 0.12);
+                it.airRoll = terrainRoll + (it.suspRoll || 0.0);
+                it.airPitchVel = clamp(it.velY * 0.035 - 0.16, -0.70, 0.50) * (1.05 - counterweight * 0.60);
+                const rollLaunchDamp = Math.max(0.08, 1.0 - counterweight * 0.86);
+                it.airRollVel = (terrainRoll * 1.15 - steerInput * 0.85 - (it.driftSlipAngle || 0.0) * 1.05) *
+                  clamp(absSpd / 14.0, 0.30, 1.35) * rollLaunchDamp;
+              } else {
+                it.y = avgWheelGroundY;
+                it.velY = curClimbVel;
+                it.prevGroundVelY = curClimbVel;
+              }
+            }
+
+            // Overdamped suspension shock absorber (returns smoothly in a single stroke with ZERO pogo-bounce!)
+            const springK = 28.0 + suspStiff * 52.0;
+            const dampC = 2.25 * Math.sqrt(springK); // Overdamped (zeta = 1.125) -> zero oscillation!
+            it.suspVelY = (it.suspVelY || 0.0) + (-(it.suspY || 0.0) * springK - (it.suspVelY || 0.0) * dampC) * dt;
+            it.suspY = clamp((it.suspY || 0.0) + it.suspVelY * dt, -0.24, 0.16);
+
+            const bodyFlex = 1.38 - suspStiff * 0.82;
             const speedRatio = clamp(absSpd / Math.max(1.0, maxFwdSpeed), 0.0, 1.0);
-            const accelSquatDecay = Math.pow(1.0 - clamp((speedRatio - 0.28) / 0.52, 0.0, 1.0), 1.6);
-            const brakeDiveFactor = clamp(absSpd / 9.5, 0.0, 1.0);
+            const accelSquatDecay = Math.pow(1.0 - clamp((speedRatio - 0.28) / 0.50, 0.0, 1.0), 1.65);
+            const brakeDiveFactor = clamp(absSpd / 10.0, 0.0, 1.0);
             const targetSuspPitch = (
               throttleInput > 0.0
-                ? (-0.11 * accelSquatDecay - clamp(longAccelG * 0.06, -0.04, 0.08))
-                : ((throttleInput < 0.0 || isDrifting) && spd > 0.4 ? (0.12 * brakeDiveFactor) : 0.0)
+                ? (-0.095 * accelSquatDecay - clamp(longAccelG * 0.04, -0.02, 0.05))
+                : ((throttleInput < 0.0 || isDrifting) && spd > 0.4 ? (0.105 * brakeDiveFactor) : 0.0)
             ) * bodyFlex;
-            const cornerG = clamp((it.steerAngle * absSpd) / 10.5 + (it.driftSlipAngle || 0.0) * 0.78 + latAccelG * 0.35, -1.30, 1.30);
-            const targetSuspRoll = cornerG * 0.19 * bodyFlex * (1.15 - counterweight * 0.35);
-            const suspResp = 6.5 + suspStiff * 6.5;
+            const cornerG = clamp((it.steerAngle * absSpd) / 11.0 + (it.driftSlipAngle || 0.0) * 0.78 + latAccelG * 0.25, -1.20, 1.20);
+            const targetSuspRoll = cornerG * 0.165 * bodyFlex * (1.15 - counterweight * 0.35);
+            const suspResp = 6.8 + suspStiff * 6.5;
             it.suspPitch = (it.suspPitch || 0.0) + (targetSuspPitch - (it.suspPitch || 0.0)) * Math.min(1.0, dt * suspResp);
             it.suspRoll = (it.suspRoll || 0.0) + (targetSuspRoll - (it.suspRoll || 0.0)) * Math.min(1.0, dt * suspResp);
 
-            // High-G side-slope rollover check regulated by Rollover Counterweight slider
-            if (!it.isAirborne && counterweight < 0.98) {
-              const totalRollLean = it.bodyRoll + it.suspRoll * (1.50 - counterweight * 0.65);
-              const groundFlipRollLimit = 0.64 + counterweight * 0.85;
+            // Rollover check on steep dune slopes at high lateral G
+            if (counterweight < 0.98) {
+              const totalRollLean = terrainRoll + it.suspRoll * (1.50 - counterweight * 0.65);
+              const groundFlipRollLimit = 0.62 + counterweight * 0.85;
               const groundFlipMinSpeed = 10.5 + counterweight * 5.0;
               if (absSpd > groundFlipMinSpeed && Math.abs(totalRollLean) > groundFlipRollLimit && (isDrifting || Math.abs(it.steerAngle) > 0.30)) {
                 it.isFlipped = true;
@@ -20606,8 +20489,8 @@
             it.mesh.position.set(it.x, it.y, it.z);
             it.mesh.rotation.order = 'YXZ';
             it.mesh.rotation.y = it.yaw;
-            it.mesh.rotation.x = -it.bodyPitch;
-            it.mesh.rotation.z = it.bodyRoll;
+            it.mesh.rotation.x = -terrainPitch;
+            it.mesh.rotation.z = terrainRoll;
           }
 
           const chassisGroup = it.mesh.userData.chassisGroup;
@@ -20617,7 +20500,7 @@
             chassisGroup.rotation.z = it.isFlipped ? 0.0 : (it.suspRoll || 0.0);
           }
 
-          // Articulate all 4 independent wheel suspension struts vertically + rotate front steering knuckles & spin tires!
+          // Articulate 4 wheels to match diagonal terrain contour + rotate front steering knuckles & spin tires
           const steerFL = it.mesh.userData.steerFL;
           const steerFR = it.mesh.userData.steerFR;
           const wheels = it.mesh.userData.wheels;
@@ -20625,21 +20508,17 @@
           if (steerFL && steerFR) {
             steerFL.rotation.y = it.steerAngle;
             steerFR.rotation.y = it.steerAngle;
-            steerFL.position.y = 0.46 + (it.isFlipped ? 0.0 : clamp(wOff[0], -0.22, 0.32));
-            steerFR.position.y = 0.46 + (it.isFlipped ? 0.0 : clamp(wOff[1], -0.22, 0.32));
+            steerFL.position.y = 0.46 + (it.isFlipped ? 0.0 : wOff[0]);
+            steerFR.position.y = 0.46 + (it.isFlipped ? 0.0 : wOff[1]);
           }
           if (wheels && wheels.length >= 4) {
-            wheels[2].position.y = 0.46 + (it.isFlipped ? 0.0 : clamp(wOff[2], -0.22, 0.32));
-            wheels[3].position.y = 0.46 + (it.isFlipped ? 0.0 : clamp(wOff[3], -0.22, 0.32));
+            wheels[2].position.y = 0.46 + (it.isFlipped ? 0.0 : wOff[2]);
+            wheels[3].position.y = 0.46 + (it.isFlipped ? 0.0 : wOff[3]);
           }
-
-          const wheelDriveSpinSpd = (throttleInput !== 0.0 && (it.isAirborne || isDrifting))
-            ? (spd + throttleInput * 5.5)
-            : spd;
-          it.wheelSpin = (it.wheelSpin || 0.0) + (wheelDriveSpinSpd / 0.46) * dt;
+          it.wheelSpin = (it.wheelSpin || 0.0) + (spd / 0.46) * dt;
           if (wheels) {
             for (let wIdx = 0; wIdx < wheels.length; wIdx++) {
-              // Rear wheels lock when E-Brake drifting without throttle, or spin up under power-slide throttle!
+              // Rear wheels lock or spin wildly when handbrake drifting!
               const spinAngle = (isDrifting && wIdx >= 2 && throttleInput <= 0.0)
                 ? wheels[wIdx].rotation.x
                 : it.wheelSpin;
