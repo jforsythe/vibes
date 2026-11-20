@@ -18849,12 +18849,12 @@
           segGroup.add(rail);
         }
 
-        // Directional launch chevron arrows along the center of the deck pointing toward the +Z launch lip
+        // Directional launch chevron arrows along the center of the deck pointing UP the ramp toward the +Z launch lip
         if (s % 2 === 1) {
           for (const side of [-1, 1]) {
-            const chevBar = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.02, 0.16), sharedRampChevronMat);
-            chevBar.position.set(side * 0.28, 0.015, 0);
-            chevBar.rotation.y = side * -0.46;
+            const chevBar = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.024, 0.17), sharedRampChevronMat);
+            chevBar.position.set(side * 0.27, 0.016, 0);
+            chevBar.rotation.y = side * 0.52;
             segGroup.add(chevBar);
           }
         }
@@ -18902,7 +18902,7 @@
         if (it.type !== 'item-ramp') continue;
         const dx = wx - it.x;
         const dz = wz - it.z;
-        if (dx * dx + dz * dz > 26.0) continue; // Quick bounding-sphere cull
+        if (dx * dx + dz * dz > 64.0) continue; // Bounding-sphere cull (8m radius covers full ramp + truck wheelbase)
         const fwdX = Math.sin(it.yaw);
         const fwdZ = Math.cos(it.yaw);
         const rightX = Math.cos(it.yaw);
@@ -18910,9 +18910,12 @@
 
         const localZ = dx * fwdX + dz * fwdZ;
         const localX = dx * rightX + dz * rightZ;
-        if (Math.abs(localX) <= RAMP_HALF_WIDTH + 0.18 && localZ >= -RAMP_HALF_LENGTH - 0.25 && localZ <= RAMP_HALF_LENGTH + 0.30) {
+        if (Math.abs(localX) <= RAMP_HALF_WIDTH + 0.35 && localZ >= -RAMP_HALF_LENGTH - 0.45 && localZ <= RAMP_HALF_LENGTH + 0.45) {
           const tNorm = clamp((localZ + RAMP_HALF_LENGTH) / (RAMP_HALF_LENGTH * 2.0), 0.0, 1.0);
-          const deckY = it.y + evalRampCurveHeight(tNorm);
+          // Blend base reference smoothly from local ground at the entry lip (tNorm=0) to ramp root Y so entry is always flush
+          const entryBlend = clamp(tNorm / 0.22, 0.0, 1.0);
+          const baseRefY = baseGroundY * (1.0 - entryBlend) + it.y * entryBlend;
+          const deckY = Math.max(baseGroundY, baseRefY + evalRampCurveHeight(tNorm));
           if (deckY >= bestY) {
             bestY = deckY;
             onRamp = it;
@@ -19386,9 +19389,12 @@
           continue;
         }
 
-        // Keep item anchored to the current terrain ground height as sand drifts or erodes
-        it.y = groundY;
-        it.mesh.position.y = groundY;
+        // Keep static items anchored to the current terrain ground height as sand drifts or erodes
+        // (Do NOT overwrite 'item-truck' here, because the truck manages its own 3D ramp elevation and airborne soaring altitude!)
+        if (it.type !== 'item-truck') {
+          it.y = groundY;
+          it.mesh.position.y = groundY;
+        }
 
         if (it.type === 'item-tap') {
           // Artesian Water Tap: Gushes a strong artesian stream at a randomly fluctuating rate — produces plenty of water to fill and keep a pond full!
@@ -19797,29 +19803,40 @@
               it.suspRoll = 0.0;
             }
           } else if (it.isAirborne) {
-            // Airborne Jump Physics: when launched off a Stunt Ramp (rampFloatTimer > 0), the vehicle gets extra floaty hang-time
-            // and sustained forward momentum so it clears wide obstacles easily!
+            // Airborne Jump Physics: when launched off a Stunt Ramp (rampFloatTimer > 0), the vehicle rises high into the sky,
+            // gets extra floaty hang-time, and preserves full forward momentum so it soars over obstacles before coming down!
             if ((it.rampFloatTimer || 0.0) > 0.0) {
               it.rampFloatTimer = Math.max(0.0, it.rampFloatTimer - dt);
             }
-            const floatBlend = clamp((it.rampFloatTimer || 0.0) / 1.2, 0.0, 1.0);
+            if ((it.rampLaunchGraceTimer || 0.0) > 0.0) {
+              it.rampLaunchGraceTimer = Math.max(0.0, it.rampLaunchGraceTimer - dt);
+            }
+            const isRampSoaring = (it.rampFloatTimer || 0.0) > 0.0;
+            const floatBlend = clamp((it.rampFloatTimer || 0.0) / 1.0, 0.0, 1.0);
             const normalGrav = ((it.velY || 0.0) > 0.0) ? (22.5 - airBoost * 3.0) : 31.5;
-            const rampFloatGrav = ((it.velY || 0.0) > 0.0) ? 10.2 : 12.8;
+            const rampFloatGrav = ((it.velY || 0.0) > 0.0) ? 10.8 : 13.2;
             const gravityAccel = normalGrav * (1.0 - floatBlend) + rampFloatGrav * floatBlend;
             it.velY = (it.velY || 0.0) - gravityAccel * dt;
             it.y = (it.y ?? avgWheelGroundY) + it.velY * dt;
 
-            // Counterweight produces a low-CG self-righting pendulum torque in mid-air that resists barrel-rolling
+            // Counterweight produces a low-CG self-righting pendulum torque in mid-air that resists barrel-rolling;
+            // during a ramp soar, pitch follows the soaring flight arc (nose up while rising, level at apex, gentle descent)
+            const flightArcPitch = isRampSoaring
+              ? clamp(-Math.atan2(it.velY || 0.0, Math.max(9.0, absSpd)) * 0.78, -0.62, 0.32)
+              : (-terrainPitch * 0.5);
             const airSteerRollTorque = -steerInput * (1.55 - counterweight * 1.10);
             const rightingRollTorque = -(it.airRoll || 0.0) * counterweight * 8.5 - (it.airRollVel || 0.0) * (1.2 + counterweight * 4.8);
-            const rightingPitchTorque = (-(it.airPitch || 0.0) - terrainPitch * 0.5) * counterweight * 6.0 - (it.airPitchVel || 0.0) * (1.2 + counterweight * 4.0);
+            const rightingPitchTorque = (flightArcPitch - (it.airPitch || 0.0)) * (isRampSoaring ? 7.5 : (counterweight * 6.0)) -
+              (it.airPitchVel || 0.0) * (1.5 + counterweight * 4.0);
 
             it.airRollVel = (it.airRollVel || 0.0) + (airSteerRollTorque + rightingRollTorque) * dt;
-            it.airPitchVel = (it.airPitchVel || 0.0) + ((throttleInput * 0.65 - 0.14) * (1.1 - counterweight * 0.55) + rightingPitchTorque) * dt;
+            it.airPitchVel = (it.airPitchVel || 0.0) + ((throttleInput * 0.55 - 0.10) * (1.1 - counterweight * 0.55) + rightingPitchTorque) * dt;
             it.airPitch = clamp((it.airPitch || 0.0) + it.airPitchVel * dt, -1.35, 1.35);
             it.airRoll = (it.airRoll || 0.0) + it.airRollVel * dt;
 
-            if (it.y <= avgWheelGroundY) {
+            // Only check ground touchdown once the initial launch grace window clears or once descending
+            const canTouchDown = ((it.rampLaunchGraceTimer || 0.0) <= 0.0) || ((it.velY || 0.0) <= 0.0);
+            if (canTouchDown && it.y <= avgWheelGroundY) {
               // Touchdown on the terrain!
               const impactVy = Math.max(0.0, -(it.velY || 0.0));
               it.y = avgWheelGroundY;
@@ -19828,6 +19845,7 @@
               it.prevGroundVelY = 0.0;
               it.upwardClimbCharge = 0.0;
               it.rampFloatTimer = 0.0;
+              it.rampLaunchGraceTimer = 0.0;
               it.wasOnRamp = null;
 
               // Compress suspension spring on landing (softer suspension compresses deeper)
@@ -19891,22 +19909,29 @@
               const rampFwdX = Math.sin(activeRamp.yaw);
               const rampFwdZ = Math.cos(activeRamp.yaw);
               const travelAlign = (fwdX * rampFwdX + fwdZ * rampFwdZ) * (spd >= 0 ? 1 : -1);
-              const maxLocalZ = Math.max(rFL.ramp ? rFL.localZ : -99, rFR.ramp ? rFR.localZ : -99, rCenter.ramp ? rCenter.localZ : -99);
+              const maxLocalZ = Math.max(
+                rFL.ramp ? rFL.localZ : -99,
+                rFR.ramp ? rFR.localZ : -99,
+                rCenter.ramp ? rCenter.localZ : -99,
+                rRL.ramp ? rRL.localZ : -99,
+                rRR.ramp ? rRR.localZ : -99
+              );
               it.wasOnRamp = activeRamp;
               it.lastRampLocalZ = maxLocalZ;
               it.lastRampAlign = travelAlign;
-              it.lastRampPitch = Math.max(terrainPitch, 0.36);
+              it.lastRampPitch = Math.max(terrainPitch, 0.44);
 
-              // While climbing up the ramp deck toward the high end, help preserve/boost forward speed so it never bogs down on the incline
-              if (travelAlign > 0.35 && throttleInput > 0.0 && spd > 1.5) {
-                it.speed = Math.min(maxFwdSpeed * 1.25, spd + 10.5 * dt);
+              // While climbing up the ramp deck toward the high end, accelerate strongly up the incline so it launches hard
+              if (travelAlign > 0.20 && (throttleInput > 0.0 || absSpd > 1.2)) {
+                const dirSign = spd >= 0 ? 1 : -1;
+                it.speed = dirSign * Math.min(maxFwdSpeed * 1.30, Math.max(absSpd, 8.5) + 16.5 * dt);
                 spd = it.speed;
               }
-              // As the front wheels reach or cross the top launch lip of the ramp (+Z >= RAMP_HALF_LENGTH - 0.55m), launch out!
-              if (travelAlign > 0.35 && absSpd > 2.2 && maxLocalZ >= RAMP_HALF_LENGTH - 0.55) {
+              // As the front wheels reach the top launch lip of the ramp (+Z >= RAMP_HALF_LENGTH - 0.75m), launch upward into a soaring arc!
+              if (travelAlign > 0.20 && Math.abs(spd) > 1.8 && maxLocalZ >= RAMP_HALF_LENGTH - 0.75) {
                 triggeredRampLaunch = true;
               }
-            } else if (it.wasOnRamp && absSpd > 2.2 && (it.lastRampAlign || 0) > 0.35 && (it.lastRampLocalZ || -99) >= RAMP_HALF_LENGTH - 1.45) {
+            } else if (it.wasOnRamp && Math.abs(spd) > 1.8 && (it.lastRampAlign || 0) > 0.20 && (it.lastRampLocalZ || -99) >= RAMP_HALF_LENGTH - 1.85) {
               // Just drove off the top lip of the ramp between frames!
               triggeredRampLaunch = true;
             }
@@ -19914,17 +19939,19 @@
             if (triggeredRampLaunch) {
               const launchRamp = activeRamp || it.wasOnRamp;
               const launchTopY = (launchRamp ? launchRamp.y : avgWheelGroundY) + RAMP_PEAK_HEIGHT;
-              // Preserve & boost forward momentum as the vehicle leaves the ramp, and activate floaty low-gravity hang-time!
-              it.speed = Math.sign(spd || 1) * Math.min(maxFwdSpeed * 1.28, Math.max(absSpd * 1.10, 9.5));
+              // Preserve & boost forward momentum as the vehicle leaves the ramp, and launch upward so it rises and soars through the air!
+              const dirSign = spd >= 0 ? 1 : -1;
+              it.speed = dirSign * Math.min(maxFwdSpeed * 1.32, Math.max(Math.abs(spd) * 1.15, 16.5));
               spd = it.speed;
               const effSpd = Math.abs(spd);
               it.isAirborne = true;
-              it.rampFloatTimer = 2.85; // 2.85 seconds of floaty low-gravity hang-time to soar over obstacles!
-              it.velY = Math.max(6.2 + effSpd * 0.38, prevClimbVel * 1.15);
-              it.y = Math.max(avgWheelGroundY, launchTopY) + 0.18;
-              it.airPitch = -Math.max(it.lastRampPitch || 0.42, 0.38);
-              it.airRoll = terrainRoll * 0.25;
-              it.airPitchVel = 0.14; // Smoothly level out nose during the floaty arc
+              it.rampFloatTimer = 3.20;       // 3.2 seconds of floaty low-gravity soaring hang-time
+              it.rampLaunchGraceTimer = 0.38; // Grace period so rear wheels clearing the lip never cancel takeoff
+              it.velY = Math.max(11.5 + effSpd * 0.42, prevClimbVel * 1.25);
+              it.y = Math.max(avgWheelGroundY, launchTopY) + 0.28;
+              it.airPitch = -Math.max(it.lastRampPitch || 0.48, 0.44);
+              it.airRoll = terrainRoll * 0.20;
+              it.airPitchVel = 0.08;
               it.airRollVel = 0.0;
               it.wasOnRamp = null;
             } else {
