@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Aeolian & Oasis — 3D Sand, Hydrology & Biome Flora Simulator</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏜️</text></svg>" />
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
   <style>
     :root {
       --bg-panel: rgba(16, 15, 13, 0.86);
@@ -1840,6 +1841,119 @@
       color: #ffd0c7;
     }
 
+    /* Multiplayer Top Button & Room Modal */
+    #btn-multiplayer-top {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.20), rgba(16, 185, 129, 0.20));
+      border: 1px solid rgba(56, 189, 248, 0.55);
+      color: #bae6fd;
+      font-weight: 700;
+      padding: 6px 11px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    #btn-multiplayer-top.in-room {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.32), rgba(5, 150, 105, 0.38));
+      border-color: #34d399;
+      color: #a7f3d0;
+      box-shadow: 0 0 14px rgba(16, 185, 129, 0.35);
+    }
+    .mp-pill-count {
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(56, 189, 248, 0.5);
+      color: #38bdf8;
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 999px;
+    }
+    #btn-multiplayer-top.in-room .mp-pill-count {
+      border-color: #34d399;
+      color: #6ee7b7;
+    }
+    #multiplayer-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9400;
+      background: rgba(8, 7, 5, 0.72);
+      backdrop-filter: blur(10px);
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+    }
+    #multiplayer-modal.open {
+      display: flex;
+    }
+    .mp-modal-card {
+      background: rgba(22, 19, 15, 0.96);
+      border: 1.5px solid rgba(56, 189, 248, 0.45);
+      border-radius: 18px;
+      padding: 20px 22px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 22px 64px rgba(0, 0, 0, 0.82);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      color: var(--text);
+    }
+    .mp-section-box {
+      background: rgba(12, 10, 8, 0.62);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+    .mp-code-display {
+      font-family: "SF Mono", Menlo, monospace;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      color: #34d399;
+      background: rgba(6, 78, 59, 0.35);
+      border: 1.5px dashed rgba(52, 211, 153, 0.65);
+      border-radius: 10px;
+      padding: 8px 14px;
+      text-align: center;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .mp-roster-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 170px;
+      overflow-y: auto;
+    }
+    .mp-roster-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+    .mp-color-swatch {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: transform 0.12s ease, border-color 0.12s ease;
+    }
+    .mp-color-swatch.active {
+      border-color: #ffffff;
+      transform: scale(1.15);
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    }
+
     /* World Genesis Staged Build Loading Screen */
     #world-boot-loader {
       position: fixed;
@@ -2134,6 +2248,10 @@
       <button id="btn-drive-mode" class="fpv-btn" style="display:none;" title="Drive the Offroad Truck with WASD / Arrow Keys &amp; Spacebar to Drift!">
         🛻 Drive
       </button>
+      <button id="btn-multiplayer-top" title="Create or Join a Live Multiplayer Room — sculpt together, drive your own Offroad Trucks, and jump off Ramps!">
+        <span id="label-multiplayer-top">🌐 Multiplayer</span>
+        <span class="mp-pill-count" id="badge-multiplayer-count" style="display:none;">1</span>
+      </button>
       <button id="btn-audio-toggle" class="audio-btn" title="Toggle Global Sound Effects On/Off (Shortcut: M)">
         🔊
       </button>
@@ -2325,6 +2443,113 @@
         <div style="display:flex; gap:8px;">
           <button type="button" id="btn-next-optics-target" style="padding:7px 12px; font-weight:700;">🔄 Next Target</button>
           <button type="button" id="btn-exit-optics-footer" class="primary" style="padding:7px 14px; font-weight:700;">▶️ Exit &amp; Resume Game</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live WebRTC Multiplayer Room Modal -->
+  <div id="multiplayer-modal">
+    <div class="mp-modal-card">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <div>
+          <div style="font-size:17px; font-weight:800; color:#38bdf8; display:flex; align-items:center; gap:7px;">
+            <span>🌐 Live Co-Op &amp; Racing Rooms</span>
+            <span id="mp-modal-status-badge" style="font-size:10.5px; font-weight:700; padding:2px 9px; border-radius:999px; background:rgba(148,163,184,0.18); color:#cbd5e1; border:1px solid rgba(148,163,184,0.35);">Offline</span>
+          </div>
+          <div style="font-size:11.5px; color:var(--text-dim); margin-top:2px;">
+            Sculpt terrain together, build road &amp; ramp tracks, drive your own 4x4 truck, or walk together! (Volcano disabled in Multiplayer)
+          </div>
+        </div>
+        <button type="button" id="btn-close-mp-modal" style="padding:6px 11px; font-weight:700;">✕ Close</button>
+      </div>
+
+      <!-- Player Profile (Handle & Signature Truck/Avatar Color) -->
+      <div class="mp-section-box">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <span style="font-size:11px; font-weight:700; color:var(--accent-bright); text-transform:uppercase; letter-spacing:0.06em;">👤 Your Player Profile</span>
+          <span style="font-size:10.5px; color:var(--text-dim);">Tints your 4x4 Truck, Avatar &amp; Sculpt Ring</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <input
+            type="text"
+            id="input-mp-player-name"
+            maxlength="18"
+            placeholder="Your Name..."
+            style="flex:1; min-width:130px; background:rgba(0,0,0,0.45); border:1px solid rgba(255,197,109,0.42); color:var(--text); border-radius:8px; padding:6px 10px; font-size:12.5px; font-weight:700; outline:none;"
+          />
+          <div id="mp-color-swatches" style="display:flex; align-items:center; gap:6px;">
+            <button type="button" class="mp-color-swatch active" data-color="#ef4444" style="background:#ef4444;" title="Baja Red"></button>
+            <button type="button" class="mp-color-swatch" data-color="#38bdf8" style="background:#38bdf8;" title="Oasis Cyan"></button>
+            <button type="button" class="mp-color-swatch" data-color="#10b981" style="background:#10b981;" title="Emerald Green"></button>
+            <button type="button" class="mp-color-swatch" data-color="#f59e0b" style="background:#f59e0b;" title="Desert Amber"></button>
+            <button type="button" class="mp-color-swatch" data-color="#a855f7" style="background:#a855f7;" title="Neon Violet"></button>
+            <button type="button" class="mp-color-swatch" data-color="#ec4899" style="background:#ec4899;" title="Sunset Pink"></button>
+          </div>
+        </div>
+      </div>
+
+      <!--Lobby Create / Join View (Shown when NOT in a room) -->
+      <div id="mp-lobby-controls" style="display:flex; flex-direction:column; gap:10px;">
+        <div class="mp-section-box">
+          <div style="font-size:11px; font-weight:700; color:#34d399; text-transform:uppercase; letter-spacing:0.06em;">🏠 Host a New Room</div>
+          <div style="font-size:11.5px; color:var(--text-dim);">Creates a room on your current map and gives you a Room Code &amp; invite link to share.</div>
+          <button type="button" id="btn-mp-create-room" class="primary" style="padding:9px 14px; font-weight:800; font-size:13px; justify-content:center;">
+            ✨ Create Multiplayer Room
+          </button>
+        </div>
+
+        <div class="mp-section-box">
+          <div style="font-size:11px; font-weight:700; color:#38bdf8; text-transform:uppercase; letter-spacing:0.06em;">🔗 Join an Existing Room</div>
+          <div style="display:flex; gap:8px;">
+            <input
+              type="text"
+              id="input-mp-join-code"
+              maxlength="12"
+              placeholder="Enter Room Code (e.g. K7M4P)"
+              style="flex:1; background:rgba(0,0,0,0.45); border:1px solid rgba(56,189,248,0.45); color:#bae6fd; border-radius:8px; padding:8px 11px; font-size:13px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; outline:none;"
+            />
+            <button type="button" id="btn-mp-join-room" style="padding:8px 16px; font-weight:800; font-size:13px; background:linear-gradient(135deg, #0284c7, #0369a1); border-color:#38bdf8; color:#fff;">
+              🚀 Join Room
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Room View (Shown when Hosting or Connected to a Room) -->
+      <div id="mp-active-room-controls" style="display:none; flex-direction:column; gap:10px;">
+        <div class="mp-section-box">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-size:11px; font-weight:700; color:#34d399; text-transform:uppercase; letter-spacing:0.06em;">🔑 Active Room Code</span>
+            <span id="mp-room-role-label" style="font-size:11px; font-weight:700; color:#fde047;">👑 Room Host</span>
+          </div>
+          <div class="mp-code-display" id="mp-active-code-display">-----</div>
+          <div style="display:flex; gap:7px; flex-wrap:wrap;">
+            <button type="button" id="btn-mp-copy-link" class="primary" style="flex:1; justify-content:center; padding:7px 10px; font-weight:700; font-size:12px;">
+              🔗 Copy Invite Link
+            </button>
+            <button type="button" id="btn-mp-copy-code" style="padding:7px 12px; font-weight:700; font-size:12px;">
+              📋 Copy Code
+            </button>
+            <button type="button" id="btn-mp-spawn-my-truck" style="padding:7px 12px; font-weight:700; font-size:12px; border-color:#f97316; color:#fed7aa;" title="Spawn or relocate your own colored 4x4 Offroad Truck at the center of your view and start driving!">
+              🛻 Drive My Truck
+            </button>
+          </div>
+        </div>
+
+        <div class="mp-section-box">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-size:11px; font-weight:700; color:#bae6fd; text-transform:uppercase; letter-spacing:0.06em;">👥 Players in Room (<span id="mp-roster-count">1</span>)</span>
+            <button type="button" id="btn-mp-resync-map" style="padding:3px 9px; font-size:10.5px; font-weight:700;" title="Sync full terrain &amp; items state across the room">🔄 Sync Map</button>
+          </div>
+          <div class="mp-roster-list" id="mp-roster-list"></div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <span style="font-size:11px; color:var(--text-dim);">🌋 Volcano is disabled while in Multiplayer</span>
+          <button type="button" id="btn-mp-leave-room" class="danger" style="padding:7px 14px; font-weight:700;">
+            🚪 Leave Room
+          </button>
         </div>
       </div>
     </div>
@@ -5791,6 +6016,35 @@
                 strength: lanternNightGlow * 2.65
               }
             );
+          }
+        }
+        if (typeof mpState !== 'undefined' && mpState.inRoom && mpState.peers) {
+          for (const peer of mpState.peers.values()) {
+            if (peer && peer.truck && peer.truckMesh && peer.truckMesh.visible) {
+              const tyaw = peer.truckMesh.rotation.y || 0;
+              const tx = peer.truckMesh.position.x;
+              const tz = peer.truckMesh.position.z;
+              const fwdX = Math.sin(tyaw);
+              const fwdZ = Math.cos(tyaw);
+              const rightX = Math.cos(tyaw);
+              const rightZ = -Math.sin(tyaw);
+              activeTruckHeadlights.push(
+                {
+                  hx: tx + fwdX * 1.85 - rightX * 0.62,
+                  hz: tz + fwdZ * 1.85 - rightZ * 0.62,
+                  dirX: Math.sin(tyaw - hlSplayRad),
+                  dirZ: Math.cos(tyaw - hlSplayRad),
+                  strength: lanternNightGlow * 2.65
+                },
+                {
+                  hx: tx + fwdX * 1.85 + rightX * 0.62,
+                  hz: tz + fwdZ * 1.85 + rightZ * 0.62,
+                  dirX: Math.sin(tyaw + hlSplayRad),
+                  dirZ: Math.cos(tyaw + hlSplayRad),
+                  strength: lanternNightGlow * 2.65
+                }
+              );
+            }
           }
         }
       }
@@ -16571,6 +16825,20 @@
     function updateVolcanoButtonUI() {
       const btn = document.getElementById('btn-tool-volcano');
       if (!btn) return;
+      if (typeof mpState !== 'undefined' && mpState.inRoom) {
+        btn.textContent = '🌋 Volcano (MP Off)';
+        btn.classList.add('on-cooldown');
+        btn.disabled = true;
+        btn.style.opacity = '0.42';
+        btn.style.cursor = 'not-allowed';
+        if (params.tool === 'volcano' && typeof syncActiveToolUI === 'function') {
+          syncActiveToolUI('none');
+        }
+        return;
+      }
+      btn.disabled = false;
+      btn.style.opacity = '';
+      btn.style.cursor = '';
       const now = Date.now();
       if (volcanoEruptionState.active) {
         const remErupt = Math.max(1, Math.ceil(VOLCANO_ERUPTION_DURATION - volcanoEruptionState.elapsed));
@@ -16589,6 +16857,13 @@
     }
 
     function triggerVolcanoEruptionAtWorld(clickWx, clickWz) {
+      if (typeof mpState !== 'undefined' && mpState.inRoom) {
+        if (typeof showCartridgeToast === 'function') {
+          showCartridgeToast('🌋 Volcano is disabled while playing in a Multiplayer Room!', true);
+        }
+        updateVolcanoButtonUI();
+        return;
+      }
       const now = Date.now();
       if (volcanoEruptionState.active || now < volcanoCooldownUntil) {
         updateVolcanoButtonUI();
@@ -18614,8 +18889,11 @@
       return wheelGroup;
     }
 
-    function createOffroadTruckMesh() {
+    function createOffroadTruckMesh(customPaintColor = null) {
       const root = new THREE.Group();
+      const bodyPaintMat = customPaintColor
+        ? new THREE.MeshStandardMaterial({ color: customPaintColor, roughness: 0.36, metalness: 0.25 })
+        : sharedTruckPaintMat;
 
       // Suspended chassis group (pitches under acceleration/braking and rolls during fast cornering & spacebar drifts!)
       const chassisGroup = new THREE.Group();
@@ -18629,7 +18907,7 @@
       chassisGroup.add(frameMesh);
 
       // 2. Front hood & engine bay (+Z is forward)
-      const hoodMesh = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.50, 1.24), sharedTruckPaintMat);
+      const hoodMesh = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.50, 1.24), bodyPaintMat);
       hoodMesh.position.set(0, 0.88, 1.14);
       hoodMesh.castShadow = true;
       hoodMesh.receiveShadow = true;
@@ -18642,7 +18920,7 @@
       chassisGroup.add(scoopMesh);
 
       // 3. Offroad Crew Cab & Tinted Windows
-      const cabMesh = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.74, 1.24), sharedTruckPaintMat);
+      const cabMesh = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.74, 1.24), bodyPaintMat);
       cabMesh.position.set(0, 1.26, 0.02);
       cabMesh.castShadow = true;
       cabMesh.receiveShadow = true;
@@ -18653,11 +18931,13 @@
       chassisGroup.add(glassMesh);
 
       // 4. Rear Pickup Bed + Angled Baja Spare Tire
-      const bedMesh = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.52, 1.28), sharedTruckPaintMat);
+      const bedMesh = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.52, 1.28), bodyPaintMat);
       bedMesh.position.set(0, 0.88, -1.16);
       bedMesh.castShadow = true;
       bedMesh.receiveShadow = true;
       chassisGroup.add(bedMesh);
+      root.userData.bodyPaintMat = bodyPaintMat;
+      root.userData.bodyMeshes = [hoodMesh, cabMesh, bedMesh];
 
       const bedLiner = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.12, 1.14), sharedTruckDarkMetalMat);
       bedLiner.position.set(0, 1.12, -1.16);
@@ -18991,15 +19271,20 @@
       return removed;
     }
 
-    function placeWorldItemAtWorld(type, wx, wz) {
+    function placeWorldItemAtWorld(type, wx, wz, remoteOpts = null) {
+      const isRemote = Boolean(remoteOpts && remoteOpts.isRemote);
+      if (isRemote && type === 'item-truck') {
+        // Remote players' trucks are rendered dynamically via their live multiplayer telemetry in mpRemoteGroup
+        return null;
+      }
       const nowMs = performance.now();
-      if (nowMs - lastItemPlaceMs < 240) return;
+      if (!isRemote && nowMs - lastItemPlaceMs < 240) return null;
 
       const halfBound = WORLD_SIZE * 0.46;
       const px = clamp(wx, -halfBound, halfBound);
       const pz = clamp(wz, -halfBound, halfBound);
 
-      // Only allow 1 Offroad Truck on the map: placing another moves the existing vehicle to the new location!
+      // Only allow 1 local Offroad Truck on the map: placing another moves the existing vehicle to the new location!
       if (type === 'item-truck') {
         const existingTruck = getLatestPlacedTruck();
         if (existingTruck) {
@@ -19012,6 +19297,7 @@
           existingTruck.prevGroundVelY = 0.0;
           existingTruck.velY = 0.0;
           existingTruck.isAirborne = false;
+          existingTruck.isRampJumpActive = false;
           existingTruck.isFlipped = false;
           existingTruck.flipTimer = 0.0;
           existingTruck.speed = 0.0;
@@ -19028,7 +19314,7 @@
             emitTruckSandDust(px + Math.cos(ang) * 0.9, groundY + 0.25, pz + Math.sin(ang) * 0.9, Math.cos(ang) * 1.8, 0.9, Math.sin(ang) * 1.8, 0, 0.55);
           }
           syncTerrainAndWaterMeshes();
-          return;
+          return { yaw: existingTruck.yaw };
         }
       }
 
@@ -19036,19 +19322,23 @@
       for (let i = 0; i < placedWorldItems.length; i++) {
         const it = placedWorldItems[i];
         if (Math.hypot(it.x - px, it.z - pz) < 2.6) {
-          return;
+          return null;
         }
       }
 
-      lastItemPlaceMs = nowMs;
+      if (!isRemote) {
+        lastItemPlaceMs = nowMs;
+      }
       while (placedWorldItems.length >= MAX_PLACED_ITEMS) {
         destroyPlacedItemAtIndex(0, false);
       }
 
       const { groundY } = sampleHeightsAtWorld(px, pz);
-      const yaw = (type === 'item-ramp')
-        ? Math.atan2(px - camera.position.x, pz - camera.position.z)
-        : (Math.random() * Math.PI * 2);
+      const yaw = (remoteOpts && typeof remoteOpts.itemYaw === 'number')
+        ? remoteOpts.itemYaw
+        : ((type === 'item-ramp')
+          ? Math.atan2(px - camera.position.x, pz - camera.position.z)
+          : (Math.random() * Math.PI * 2));
       let mesh = null;
       if (type === 'item-tap') {
         mesh = createWaterTapMesh();
@@ -19059,9 +19349,10 @@
       } else if (type === 'item-ramp') {
         mesh = createStuntRampMesh();
       } else if (type === 'item-truck') {
-        mesh = createOffroadTruckMesh();
+        const myTruckCol = (typeof mpState !== 'undefined' && mpState.myColor) ? mpState.myColor : null;
+        mesh = createOffroadTruckMesh(myTruckCol);
       }
-      if (!mesh) return;
+      if (!mesh) return null;
 
       mesh.position.set(px, groundY, pz);
       mesh.rotation.y = yaw;
@@ -19100,6 +19391,7 @@
       if (type === 'item-lantern' || type === 'item-truck') {
         syncTerrainAndWaterMeshes();
       }
+      return { yaw };
     }
 
     const driveState = {
@@ -21795,81 +22087,79 @@
       showCartridgeToast(`💾 Saved Cartridge: "${cartridgeTitle}" (${filename})`);
     }
 
-    async function loadCartridgeFromPngFile(file) {
-      if (!file) return;
-      try {
-        const arrayBuf = await file.arrayBuffer();
-        const chunkData = extractPngCartridgeChunk(arrayBuf);
-        if (!chunkData) {
-          showCartridgeToast('⚠️ That PNG does not contain an Aeolian & Oasis 3D Cartridge!', true);
-          return;
-        }
-        const rawBytes = await decompressBytesGzip(chunkData);
-        const dv = new DataView(rawBytes.buffer, rawBytes.byteOffset, rawBytes.byteLength);
-        const metaLen = dv.getUint32(0, false);
-        if (metaLen <= 0 || 4 + metaLen > rawBytes.length) {
-          throw new Error('Corrupt cartridge header');
-        }
-        const metaJson = new TextDecoder().decode(rawBytes.subarray(4, 4 + metaLen));
-        const meta = JSON.parse(metaJson);
-        if (!meta || meta.magic !== 'AEOLIAN_OASIS_CARTRIDGE_V1' || meta.grid !== GRID) {
-          throw new Error('Incompatible cartridge version');
-        }
+    async function applyCompressedWorldPayload(chunkData, options = {}) {
+      const isMpSync = Boolean(options.isMultiplayerSync);
+      const rawBytes = await decompressBytesGzip(chunkData);
+      const dv = new DataView(rawBytes.buffer, rawBytes.byteOffset, rawBytes.byteLength);
+      const metaLen = dv.getUint32(0, false);
+      if (metaLen <= 0 || 4 + metaLen > rawBytes.length) {
+        throw new Error('Corrupt cartridge header');
+      }
+      const metaJson = new TextDecoder().decode(rawBytes.subarray(4, 4 + metaLen));
+      const meta = JSON.parse(metaJson);
+      if (!meta || meta.magic !== 'AEOLIAN_OASIS_CARTRIDGE_V1' || meta.grid !== GRID) {
+        throw new Error('Incompatible cartridge version');
+      }
 
-        // Exit FPV or Drive Mode cleanly before restoring world state
+      if (!isMpSync) {
+        // Exit FPV or Drive Mode cleanly before restoring world state from a PNG file
         if (params.driveMode) toggleDriveMode(false);
         if (params.fpvMode) toggleFPVMode(false);
+      }
 
-        let ptr = 4 + metaLen;
-        const floatArrays = [
-          bedrock, sand, water, soilMoisture, waterProximity,
-          veg, vegHealth, snowCover, iceCover, lavaFrac, pondAge
-        ];
-        const byteArrays = [obstacleType, grassMask, surfaceMaterial];
+      let ptr = 4 + metaLen;
+      const floatArrays = [
+        bedrock, sand, water, soilMoisture, waterProximity,
+        veg, vegHealth, snowCover, iceCover, lavaFrac, pondAge
+      ];
+      const byteArrays = [obstacleType, grassMask, surfaceMaterial];
 
-        for (let f = 0; f < floatArrays.length; f++) {
-          const arr = floatArrays[f];
-          const byteLen = arr.byteLength;
-          const srcU8 = rawBytes.subarray(ptr, ptr + byteLen);
-          new Uint8Array(arr.buffer, arr.byteOffset, byteLen).set(srcU8);
-          ptr += byteLen;
-        }
-        for (let b = 0; b < byteArrays.length; b++) {
-          const arr = byteArrays[b];
-          const byteLen = arr.byteLength;
-          arr.set(rawBytes.subarray(ptr, ptr + byteLen));
-          ptr += byteLen;
-        }
+      for (let f = 0; f < floatArrays.length; f++) {
+        const arr = floatArrays[f];
+        const byteLen = arr.byteLength;
+        const srcU8 = rawBytes.subarray(ptr, ptr + byteLen);
+        new Uint8Array(arr.buffer, arr.byteOffset, byteLen).set(srcU8);
+        ptr += byteLen;
+      }
+      for (let b = 0; b < byteArrays.length; b++) {
+        const arr = byteArrays[b];
+        const byteLen = arr.byteLength;
+        arr.set(rawBytes.subarray(ptr, ptr + byteLen));
+        ptr += byteLen;
+      }
 
-        // Clear transient buffers
-        sandNext.set(sand);
-        waterNext.set(water);
-        moistureNext.set(soilMoisture);
-        waterProxNext.set(waterProximity);
-        lavaFracNext.set(lavaFrac);
-        plantBurnTimer.fill(0);
-        steamStageTimer.fill(0);
-        pendingRockHeight.fill(0);
-        plantSubmergedTimer.fill(0);
+      // Clear transient buffers
+      sandNext.set(sand);
+      waterNext.set(water);
+      moistureNext.set(soilMoisture);
+      waterProxNext.set(waterProximity);
+      lavaFracNext.set(lavaFrac);
+      plantBurnTimer.fill(0);
+      steamStageTimer.fill(0);
+      pendingRockHeight.fill(0);
+      plantSubmergedTimer.fill(0);
 
-        // Restore params & sync UI controls
-        if (meta.params) {
-          const p = meta.params;
-          const assignIfNum = (k) => { if (typeof p[k] === 'number' && !Number.isNaN(p[k])) params[k] = p[k]; };
-          const assignIfBool = (k) => { if (typeof p[k] === 'boolean') params[k] = p[k]; };
-          assignIfNum('windSpeed');
-          assignIfNum('windDirDeg');
-          assignIfNum('sandSupply');
-          assignIfNum('rainRate');
-          assignIfNum('evapRate');
-          assignIfNum('absorptionRate');
-          assignIfNum('simSteps');
+      // Restore params & sync UI controls
+      if (meta.params) {
+        const p = meta.params;
+        const assignIfNum = (k) => { if (typeof p[k] === 'number' && !Number.isNaN(p[k])) params[k] = p[k]; };
+        const assignIfBool = (k) => { if (typeof p[k] === 'boolean') params[k] = p[k]; };
+        assignIfNum('windSpeed');
+        assignIfNum('windDirDeg');
+        assignIfNum('sandSupply');
+        assignIfNum('rainRate');
+        assignIfNum('evapRate');
+        assignIfNum('absorptionRate');
+        assignIfNum('simSteps');
+        if (!isMpSync) {
           assignIfNum('brushRadius');
           assignIfNum('selectZoomDistance');
-          assignIfNum('timeOfDay');
-          assignIfBool('autoDayNight');
-          assignIfBool('autoWeather');
-          assignIfNum('snowRate');
+        }
+        assignIfNum('timeOfDay');
+        assignIfBool('autoDayNight');
+        assignIfBool('autoWeather');
+        assignIfNum('snowRate');
+        if (!isMpSync) {
           assignIfBool('showShadowOverlay');
           assignIfBool('showMoistureOverlay');
           assignIfBool('showParticles');
@@ -21888,26 +22178,27 @@
           assignIfNum('truckLightAngleDeg');
           assignIfNum('truckLightDistance');
           assignIfNum('truckLightConeOpacity');
+        }
 
-          if (typeof p.weatherMode === 'string') {
-            params.weatherMode = p.weatherMode;
-            document.querySelectorAll('.weather-btn').forEach((b) => {
-              b.classList.toggle('active', b.dataset.weather === params.weatherMode);
-            });
-          }
-          if (typeof p.fidelity === 'number' && typeof applyGraphicsFidelity === 'function') {
-            applyGraphicsFidelity(p.fidelity);
-            const sf = document.getElementById('slider-fidelity');
-            if (sf) sf.value = String(p.fidelity);
-          }
-          if (typeof p.truckLightColorHex === 'string' && typeof applyTruckLightColorHex === 'function') {
-            applyTruckLightColorHex(p.truckLightColorHex);
-          }
-          if (typeof updateTruckHeadlightConeGeometry === 'function') {
-            updateTruckHeadlightConeGeometry();
-          }
+        if (typeof p.weatherMode === 'string') {
+          params.weatherMode = p.weatherMode;
+          document.querySelectorAll('.weather-btn').forEach((b) => {
+            b.classList.toggle('active', b.dataset.weather === params.weatherMode);
+          });
+        }
+        if (!isMpSync && typeof p.fidelity === 'number' && typeof applyGraphicsFidelity === 'function') {
+          applyGraphicsFidelity(p.fidelity);
+          const sf = document.getElementById('slider-fidelity');
+          if (sf) sf.value = String(p.fidelity);
+        }
+        if (!isMpSync && typeof p.truckLightColorHex === 'string' && typeof applyTruckLightColorHex === 'function') {
+          applyTruckLightColorHex(p.truckLightColorHex);
+        }
+        if (!isMpSync && typeof updateTruckHeadlightConeGeometry === 'function') {
+          updateTruckHeadlightConeGeometry();
+        }
 
-          // Sync vehicle tuner sliders
+        if (!isMpSync) {
           const setSlider = (id, val, triggerInput = true) => {
             const el = document.getElementById(id);
             if (el && val !== undefined) {
@@ -21932,125 +22223,149 @@
           setSlider('slider-truck-light-opacity', Math.round((params.truckLightConeOpacity ?? 0.02) * 100));
           setSlider('slider-select-zoom', params.selectZoomDistance ?? 11.0, false);
         }
+      }
 
-        if (meta.terrainPreset) {
-          document.querySelectorAll('.terrain-btn').forEach((b) => {
-            b.classList.toggle('active', b.dataset.terrain === meta.terrainPreset);
+      if (meta.terrainPreset) {
+        document.querySelectorAll('.terrain-btn').forEach((b) => {
+          b.classList.toggle('active', b.dataset.terrain === meta.terrainPreset);
+        });
+      }
+
+      // Restore Placed World Items (In Multiplayer Sync, preserve the local player's own truck while syncing all shared Ramps, Taps, Feeders & Lanterns!)
+      for (let i = placedWorldItems.length - 1; i >= 0; i--) {
+        if (isMpSync && placedWorldItems[i].type === 'item-truck') {
+          const t = placedWorldItems[i];
+          const { groundY } = sampleHeightsAtWorld(t.x, t.z);
+          t.y = groundY;
+          if (t.mesh) t.mesh.position.y = groundY;
+          continue;
+        }
+        destroyPlacedItemAtIndex(i, false);
+      }
+      if (Array.isArray(meta.items)) {
+        for (const savedIt of meta.items) {
+          if (isMpSync && savedIt.type === 'item-truck') continue;
+          let mesh = null;
+          if (savedIt.type === 'item-tap') mesh = createWaterTapMesh();
+          else if (savedIt.type === 'item-feeder') mesh = createAnimalFeederMesh();
+          else if (savedIt.type === 'item-lantern') mesh = createHangingLanternMesh();
+          else if (savedIt.type === 'item-ramp') mesh = createStuntRampMesh();
+          else if (savedIt.type === 'item-truck') mesh = createOffroadTruckMesh();
+          if (!mesh) continue;
+          const { groundY } = sampleHeightsAtWorld(savedIt.x, savedIt.z);
+          mesh.position.set(savedIt.x, groundY, savedIt.z);
+          mesh.rotation.y = savedIt.yaw || 0;
+          placedItemsGroup.add(mesh);
+          placedWorldItems.push({
+            type: savedIt.type,
+            x: savedIt.x,
+            y: groundY,
+            z: savedIt.z,
+            yaw: savedIt.yaw || 0,
+            phase: savedIt.phase || 0,
+            spurtTimer: 0.6,
+            spurtStrength: savedIt.spurtStrength ?? 1.0,
+            foodRemaining: savedIt.foodRemaining ?? 1.0,
+            mothCooldown: savedIt.mothCooldown ?? 4.0,
+            mothSupply: savedIt.mothSupply ?? 0.0,
+            mothSpawning: false,
+            mothsActive: Boolean(savedIt.mothsActive),
+            speed: 0.0,
+            steerAngle: 0.0,
+            driftSlipAngle: 0.0,
+            wheelSpin: 0.0,
+            suspPitch: 0.0,
+            suspRoll: 0.0,
+            mesh
           });
         }
+      }
+      updatePlacedItemsCountUI();
 
-        // Restore Placed World Items (Water Taps, Feeders, Lanterns, Offroad Truck)
-        while (placedWorldItems.length > 0) {
-          destroyPlacedItemAtIndex(placedWorldItems.length - 1, false);
+      // Restore Fauna Agents
+      for (let i = 0; i < faunaAgents.length; i++) {
+        if (faunaAgents[i].rig && typeof disposeApexRig === 'function') {
+          disposeApexRig(faunaAgents[i]);
         }
-        if (Array.isArray(meta.items)) {
-          for (const savedIt of meta.items) {
-            let mesh = null;
-            if (savedIt.type === 'item-tap') mesh = createWaterTapMesh();
-            else if (savedIt.type === 'item-feeder') mesh = createAnimalFeederMesh();
-            else if (savedIt.type === 'item-lantern') mesh = createHangingLanternMesh();
-            else if (savedIt.type === 'item-ramp') mesh = createStuntRampMesh();
-            else if (savedIt.type === 'item-truck') mesh = createOffroadTruckMesh();
-            if (!mesh) continue;
-            const { groundY } = sampleHeightsAtWorld(savedIt.x, savedIt.z);
-            mesh.position.set(savedIt.x, groundY, savedIt.z);
-            mesh.rotation.y = savedIt.yaw || 0;
-            placedItemsGroup.add(mesh);
-            placedWorldItems.push({
-              type: savedIt.type,
-              x: savedIt.x,
-              y: groundY,
-              z: savedIt.z,
-              yaw: savedIt.yaw || 0,
-              phase: savedIt.phase || 0,
-              spurtTimer: 0.6,
-              spurtStrength: savedIt.spurtStrength ?? 1.0,
-              foodRemaining: savedIt.foodRemaining ?? 1.0,
-              mothCooldown: savedIt.mothCooldown ?? 4.0,
-              mothSupply: savedIt.mothSupply ?? 0.0,
-              mothSpawning: false,
-              mothsActive: Boolean(savedIt.mothsActive),
-              speed: 0.0,
-              steerAngle: 0.0,
-              driftSlipAngle: 0.0,
-              wheelSpin: 0.0,
-              suspPitch: 0.0,
-              suspRoll: 0.0,
-              mesh
-            });
-          }
+      }
+      faunaAgents.length = 0;
+      if (Array.isArray(meta.fauna)) {
+        for (const fa of meta.fauna) {
+          const isApex = (fa.type === 'jaguar' || fa.type === 'lion' || fa.type === 'croc');
+          faunaAgents.push({
+            type: fa.type,
+            state: fa.state || 'alive',
+            submergedTime: 0,
+            skeletonTimer: fa.skeletonTimer || 0,
+            huntCooldown: 2.5 + Math.random() * 3.5,
+            croakTimer: 1.5 + Math.random() * 3.5,
+            hopPitch: 0,
+            apexPhase: 'PROWL',
+            stalkTimer: 0,
+            pounceTimer: 0,
+            lookYawOffset: 0,
+            animFreq: 6.0,
+            rig: (isApex && fa.state !== 'skeleton') ? createArticulatedApexRig(fa.type) : null,
+            x: fa.x,
+            y: fa.y,
+            z: fa.z,
+            heading: fa.heading || 0,
+            turnRate: 0,
+            speed: fa.speed || 3.5,
+            scale: fa.scale || 1.0,
+            phase: Math.random() * Math.PI * 2,
+            colorHex: fa.colorHex || 0xd97706
+          });
         }
-        updatePlacedItemsCountUI();
+      }
 
-        // Restore Fauna Agents
-        for (let i = 0; i < faunaAgents.length; i++) {
-          if (faunaAgents[i].rig && typeof disposeApexRig === 'function') {
-            disposeApexRig(faunaAgents[i]);
-          }
+      if (!isMpSync && meta.camera && Array.isArray(meta.camera.pos) && Array.isArray(meta.camera.target)) {
+        camera.position.set(meta.camera.pos[0], meta.camera.pos[1], meta.camera.pos[2]);
+        controls.target.set(meta.camera.target[0], meta.camera.target[1], meta.camera.target[2]);
+        controls.update();
+      }
+
+      if (!isMpSync && meta.title && inputCartridgeTitle) {
+        inputCartridgeTitle.value = meta.title;
+        userEditedCartridgeTitle = false;
+        if (valCartridgeSlug) valCartridgeSlug.textContent = `${titleToCartridgeSlug(meta.title)}.png`;
+      }
+
+      computeWindShadowAndFlow();
+      updateSunPosition();
+      syncUILabels();
+      syncTerrainAndWaterMeshes();
+      rebuildFloraInstances();
+
+      worldBootComplete = true;
+      worldWeatherStarted = true;
+      worldPersonSpawnAllowed = true;
+      terrainMesh.visible = true;
+      waterMesh.visible = true;
+      if (bootLoaderEl) bootLoaderEl.classList.add('hidden');
+
+      return meta;
+    }
+
+    async function loadCartridgeFromPngFile(file) {
+      if (!file) return;
+      try {
+        const arrayBuf = await file.arrayBuffer();
+        const chunkData = extractPngCartridgeChunk(arrayBuf);
+        if (!chunkData) {
+          showCartridgeToast('⚠️ That PNG does not contain an Aeolian & Oasis 3D Cartridge!', true);
+          return;
         }
-        faunaAgents.length = 0;
-        if (Array.isArray(meta.fauna)) {
-          for (const fa of meta.fauna) {
-            const isApex = (fa.type === 'jaguar' || fa.type === 'lion' || fa.type === 'croc');
-            faunaAgents.push({
-              type: fa.type,
-              state: fa.state || 'alive',
-              submergedTime: 0,
-              skeletonTimer: fa.skeletonTimer || 0,
-              huntCooldown: 2.5 + Math.random() * 3.5,
-              croakTimer: 1.5 + Math.random() * 3.5,
-              hopPitch: 0,
-              apexPhase: 'PROWL',
-              stalkTimer: 0,
-              pounceTimer: 0,
-              lookYawOffset: 0,
-              animFreq: 6.0,
-              rig: (isApex && fa.state !== 'skeleton') ? createArticulatedApexRig(fa.type) : null,
-              x: fa.x,
-              y: fa.y,
-              z: fa.z,
-              heading: fa.heading || 0,
-              turnRate: 0,
-              speed: fa.speed || 3.5,
-              scale: fa.scale || 1.0,
-              phase: Math.random() * Math.PI * 2,
-              colorHex: fa.colorHex || 0xd97706
-            });
-          }
-        }
-
-        // Restore Camera Position & Target
-        if (meta.camera && Array.isArray(meta.camera.pos) && Array.isArray(meta.camera.target)) {
-          camera.position.set(meta.camera.pos[0], meta.camera.pos[1], meta.camera.pos[2]);
-          controls.target.set(meta.camera.target[0], meta.camera.target[1], meta.camera.target[2]);
-          controls.update();
-        }
-
-        if (meta.title && inputCartridgeTitle) {
-          inputCartridgeTitle.value = meta.title;
-          userEditedCartridgeTitle = false;
-          if (valCartridgeSlug) valCartridgeSlug.textContent = `${titleToCartridgeSlug(meta.title)}.png`;
-        }
-
-        computeWindShadowAndFlow();
-        updateSunPosition();
-        syncUILabels();
-        syncTerrainAndWaterMeshes();
-        rebuildFloraInstances();
-
-        worldBootComplete = true;
-        worldWeatherStarted = true;
-        worldPersonSpawnAllowed = true;
-        terrainMesh.visible = true;
-        waterMesh.visible = true;
-        if (bootLoaderEl) bootLoaderEl.classList.add('hidden');
-
-        const loadedTitle = meta.title || file.name.replace(/\.png$/i, '');
+        const meta = await applyCompressedWorldPayload(chunkData, { isMultiplayerSync: false });
+        const loadedTitle = (meta && meta.title) || file.name.replace(/\.png$/i, '');
         if (valCartridgeStatus) {
           valCartridgeStatus.textContent = 'Loaded!';
           setTimeout(() => { valCartridgeStatus.textContent = 'Playable PNG'; }, 2200);
         }
         showCartridgeToast(`🎮 Loaded Cartridge: "${loadedTitle}"`);
+        if (typeof mpState !== 'undefined' && mpState.inRoom && mpState.isHost && typeof broadcastFullWorldSyncToPeers === 'function') {
+          broadcastFullWorldSyncToPeers();
+        }
       } catch (err) {
         console.error('Cartridge PNG load error:', err);
         showCartridgeToast('⚠️ Could not load Cartridge PNG', true);
@@ -22558,30 +22873,51 @@
       lastMs: 0
     };
 
-    function applyBrushAtWorld(wx, wz) {
-      if (!params.tool || params.tool === 'none') {
-        return;
-      }
-      if (params.tool === 'volcano') {
-        triggerVolcanoEruptionAtWorld(wx, wz);
-        return;
-      }
-      if (params.tool === 'fireworks') {
-        launchFireworkAtWorld(wx, wz);
-        return;
-      }
-      if (params.tool === 'item-tap' || params.tool === 'item-feeder' || params.tool === 'item-lantern' || params.tool === 'item-ramp' || params.tool === 'item-truck') {
-        placeWorldItemAtWorld(params.tool, wx, wz);
-        return;
-      }
-      if (params.tool === 'erase') {
-        destroyPlacedItemsNearWorld(wx, wz, params.brushRadius, true);
-        if (typeof voxelHuman !== 'undefined' && voxelHuman.active) {
-          if (Math.hypot(voxelHuman.x - wx, voxelHuman.z - wz) <= params.brushRadius) {
-            destroyVoxelHuman('erase');
-          }
+    function applyBrushAtWorld(wx, wz, remoteOpts = null) {
+      const isRemote = Boolean(remoteOpts && remoteOpts.isRemote);
+      const savedTool = params.tool;
+      const savedRadius = params.brushRadius;
+      if (isRemote) {
+        params.tool = remoteOpts.tool || 'none';
+        if (typeof remoteOpts.radius === 'number') {
+          params.brushRadius = remoteOpts.radius;
         }
       }
+      try {
+        if (!params.tool || params.tool === 'none') {
+          return;
+        }
+        if (params.tool === 'volcano') {
+          if (!isRemote) {
+            triggerVolcanoEruptionAtWorld(wx, wz);
+          }
+          return;
+        }
+        if (params.tool === 'fireworks') {
+          launchFireworkAtWorld(wx, wz);
+          if (!isRemote && typeof broadcastMultiplayerBrushAction === 'function') {
+            broadcastMultiplayerBrushAction(params.tool, wx, wz, params.brushRadius, null, true);
+          }
+          return;
+        }
+        if (params.tool === 'item-tap' || params.tool === 'item-feeder' || params.tool === 'item-lantern' || params.tool === 'item-ramp' || params.tool === 'item-truck') {
+          const placed = placeWorldItemAtWorld(params.tool, wx, wz, remoteOpts);
+          if (!isRemote && placed && params.tool !== 'item-truck' && typeof broadcastMultiplayerBrushAction === 'function') {
+            broadcastMultiplayerBrushAction(params.tool, wx, wz, params.brushRadius, placed.yaw, true);
+          }
+          return;
+        }
+        if (!isRemote && typeof broadcastMultiplayerBrushAction === 'function') {
+          broadcastMultiplayerBrushAction(params.tool, wx, wz, params.brushRadius, null, false);
+        }
+        if (params.tool === 'erase') {
+          destroyPlacedItemsNearWorld(wx, wz, params.brushRadius, true);
+          if (typeof voxelHuman !== 'undefined' && voxelHuman.active) {
+            if (Math.hypot(voxelHuman.x - wx, voxelHuman.z - wz) <= params.brushRadius) {
+              destroyVoxelHuman('erase');
+            }
+          }
+        }
 
       const cx = Math.round(((wx / WORLD_SIZE) + 0.5) * (GRID - 1));
       const cy = Math.round(((wz / WORLD_SIZE) + 0.5) * (GRID - 1));
@@ -22912,6 +23248,12 @@
       computeWindShadowAndFlow();
       syncTerrainAndWaterMeshes();
       rebuildFloraInstances();
+      } finally {
+        if (isRemote) {
+          params.tool = savedTool;
+          params.brushRadius = savedRadius;
+        }
+      }
     }
 
     // Multi-touch & Pointer tracking so 1-finger sculpts (or orbits), 2-finger pinch-zooms/rotates, and FPV touch-look & virtual joystick work seamlessly
@@ -23187,7 +23529,7 @@
       'item-truck':   { icon: '🛻', name: '4x4 Offroad Baja Truck', radius: 2.25, height: 1.85, colorHex: 0xdc2626 }
     };
 
-    function rotateSelectedObjectByStep(target, deltaYaw) {
+    function rotateSelectedObjectByStep(target, deltaYaw, isRemote = false) {
       if (!target) return;
       if (target.kind === 'item' && target.item) {
         target.item.yaw = ((target.item.yaw || 0) + deltaYaw) % (Math.PI * 2);
@@ -23196,6 +23538,15 @@
         }
         if (target.item.type === 'item-lantern' || target.item.type === 'item-truck') {
           syncTerrainAndWaterMeshes();
+        }
+        if (!isRemote && typeof broadcastMultiplayerEvent === 'function' && target.item.type !== 'item-truck') {
+          broadcastMultiplayerEvent({
+            t: 'rotate_item',
+            kind: 'item',
+            wx: Number(target.item.x.toFixed(2)),
+            wz: Number(target.item.z.toFixed(2)),
+            yaw: Number(target.item.yaw.toFixed(4))
+          });
         }
       } else if (target.kind === 'person' && typeof voxelHuman !== 'undefined' && voxelHuman.active) {
         voxelHuman.heading = ((voxelHuman.heading || 0) + deltaYaw) % (Math.PI * 2);
@@ -23214,6 +23565,14 @@
       } else if (target.kind === 'plant' && typeof target.cellIdx === 'number') {
         plantYawOffset[target.cellIdx] = (plantYawOffset[target.cellIdx] + deltaYaw) % (Math.PI * 2);
         rebuildFloraInstances();
+        if (!isRemote && typeof broadcastMultiplayerEvent === 'function') {
+          broadcastMultiplayerEvent({
+            t: 'rotate_item',
+            kind: 'plant',
+            cellIdx: target.cellIdx,
+            yaw: Number(plantYawOffset[target.cellIdx].toFixed(4))
+          });
+        }
       }
       syncSelectFollowBadgeUI();
     }
@@ -25749,15 +26108,1035 @@
       reloadFromBackgroundSuspend();
     });
 
-    // Trigger background suspend whenever the tab/app is put into the background
+    // Trigger background suspend whenever the tab/app is put into the background (unless hosting/playing in an active Multiplayer Room!)
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
+        if (typeof mpState !== 'undefined' && mpState.inRoom) return;
         suspendAppInBackground();
       }
     });
     window.addEventListener('pagehide', () => {
+      if (typeof mpState !== 'undefined' && mpState.inRoom) {
+        leaveMultiplayerRoom(true);
+      }
       suspendAppInBackground();
     });
+
+    // ============================================================================
+    // 16. LIVE WEBRTC MULTIPLAYER ROOMS (PEERJS), CO-OP SCULPTING, PER-PLAYER
+    //     4x4 OFFROAD TRUCKS & 3D WALK-MODE EXPLORER AVATARS
+    //     - Create a Room -> 5-char Room Code + Shareable ?room=CODE Link
+    //     - Join a Room -> Instant Gzip Full-World Sync from Host
+    //     - Live Co-Op Brush Sync + Colored 3D Sculpting Rings + Nameplates
+    //     - Per-Player Colored 4x4 Baja Trucks (race & launch off Ramps together!)
+    //     - 3D Articulated Voxel Explorer Avatars when players are in Walk Mode
+    //     - Volcano is automatically disabled while in a Multiplayer Room
+    // ============================================================================
+    const MP_DEFAULT_NAMES = [
+      'BajaFox', 'DuneRider', 'OasisNomad', 'CanyonHawk', 'MirageWolf',
+      'SaguaroAce', 'WadiDrifter', 'SandViper', 'DesertFalcon', 'MesaRanger'
+    ];
+    const MP_PALETTE_HEX = ['#ef4444', '#38bdf8', '#10b981', '#f59e0b', '#a855f7', '#ec4899'];
+
+    const mpRemoteGroup = new THREE.Group();
+    scene.add(mpRemoteGroup);
+
+    const mpState = {
+      myId: 'p_' + Math.random().toString(36).slice(2, 10),
+      myName: (typeof localStorage !== 'undefined' && localStorage.getItem('aeolian_mp_name')) ||
+        (MP_DEFAULT_NAMES[Math.floor(Math.random() * MP_DEFAULT_NAMES.length)] + Math.floor(10 + Math.random() * 89)),
+      myColor: (typeof localStorage !== 'undefined' && localStorage.getItem('aeolian_mp_color')) ||
+        MP_PALETTE_HEX[Math.floor(Math.random() * MP_PALETTE_HEX.length)],
+      inRoom: false,
+      isHost: false,
+      roomCode: '',
+      peer: null,
+      hostConn: null,
+      guestConns: new Map(), // peerId -> PeerJS DataConnection (on Host)
+      peers: new Map(),      // peerId -> remote peer state & 3D meshes
+      lastTelemetrySentMs: 0,
+      lastBrushSentMs: 0,
+      autoJoinChecked: false
+    };
+
+    const btnMpTopEl = document.getElementById('btn-multiplayer-top');
+    const labelMpTopEl = document.getElementById('label-multiplayer-top');
+    const badgeMpCountEl = document.getElementById('badge-multiplayer-count');
+    const mpModalEl = document.getElementById('multiplayer-modal');
+    const mpStatusBadgeEl = document.getElementById('mp-modal-status-badge');
+    const inputMpNameEl = document.getElementById('input-mp-player-name');
+    const inputMpJoinCodeEl = document.getElementById('input-mp-join-code');
+    const mpLobbyControlsEl = document.getElementById('mp-lobby-controls');
+    const mpActiveRoomControlsEl = document.getElementById('mp-active-room-controls');
+    const mpActiveCodeDisplayEl = document.getElementById('mp-active-code-display');
+    const mpRoomRoleLabelEl = document.getElementById('mp-room-role-label');
+    const mpRosterCountEl = document.getElementById('mp-roster-count');
+    const mpRosterListEl = document.getElementById('mp-roster-list');
+
+    function uint8ToBase64(u8) {
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let i = 0; i < u8.length; i += chunkSize) {
+        binary += String.fromCharCode.apply(null, u8.subarray(i, i + chunkSize));
+      }
+      return btoa(binary);
+    }
+
+    function base64ToUint8(b64) {
+      const bin = atob(b64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) {
+        out[i] = bin.charCodeAt(i);
+      }
+      return out;
+    }
+
+    function createPlayerNameplateSprite(nameText, colorCss, modeIcon = '✋') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(3.8, 0.95, 1.0);
+      sprite.renderOrder = 35;
+
+      const redraw = (nText, cCss, mIcon) => {
+        ctx.clearRect(0, 0, 256, 64);
+        ctx.fillStyle = 'rgba(14, 12, 10, 0.86)';
+        ctx.strokeStyle = cCss || '#38bdf8';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.roundRect(8, 8, 240, 48, 24);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = cCss || '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(32, 32, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#fef3c7';
+        ctx.font = '800 22px "Inter", -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        const label = `${mIcon || '✋'} ${(nText || 'Explorer').slice(0, 14)}`;
+        ctx.fillText(label, 50, 33);
+        tex.needsUpdate = true;
+      };
+      redraw(nameText, colorCss, modeIcon);
+      sprite.userData.redraw = redraw;
+      sprite.userData.lastSig = `${nameText}|${colorCss}|${modeIcon}`;
+      return sprite;
+    }
+
+    function createRemotePlayerExplorerAvatar(colorCss) {
+      const root = new THREE.Group();
+      const shirtMat = new THREE.MeshStandardMaterial({ color: colorCss || '#38bdf8', roughness: 0.6 });
+      const skinMat = new THREE.MeshStandardMaterial({ color: 0xf4c29f, roughness: 0.68 });
+      const hatMat = new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.78 });
+      const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.78 });
+      const bootMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.82 });
+      const woodMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.75 });
+
+      const legLPivot = new THREE.Group();
+      legLPivot.position.set(-0.14, 0.74, 0);
+      root.add(legLPivot);
+      const legL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.62, 0.22), pantsMat);
+      legL.position.set(0, -0.31, 0);
+      legL.castShadow = true;
+      legLPivot.add(legL);
+      const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.28), bootMat);
+      bootL.position.set(0, -0.62, 0.03);
+      legLPivot.add(bootL);
+
+      const legRPivot = new THREE.Group();
+      legRPivot.position.set(0.14, 0.74, 0);
+      root.add(legRPivot);
+      const legR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.62, 0.22), pantsMat);
+      legR.position.set(0, -0.31, 0);
+      legR.castShadow = true;
+      legRPivot.add(legR);
+      const bootR = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.28), bootMat);
+      bootR.position.set(0, -0.62, 0.03);
+      legRPivot.add(bootR);
+
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.64, 0.30), shirtMat);
+      torso.position.set(0, 1.06, 0);
+      torso.castShadow = true;
+      root.add(torso);
+
+      const headPivot = new THREE.Group();
+      headPivot.position.set(0, 1.40, 0);
+      root.add(headPivot);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.44, 0.44), skinMat);
+      head.position.set(0, 0.22, 0);
+      head.castShadow = true;
+      headPivot.add(head);
+      const hatBrim = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.07, 0.72), hatMat);
+      hatBrim.position.set(0, 0.44, 0);
+      headPivot.add(hatBrim);
+      const hatCrown = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.18, 0.45), hatMat);
+      hatCrown.position.set(0, 0.55, 0);
+      headPivot.add(hatCrown);
+
+      const armLPivot = new THREE.Group();
+      armLPivot.position.set(0.38, 1.32, 0);
+      root.add(armLPivot);
+      const armL = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.56, 0.20), shirtMat);
+      armL.position.set(0, -0.24, 0);
+      armLPivot.add(armL);
+
+      const armRPivot = new THREE.Group();
+      armRPivot.position.set(-0.38, 1.32, 0);
+      root.add(armRPivot);
+      const armR = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.56, 0.20), shirtMat);
+      armR.position.set(0, -0.24, 0);
+      armRPivot.add(armR);
+
+      // Held Torch in right hand when remote player equips Torch ('torch')
+      const torchStick = new THREE.Group();
+      torchStick.position.set(0, -0.52, 0.22);
+      torchStick.visible = false;
+      armRPivot.add(torchStick);
+      const tShaft = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.45, 0.07), woodMat);
+      tShaft.rotation.x = 0.65;
+      torchStick.add(tShaft);
+      const tFlame = new THREE.Mesh(
+        new THREE.ConeGeometry(0.11, 0.28, 6),
+        new THREE.MeshBasicMaterial({ color: 0xffa726 })
+      );
+      tFlame.position.set(0, 0.18, 0.16);
+      torchStick.add(tFlame);
+
+      root.userData = {
+        shirtMat,
+        legLPivot,
+        legRPivot,
+        armLPivot,
+        armRPivot,
+        headPivot,
+        torchStick,
+        walkPhase: 0
+      };
+      return root;
+    }
+
+    function ensureRemotePeerVisuals(peerId, name, colorCss) {
+      let p = mpState.peers.get(peerId);
+      if (!p) {
+        // 1. 3D Sculpting Cursor Ring
+        const cursorGroup = new THREE.Group();
+        cursorGroup.visible = false;
+        const ringGeo = new THREE.RingGeometry(0.86, 1.0, 36);
+        ringGeo.rotateX(-Math.PI / 2);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: colorCss || '#38bdf8',
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false
+        });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        cursorGroup.add(ringMesh);
+        mpRemoteGroup.add(cursorGroup);
+
+        // 2. 3D Walk-Mode Voxel Explorer Avatar
+        const avatarGroup = createRemotePlayerExplorerAvatar(colorCss || '#38bdf8');
+        avatarGroup.visible = false;
+        mpRemoteGroup.add(avatarGroup);
+
+        // 3. Per-Player 3D Offroad Baja Truck
+        const truckMesh = createOffroadTruckMesh(colorCss || '#38bdf8');
+        truckMesh.visible = false;
+        mpRemoteGroup.add(truckMesh);
+
+        // 4. Floating Nameplate Sprite
+        const nameSprite = createPlayerNameplateSprite(name || 'Explorer', colorCss || '#38bdf8', '✋');
+        nameSprite.visible = false;
+        mpRemoteGroup.add(nameSprite);
+
+        p = {
+          id: peerId,
+          name: name || 'Explorer',
+          color: colorCss || '#38bdf8',
+          mode: 'observe',
+          lastSeenMs: performance.now(),
+          cursor: null,
+          walk: null,
+          truck: null,
+          cursorGroup,
+          ringMat,
+          avatarGroup,
+          truckMesh,
+          nameSprite
+        };
+        mpState.peers.set(peerId, p);
+      } else {
+        if (name && p.name !== name) p.name = name;
+        if (colorCss && p.color !== colorCss) {
+          p.color = colorCss;
+          p.ringMat.color.set(colorCss);
+          if (p.avatarGroup.userData.shirtMat) {
+            p.avatarGroup.userData.shirtMat.color.set(colorCss);
+          }
+          if (p.truckMesh.userData.bodyPaintMat) {
+            p.truckMesh.userData.bodyPaintMat.color.set(colorCss);
+          }
+        }
+      }
+      return p;
+    }
+
+    function removeRemotePeerVisuals(peerId) {
+      const p = mpState.peers.get(peerId);
+      if (!p) return;
+      if (p.cursorGroup) mpRemoteGroup.remove(p.cursorGroup);
+      if (p.avatarGroup) mpRemoteGroup.remove(p.avatarGroup);
+      if (p.truckMesh) mpRemoteGroup.remove(p.truckMesh);
+      if (p.nameSprite) mpRemoteGroup.remove(p.nameSprite);
+      mpState.peers.delete(peerId);
+    }
+
+    function clearAllRemotePeers() {
+      for (const pid of Array.from(mpState.peers.keys())) {
+        removeRemotePeerVisuals(pid);
+      }
+    }
+
+    function getRoomRosterList() {
+      const list = [
+        {
+          id: mpState.myId,
+          name: mpState.myName,
+          color: mpState.myColor,
+          isHost: mpState.isHost,
+          mode: params.driveMode ? 'drive' : (params.fpvMode ? 'walk' : 'observe')
+        }
+      ];
+      for (const p of mpState.peers.values()) {
+        list.push({
+          id: p.id,
+          name: p.name,
+          color: p.color,
+          isHost: !mpState.isHost && p.isHostPeer,
+          mode: p.mode || 'observe'
+        });
+      }
+      return list;
+    }
+
+    function syncMultiplayerModalUI() {
+      const totalPlayers = 1 + mpState.peers.size;
+      if (btnMpTopEl) {
+        btnMpTopEl.classList.toggle('in-room', mpState.inRoom);
+      }
+      if (labelMpTopEl) {
+        labelMpTopEl.textContent = mpState.inRoom ? `🌐 Room ${mpState.roomCode}` : '🌐 Multiplayer';
+      }
+      if (badgeMpCountEl) {
+        badgeMpCountEl.style.display = mpState.inRoom ? 'inline-block' : 'none';
+        badgeMpCountEl.textContent = String(totalPlayers);
+      }
+      if (mpStatusBadgeEl) {
+        if (mpState.inRoom) {
+          mpStatusBadgeEl.textContent = mpState.isHost ? `👑 Hosting · ${mpState.roomCode}` : `🟢 Connected · ${mpState.roomCode}`;
+          mpStatusBadgeEl.style.background = 'rgba(16, 185, 129, 0.22)';
+          mpStatusBadgeEl.style.color = '#6ee7b7';
+          mpStatusBadgeEl.style.borderColor = 'rgba(52, 211, 153, 0.55)';
+        } else {
+          mpStatusBadgeEl.textContent = 'Offline';
+          mpStatusBadgeEl.style.background = 'rgba(148, 163, 184, 0.18)';
+          mpStatusBadgeEl.style.color = '#cbd5e1';
+          mpStatusBadgeEl.style.borderColor = 'rgba(148, 163, 184, 0.35)';
+        }
+      }
+      if (mpLobbyControlsEl) {
+        mpLobbyControlsEl.style.display = mpState.inRoom ? 'none' : 'flex';
+      }
+      if (mpActiveRoomControlsEl) {
+        mpActiveRoomControlsEl.style.display = mpState.inRoom ? 'flex' : 'none';
+      }
+      if (mpActiveCodeDisplayEl) {
+        mpActiveCodeDisplayEl.textContent = mpState.roomCode || '-----';
+      }
+      if (mpRoomRoleLabelEl) {
+        mpRoomRoleLabelEl.textContent = mpState.isHost ? '👑 Room Host' : '🤝 Room Guest';
+      }
+      if (mpRosterCountEl) {
+        mpRosterCountEl.textContent = String(totalPlayers);
+      }
+      if (mpRosterListEl && mpState.inRoom) {
+        const roster = getRoomRosterList();
+        const modeBadges = {
+          observe: '✋ Sculpting / Pan',
+          walk: '🚶 Walking (FPV)',
+          drive: '🛻 Driving 4x4'
+        };
+        mpRosterListEl.innerHTML = roster.map((r) => {
+          const isMe = r.id === mpState.myId;
+          return `<div class="mp-roster-row">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="width:11px; height:11px; border-radius:999px; background:${r.color}; display:inline-block; box-shadow:0 0 6px ${r.color};"></span>
+              <span style="font-weight:700; color:#f8fafc;">${r.name}${isMe ? ' (You)' : ''}</span>
+              ${r.isHost ? '<span style="font-size:10px; background:rgba(234,179,8,0.2); color:#fde047; padding:1px 6px; border-radius:999px; font-weight:700;">HOST</span>' : ''}
+            </div>
+            <span style="font-size:11px; color:#94a3b8; font-weight:600;">${modeBadges[r.mode] || modeBadges.observe}</span>
+          </div>`;
+        }).join('');
+      }
+      updateVolcanoButtonUI();
+    }
+
+    function broadcastMultiplayerEvent(pkt, excludeConnId = null) {
+      if (!mpState.inRoom) return;
+      pkt.pid = pkt.pid || mpState.myId;
+      if (mpState.isHost) {
+        for (const [cid, conn] of mpState.guestConns.entries()) {
+          if (cid !== excludeConnId && conn && conn.open) {
+            try { conn.send(pkt); } catch (_) {}
+          }
+        }
+      } else if (mpState.hostConn && mpState.hostConn.open) {
+        try { mpState.hostConn.send(pkt); } catch (_) {}
+      }
+    }
+
+    function broadcastMultiplayerBrushAction(tool, wx, wz, radius, itemYaw = null, immediate = false) {
+      if (!mpState.inRoom) return;
+      const nowMs = performance.now();
+      if (!immediate && (nowMs - mpState.lastBrushSentMs < 32)) return;
+      mpState.lastBrushSentMs = nowMs;
+      broadcastMultiplayerEvent({
+        t: 'brush',
+        tool,
+        wx: Number(wx.toFixed(2)),
+        wz: Number(wz.toFixed(2)),
+        r: Number(radius.toFixed(1)),
+        itemYaw: typeof itemYaw === 'number' ? Number(itemYaw.toFixed(4)) : undefined
+      });
+    }
+
+    async function sendFullWorldSyncToConn(targetConn) {
+      if (!targetConn || !targetConn.open) return;
+      try {
+        const compressed = await serializeWorldCartridgePayload(`Room ${mpState.roomCode}`);
+        const b64 = uint8ToBase64(compressed);
+        targetConn.send({
+          t: 'world_sync',
+          b64,
+          hostId: mpState.myId,
+          hostName: mpState.myName,
+          hostColor: mpState.myColor
+        });
+      } catch (err) {
+        console.warn('Multiplayer world_sync encode error:', err);
+      }
+    }
+
+    async function broadcastFullWorldSyncToPeers() {
+      if (!mpState.inRoom || !mpState.isHost || mpState.guestConns.size === 0) return;
+      try {
+        const compressed = await serializeWorldCartridgePayload(`Room ${mpState.roomCode}`);
+        const b64 = uint8ToBase64(compressed);
+        broadcastMultiplayerEvent({
+          t: 'world_sync',
+          b64,
+          hostId: mpState.myId,
+          hostName: mpState.myName,
+          hostColor: mpState.myColor
+        });
+      } catch (err) {
+        console.warn('Multiplayer broadcast world_sync error:', err);
+      }
+    }
+
+    async function handleMultiplayerPacket(pkt, sourceConn = null) {
+      if (!pkt || typeof pkt !== 'object' || pkt.pid === mpState.myId) return;
+
+      // If we are the Room Host, relay guest packets to all other connected guests!
+      if (mpState.isHost && sourceConn && ['brush', 'rotate_item', 'telemetry', 'profile', 'weather'].includes(pkt.t)) {
+        for (const [cid, conn] of mpState.guestConns.entries()) {
+          if (conn !== sourceConn && conn && conn.open) {
+            try { conn.send(pkt); } catch (_) {}
+          }
+        }
+      }
+
+      if (pkt.t === 'hello') {
+        const p = ensureRemotePeerVisuals(pkt.pid, pkt.name, pkt.color);
+        p.lastSeenMs = performance.now();
+        if (sourceConn) {
+          sourceConn._remotePlayerId = pkt.pid;
+        }
+        showCartridgeToast(`👋 ${p.name} joined Room ${mpState.roomCode}!`);
+        if (mpState.isHost && sourceConn) {
+          await sendFullWorldSyncToConn(sourceConn);
+          broadcastMultiplayerEvent({ t: 'peer_list', peers: getRoomRosterList() });
+        }
+        syncMultiplayerModalUI();
+      } else if (pkt.t === 'request_sync') {
+        if (mpState.isHost && sourceConn) {
+          await sendFullWorldSyncToConn(sourceConn);
+        }
+      } else if (pkt.t === 'world_sync' && pkt.b64) {
+        if (pkt.hostId && pkt.hostId !== mpState.myId) {
+          const hp = ensureRemotePeerVisuals(pkt.hostId, pkt.hostName || 'Host', pkt.hostColor || '#f59e0b');
+          hp.isHostPeer = true;
+        }
+        const bytes = base64ToUint8(pkt.b64);
+        await applyCompressedWorldPayload(bytes, { isMultiplayerSync: true });
+        showCartridgeToast(`🌍 Synced map with Room ${mpState.roomCode}`);
+        syncMultiplayerModalUI();
+      } else if (pkt.t === 'peer_list' && Array.isArray(pkt.peers)) {
+        const activeIds = new Set();
+        for (const rp of pkt.peers) {
+          if (!rp || rp.id === mpState.myId) continue;
+          activeIds.add(rp.id);
+          const p = ensureRemotePeerVisuals(rp.id, rp.name, rp.color);
+          p.mode = rp.mode || p.mode;
+          if (rp.isHost) p.isHostPeer = true;
+        }
+        for (const existingId of Array.from(mpState.peers.keys())) {
+          if (!activeIds.has(existingId)) {
+            removeRemotePeerVisuals(existingId);
+          }
+        }
+        syncMultiplayerModalUI();
+      } else if (pkt.t === 'peer_left' && pkt.leftId) {
+        const p = mpState.peers.get(pkt.leftId);
+        if (p) {
+          showCartridgeToast(`🚪 ${p.name} left the room`);
+          removeRemotePeerVisuals(pkt.leftId);
+          syncMultiplayerModalUI();
+        }
+      } else if (pkt.t === 'profile') {
+        const p = ensureRemotePeerVisuals(pkt.pid, pkt.name, pkt.color);
+        p.lastSeenMs = performance.now();
+        syncMultiplayerModalUI();
+      } else if (pkt.t === 'brush') {
+        applyBrushAtWorld(pkt.wx, pkt.wz, {
+          isRemote: true,
+          tool: pkt.tool,
+          radius: pkt.r,
+          itemYaw: pkt.itemYaw,
+          peerId: pkt.pid
+        });
+      } else if (pkt.t === 'rotate_item') {
+        if (pkt.kind === 'item') {
+          let bestIt = null;
+          let bestD = 3.5;
+          for (let i = 0; i < placedWorldItems.length; i++) {
+            const it = placedWorldItems[i];
+            if (it.type === 'item-truck') continue;
+            const d = Math.hypot(it.x - pkt.wx, it.z - pkt.wz);
+            if (d < bestD) {
+              bestD = d;
+              bestIt = it;
+            }
+          }
+          if (bestIt && typeof pkt.yaw === 'number') {
+            bestIt.yaw = pkt.yaw;
+            if (bestIt.mesh) bestIt.mesh.rotation.y = pkt.yaw;
+            if (bestIt.type === 'item-lantern') syncTerrainAndWaterMeshes();
+          }
+        } else if (pkt.kind === 'plant' && typeof pkt.cellIdx === 'number' && typeof pkt.yaw === 'number') {
+          plantYawOffset[pkt.cellIdx] = pkt.yaw;
+          rebuildFloraInstances();
+        }
+      } else if (pkt.t === 'weather' && pkt.mode) {
+        if (typeof applyWeatherPreset === 'function') {
+          applyWeatherPreset(pkt.mode, true);
+        }
+      } else if (pkt.t === 'telemetry') {
+        const p = ensureRemotePeerVisuals(pkt.pid, pkt.name, pkt.color);
+        p.lastSeenMs = performance.now();
+        const prevMode = p.mode;
+        p.mode = pkt.mode || 'observe';
+        p.cursor = pkt.cursor || null;
+        p.walk = pkt.walk || null;
+        p.truck = pkt.truck || null;
+        if (prevMode !== p.mode) {
+          syncMultiplayerModalUI();
+        }
+      }
+    }
+
+    function generateShortRoomCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let out = '';
+      for (let i = 0; i < 5; i++) {
+        out += chars[Math.floor(Math.random() * chars.length)];
+      }
+      return out;
+    }
+
+    function leaveMultiplayerRoom(silent = false) {
+      if (mpState.inRoom) {
+        broadcastMultiplayerEvent({ t: 'peer_left', leftId: mpState.myId });
+      }
+      for (const conn of mpState.guestConns.values()) {
+        try { conn.close(); } catch (_) {}
+      }
+      mpState.guestConns.clear();
+      if (mpState.hostConn) {
+        try { mpState.hostConn.close(); } catch (_) {}
+        mpState.hostConn = null;
+      }
+      if (mpState.peer) {
+        try { mpState.peer.destroy(); } catch (_) {}
+        mpState.peer = null;
+      }
+      mpState.inRoom = false;
+      mpState.isHost = false;
+      mpState.roomCode = '';
+      clearAllRemotePeers();
+      if (window.location.search.includes('room=')) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+      syncMultiplayerModalUI();
+      if (!silent) {
+        showCartridgeToast('🚪 Left Multiplayer Room');
+      }
+    }
+
+    function createMultiplayerRoom() {
+      if (typeof window.Peer === 'undefined') {
+        showCartridgeToast('⚠️ WebRTC PeerJS library is still loading — please try again in a moment!', true);
+        return;
+      }
+      leaveMultiplayerRoom(true);
+      const code = generateShortRoomCode();
+      const peerId = `aeolian-oasis-room-${code}`;
+      showCartridgeToast(`🌐 Creating Room ${code}...`);
+
+      const peer = new window.Peer(peerId, { debug: 1 });
+      mpState.peer = peer;
+
+      peer.on('open', () => {
+        mpState.inRoom = true;
+        mpState.isHost = true;
+        mpState.roomCode = code;
+        window.history.replaceState(null, '', `?room=${code}`);
+        syncMultiplayerModalUI();
+        showCartridgeToast(`👑 Room ${code} Created! Share the Room Code or Invite Link.`);
+      });
+
+      peer.on('connection', (conn) => {
+        conn.on('open', () => {
+          mpState.guestConns.set(conn.peer, conn);
+          conn.send({
+            t: 'hello',
+            pid: mpState.myId,
+            name: mpState.myName,
+            color: mpState.myColor
+          });
+        });
+        conn.on('data', (data) => {
+          handleMultiplayerPacket(data, conn);
+        });
+        conn.on('close', () => {
+          mpState.guestConns.delete(conn.peer);
+          if (conn._remotePlayerId) {
+            const p = mpState.peers.get(conn._remotePlayerId);
+            if (p) {
+              showCartridgeToast(`🚪 ${p.name} disconnected`);
+              removeRemotePeerVisuals(conn._remotePlayerId);
+            }
+            broadcastMultiplayerEvent({ t: 'peer_left', leftId: conn._remotePlayerId });
+          }
+          syncMultiplayerModalUI();
+        });
+      });
+
+      peer.on('error', (err) => {
+        console.warn('PeerJS Host error:', err);
+        if (err && err.type === 'unavailable-id') {
+          createMultiplayerRoom();
+        } else {
+          showCartridgeToast(`⚠️ Multiplayer error: ${err ? err.type : 'Connection failed'}`, true);
+        }
+      });
+    }
+
+    function joinMultiplayerRoom(rawCode) {
+      if (typeof window.Peer === 'undefined') {
+        showCartridgeToast('⚠️ WebRTC PeerJS library is still loading — please try again in a moment!', true);
+        return;
+      }
+      const code = (rawCode || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (code.length < 3) {
+        showCartridgeToast('⚠️ Please enter a valid Room Code!', true);
+        return;
+      }
+      leaveMultiplayerRoom(true);
+      showCartridgeToast(`🔗 Connecting to Room ${code}...`);
+
+      const peer = new window.Peer(undefined, { debug: 1 });
+      mpState.peer = peer;
+
+      peer.on('open', () => {
+        const hostPeerId = `aeolian-oasis-room-${code}`;
+        const conn = peer.connect(hostPeerId, { reliable: true });
+        mpState.hostConn = conn;
+
+        conn.on('open', () => {
+          mpState.inRoom = true;
+          mpState.isHost = false;
+          mpState.roomCode = code;
+          window.history.replaceState(null, '', `?room=${code}`);
+          conn.send({
+            t: 'hello',
+            pid: mpState.myId,
+            name: mpState.myName,
+            color: mpState.myColor
+          });
+          syncMultiplayerModalUI();
+          showCartridgeToast(`🟢 Joined Room ${code}! Syncing map from host...`);
+        });
+
+        conn.on('data', (data) => {
+          handleMultiplayerPacket(data, conn);
+        });
+
+        conn.on('close', () => {
+          if (mpState.inRoom) {
+            showCartridgeToast('⚠️ Disconnected from Room Host', true);
+            leaveMultiplayerRoom(true);
+          }
+        });
+      });
+
+      peer.on('error', (err) => {
+        console.warn('PeerJS Join error:', err);
+        showCartridgeToast(`⚠️ Could not join Room ${code} (${err ? err.type : 'Not found'})`, true);
+        leaveMultiplayerRoom(true);
+      });
+    }
+
+    function updateMultiplayerFrame(dt) {
+      // Auto-join ?room=CODE from URL once world boot completes and PeerJS is ready
+      if (!mpState.autoJoinChecked && worldBootComplete && typeof window.Peer !== 'undefined') {
+        mpState.autoJoinChecked = true;
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlRoom = urlParams.get('room');
+        if (urlRoom && urlRoom.trim().length >= 3) {
+          if (inputMpJoinCodeEl) inputMpJoinCodeEl.value = urlRoom.trim().toUpperCase();
+          joinMultiplayerRoom(urlRoom);
+        }
+      }
+
+      if (!mpState.inRoom) return;
+
+      const nowMs = performance.now();
+      const time = uniforms.uTime.value || 0;
+      const nightFactor = skyUniforms.uNightFactor.value || 0.0;
+      const hr = ((params.timeOfDay % 24) + 24) % 24;
+      const isNightTime = (hr >= 18.2 || hr < 6.0) || (nightFactor > 0.35);
+
+      // 1. Broadcast local player 25Hz telemetry (Cursor ring, Walk Mode Explorer pose, and Local 4x4 Offroad Truck pose!)
+      if (nowMs - mpState.lastTelemetrySentMs >= 40) {
+        mpState.lastTelemetrySentMs = nowMs;
+        const myTruck = getLatestPlacedTruck();
+        const myMode = params.driveMode ? 'drive' : (params.fpvMode ? 'walk' : 'observe');
+        broadcastMultiplayerEvent({
+          t: 'telemetry',
+          pid: mpState.myId,
+          name: mpState.myName,
+          color: mpState.myColor,
+          mode: myMode,
+          cursor: (!params.fpvMode && !params.driveMode && brushRing.visible)
+            ? {
+                active: true,
+                x: Number(brushRing.position.x.toFixed(2)),
+                y: Number(brushRing.position.y.toFixed(2)),
+                z: Number(brushRing.position.z.toFixed(2)),
+                r: Number(params.brushRadius.toFixed(1))
+              }
+            : { active: false },
+          walk: params.fpvMode
+            ? {
+                x: Number(camera.position.x.toFixed(2)),
+                y: Number(camera.position.y.toFixed(2)),
+                z: Number(camera.position.z.toFixed(2)),
+                yaw: Number(fpvState.yaw.toFixed(3)),
+                pitch: Number(fpvState.pitch.toFixed(3)),
+                equip: params.fpvEquip
+              }
+            : null,
+          truck: myTruck
+            ? {
+                x: Number(myTruck.x.toFixed(2)),
+                y: Number(myTruck.y.toFixed(2)),
+                z: Number(myTruck.z.toFixed(2)),
+                yaw: Number((myTruck.yaw || 0).toFixed(3)),
+                pitch: Number((myTruck.mesh.rotation.x || 0).toFixed(3)),
+                roll: Number((myTruck.mesh.rotation.z || 0).toFixed(3)),
+                suspY: Number((myTruck.suspY || 0).toFixed(3)),
+                suspPitch: Number((myTruck.suspPitch || 0).toFixed(3)),
+                suspRoll: Number((myTruck.suspRoll || 0).toFixed(3)),
+                steer: Number((myTruck.steerAngle || 0).toFixed(3)),
+                spin: Number((myTruck.wheelSpin || 0).toFixed(2)),
+                spd: Number((myTruck.speed || 0).toFixed(2))
+              }
+            : null
+        });
+      }
+
+      // 2. Smoothly interpolate & animate all connected Remote Peers' 3D Cursors, Walk Avatars & Offroad Trucks!
+      const lerpT = Math.min(1.0, dt * 16.0);
+      for (const p of mpState.peers.values()) {
+        const modeIcon = p.mode === 'drive' ? '🛻' : (p.mode === 'walk' ? '🚶' : '✋');
+        const sig = `${p.name}|${p.color}|${modeIcon}`;
+        if (p.nameSprite.userData.lastSig !== sig) {
+          p.nameSprite.userData.redraw(p.name, p.color, modeIcon);
+          p.nameSprite.userData.lastSig = sig;
+        }
+
+        let labelPlaced = false;
+
+        // A. Remote Player's 4x4 Offroad Truck
+        if (p.truck) {
+          p.truckMesh.visible = true;
+          if (!p.truckInit) {
+            p.truckMesh.position.set(p.truck.x, p.truck.y, p.truck.z);
+            p.truckInit = true;
+          } else {
+            p.truckMesh.position.x += (p.truck.x - p.truckMesh.position.x) * lerpT;
+            p.truckMesh.position.y += (p.truck.y - p.truckMesh.position.y) * lerpT;
+            p.truckMesh.position.z += (p.truck.z - p.truckMesh.position.z) * lerpT;
+          }
+          p.truckMesh.rotation.order = 'YXZ';
+          p.truckMesh.rotation.y = p.truck.yaw;
+          p.truckMesh.rotation.x = p.truck.pitch;
+          p.truckMesh.rotation.z = p.truck.roll;
+
+          const cg = p.truckMesh.userData.chassisGroup;
+          if (cg) {
+            cg.position.y = p.truck.suspY || 0;
+            cg.rotation.x = p.truck.suspPitch || 0;
+            cg.rotation.z = p.truck.suspRoll || 0;
+          }
+          const sFL = p.truckMesh.userData.steerFL;
+          const sFR = p.truckMesh.userData.steerFR;
+          if (sFL && sFR) {
+            sFL.rotation.y = p.truck.steer || 0;
+            sFR.rotation.y = p.truck.steer || 0;
+          }
+          const wheels = p.truckMesh.userData.wheels;
+          if (wheels) {
+            for (let w = 0; w < wheels.length; w++) {
+              wheels[w].rotation.x = p.truck.spin || 0;
+            }
+          }
+          const hlBeams = p.truckMesh.userData.headlightBeams;
+          if (hlBeams) {
+            const showCone = isNightTime && ((params.truckLightConeOpacity ?? 0.35) > 0.005);
+            for (let b = 0; b < hlBeams.length; b++) {
+              hlBeams[b].visible = showCone;
+            }
+          }
+          // Emit offroad tire dust behind remote trucks driving fast!
+          if (Math.abs(p.truck.spd || 0) > 4.5 && Math.random() < 0.45) {
+            const backX = p.truckMesh.position.x - Math.sin(p.truck.yaw) * 1.4;
+            const backZ = p.truckMesh.position.z - Math.cos(p.truck.yaw) * 1.4;
+            emitTruckSandDust(backX, p.truckMesh.position.y + 0.25, backZ, (Math.random() - 0.5) * 1.4, 0.7, (Math.random() - 0.5) * 1.4, 0, 0.45);
+          }
+
+          if (p.mode === 'drive') {
+            p.nameSprite.visible = true;
+            p.nameSprite.position.set(p.truckMesh.position.x, p.truckMesh.position.y + 2.65, p.truckMesh.position.z);
+            labelPlaced = true;
+          }
+        } else {
+          p.truckMesh.visible = false;
+          p.truckInit = false;
+        }
+
+        // B. Remote Player's 3D Walk-Mode Explorer Avatar
+        if (p.mode === 'walk' && p.walk) {
+          p.avatarGroup.visible = true;
+          const targetFootY = p.walk.y - 1.65;
+          const prevX = p.avatarGroup.position.x;
+          const prevZ = p.avatarGroup.position.z;
+          p.avatarGroup.position.x += (p.walk.x - p.avatarGroup.position.x) * lerpT;
+          p.avatarGroup.position.y += (targetFootY - p.avatarGroup.position.y) * lerpT;
+          p.avatarGroup.position.z += (p.walk.z - p.avatarGroup.position.z) * lerpT;
+          p.avatarGroup.rotation.y = p.walk.yaw + Math.PI;
+
+          const moveStep = Math.hypot(p.avatarGroup.position.x - prevX, p.avatarGroup.position.z - prevZ);
+          const ud = p.avatarGroup.userData;
+          if (moveStep > 0.005) {
+            ud.walkPhase = (ud.walkPhase || 0) + dt * 10.5;
+            const swing = Math.sin(ud.walkPhase) * 0.55;
+            ud.legLPivot.rotation.x = swing;
+            ud.legRPivot.rotation.x = -swing;
+            ud.armLPivot.rotation.x = -swing * 0.7;
+            ud.armRPivot.rotation.x = p.walk.equip === 'torch' ? -0.85 : swing * 0.7;
+          } else {
+            ud.legLPivot.rotation.x *= 0.85;
+            ud.legRPivot.rotation.x *= 0.85;
+            ud.armLPivot.rotation.x *= 0.85;
+            ud.armRPivot.rotation.x = p.walk.equip === 'torch' ? -0.85 : (ud.armRPivot.rotation.x * 0.85);
+          }
+          ud.headPivot.rotation.x = -clamp(p.walk.pitch || 0, -0.7, 0.7);
+          ud.torchStick.visible = (p.walk.equip === 'torch');
+
+          p.nameSprite.visible = true;
+          p.nameSprite.position.set(p.avatarGroup.position.x, p.avatarGroup.position.y + 2.45, p.avatarGroup.position.z);
+          labelPlaced = true;
+        } else {
+          p.avatarGroup.visible = false;
+        }
+
+        // C. Remote Player's 3D Sculpting Cursor Ring
+        if (p.mode === 'observe' && p.cursor && p.cursor.active) {
+          p.cursorGroup.visible = true;
+          p.cursorGroup.position.x += (p.cursor.x - p.cursorGroup.position.x) * lerpT;
+          p.cursorGroup.position.y += (p.cursor.y + 0.08 - p.cursorGroup.position.y) * lerpT;
+          p.cursorGroup.position.z += (p.cursor.z - p.cursorGroup.position.z) * lerpT;
+          p.cursorGroup.scale.setScalar(p.cursor.r || 12);
+
+          if (!labelPlaced) {
+            p.nameSprite.visible = true;
+            p.nameSprite.position.set(p.cursorGroup.position.x, p.cursorGroup.position.y + 2.2, p.cursorGroup.position.z);
+            labelPlaced = true;
+          }
+        } else {
+          p.cursorGroup.visible = false;
+        }
+
+        if (!labelPlaced) {
+          p.nameSprite.visible = false;
+        }
+      }
+    }
+
+    // Wire up Multiplayer Modal UI Controls
+    if (inputMpNameEl) {
+      inputMpNameEl.value = mpState.myName;
+      inputMpNameEl.addEventListener('input', () => {
+        const v = inputMpNameEl.value.trim();
+        if (v) {
+          mpState.myName = v;
+          try { localStorage.setItem('aeolian_mp_name', v); } catch (_) {}
+          if (mpState.inRoom) {
+            broadcastMultiplayerEvent({ t: 'profile', name: mpState.myName, color: mpState.myColor });
+            syncMultiplayerModalUI();
+          }
+        }
+      });
+    }
+
+    document.querySelectorAll('#mp-color-swatches .mp-color-swatch').forEach((sw) => {
+      sw.classList.toggle('active', sw.dataset.color === mpState.myColor);
+      sw.addEventListener('click', () => {
+        const col = sw.dataset.color || '#ef4444';
+        mpState.myColor = col;
+        try { localStorage.setItem('aeolian_mp_color', col); } catch (_) {}
+        document.querySelectorAll('#mp-color-swatches .mp-color-swatch').forEach((b) => {
+          b.classList.toggle('active', b.dataset.color === col);
+        });
+        // Update local player's Offroad Truck paint color immediately!
+        const myTruck = getLatestPlacedTruck();
+        if (myTruck && myTruck.mesh && myTruck.mesh.userData.bodyMeshes) {
+          const customMat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.36, metalness: 0.25 });
+          myTruck.mesh.userData.bodyPaintMat = customMat;
+          for (const bm of myTruck.mesh.userData.bodyMeshes) {
+            bm.material = customMat;
+          }
+        }
+        if (mpState.inRoom) {
+          broadcastMultiplayerEvent({ t: 'profile', name: mpState.myName, color: mpState.myColor });
+          syncMultiplayerModalUI();
+        }
+      });
+    });
+
+    if (btnMpTopEl && mpModalEl) {
+      btnMpTopEl.addEventListener('click', () => {
+        syncMultiplayerModalUI();
+        mpModalEl.classList.add('open');
+      });
+    }
+    const btnCloseMpModal = document.getElementById('btn-close-mp-modal');
+    if (btnCloseMpModal && mpModalEl) {
+      btnCloseMpModal.addEventListener('click', () => {
+        mpModalEl.classList.remove('open');
+      });
+    }
+    const btnMpCreateRoom = document.getElementById('btn-mp-create-room');
+    if (btnMpCreateRoom) {
+      btnMpCreateRoom.addEventListener('click', () => {
+        createMultiplayerRoom();
+      });
+    }
+    const btnMpJoinRoom = document.getElementById('btn-mp-join-room');
+    if (btnMpJoinRoom && inputMpJoinCodeEl) {
+      btnMpJoinRoom.addEventListener('click', () => {
+        joinMultiplayerRoom(inputMpJoinCodeEl.value);
+      });
+      inputMpJoinCodeEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          joinMultiplayerRoom(inputMpJoinCodeEl.value);
+        }
+      });
+    }
+    const btnMpCopyLink = document.getElementById('btn-mp-copy-link');
+    if (btnMpCopyLink) {
+      btnMpCopyLink.addEventListener('click', () => {
+        const shareUrl = `${window.location.origin}${window.location.pathname}?room=${mpState.roomCode}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(shareUrl).then(() => {
+            showCartridgeToast(`🔗 Copied Room Invite Link! (${shareUrl})`);
+          }).catch(() => {});
+        }
+      });
+    }
+    const btnMpCopyCode = document.getElementById('btn-mp-copy-code');
+    if (btnMpCopyCode) {
+      btnMpCopyCode.addEventListener('click', () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(mpState.roomCode).then(() => {
+            showCartridgeToast(`📋 Copied Room Code: ${mpState.roomCode}`);
+          }).catch(() => {});
+        }
+      });
+    }
+    const btnMpSpawnMyTruck = document.getElementById('btn-mp-spawn-my-truck');
+    if (btnMpSpawnMyTruck) {
+      btnMpSpawnMyTruck.addEventListener('click', () => {
+        if (mpModalEl) mpModalEl.classList.remove('open');
+        let myTruck = getLatestPlacedTruck();
+        if (!myTruck) {
+          placeWorldItemAtWorld('item-truck', controls.target.x, controls.target.z);
+          myTruck = getLatestPlacedTruck();
+        }
+        if (myTruck && !params.driveMode && typeof toggleDriveMode === 'function') {
+          toggleDriveMode(true);
+        }
+      });
+    }
+    const btnMpResyncMap = document.getElementById('btn-mp-resync-map');
+    if (btnMpResyncMap) {
+      btnMpResyncMap.addEventListener('click', () => {
+        if (mpState.isHost) {
+          broadcastFullWorldSyncToPeers();
+          showCartridgeToast('🌍 Broadcasted full map sync to all players in room!');
+        } else if (mpState.hostConn && mpState.hostConn.open) {
+          mpState.hostConn.send({ t: 'request_sync', pid: mpState.myId });
+          showCartridgeToast('🔄 Requested fresh map sync from Room Host...');
+        }
+      });
+    }
+    const btnMpLeaveRoom = document.getElementById('btn-mp-leave-room');
+    if (btnMpLeaveRoom) {
+      btnMpLeaveRoom.addEventListener('click', () => {
+        leaveMultiplayerRoom(false);
+      });
+    }
 
     function animate() {
       if (isBackgroundSuspended) return;
@@ -25838,6 +27217,7 @@
       }
       updateFPVAndUnderwaterState(dt);
       updateSciFiSkyAtmosphere(dt);
+      updateMultiplayerFrame(dt);
 
       if (frameCount % 4 === 0) {
         document.getElementById('stat-wind').textContent =
